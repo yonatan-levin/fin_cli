@@ -12,14 +12,12 @@ def fetch_urls(quarry, page_count):
     urls = [f"{quarry}&r={abs(20*(i) + 1)}" for i in range(page_count + 1)]
     return [fetch_page_sync(url) for url in urls]
 
-
 def aggregate_rows(pages):
     rows = []
     for page_content in pages:
         tab = StockTableScreeningContent(page_content)
         rows.extend(tab.all_table_content)
     return [row.table_data for row in rows]
-
 
 def build_data_frame(data_rows):
     df = pd.concat([pd.DataFrame(row) for row in data_rows])
@@ -44,7 +42,6 @@ def convert_market_cap_to_numeric(market_cap):
         return market_cap.replace("-","N/A")
     else:
         return float(market_cap)
-
 
 def run_stock_screener(history: bool = False, debug: bool = False):
     logger.set_level(logging.DEBUG if debug else logging.INFO)

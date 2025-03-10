@@ -8,7 +8,7 @@ fundainsight/local_history/*
 .env
 .vscode
 *.pstat
-.idea/*
+.idea
 venv/*
 log.txt
 log-ingestion.txt
@@ -27,7 +27,7 @@ fundainsight/__main__.onefile-build
 fundainsight/__main__.exe
 fundainsight/stock_screening/local_history/*
 fundainsight/workspace_output/*
-
+fundainsight/cache/*
 
 
 # Byte-compiled / optimized / DLL files

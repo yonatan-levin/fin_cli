@@ -1,6 +1,76 @@
 import yfinance as yf
 # import yahooquery as yq
 from logger import logger
+import time
+import random
+import requests
+import os
+import json
+import datetime
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+# List of user agents to rotate through
+USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 11.5; rv:90.0) Gecko/20100101 Firefox/90.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.59',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_5_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Safari/605.1.15',
+]
+
+# In-memory cache for financial data
+# Structure: {ticker_name: {'data': {...}, 'timestamp': datetime}}
+MEMORY_CACHE = {}
+CACHE_EXPIRY = 86400  # 24 hours in seconds
+
+def get_from_cache(ticker_name):
+    """Get financial data from in-memory cache if available and not expired"""
+    if ticker_name not in MEMORY_CACHE:
+        return None
+    
+    cache_entry = MEMORY_CACHE[ticker_name]
+    cache_time = cache_entry.get('timestamp')
+    
+    # Check if cache is expired (older than 24 hours)
+    if (datetime.datetime.now() - cache_time).total_seconds() > CACHE_EXPIRY:
+        # Remove expired entry
+        del MEMORY_CACHE[ticker_name]
+        return None
+    
+    return cache_entry.get('data')
+
+def save_to_cache(ticker_name, data):
+    """Save financial data to in-memory cache"""
+    if data is None:
+        return
+    
+    MEMORY_CACHE[ticker_name] = {
+        'data': data,
+        'timestamp': datetime.datetime.now()
+    }
+
+def create_session():
+    """Create a session with retry logic and random user agent"""
+    session = requests.Session()
+    
+    # Configure retry strategy
+    retry_strategy = Retry(
+        total=3,  # Maximum number of retries
+        backoff_factor=1,  # Exponential backoff
+        status_forcelist=[429, 500, 502, 503, 504],  # Retry on these status codes
+        allowed_methods=["HEAD", "GET", "OPTIONS"]  # Only retry for these methods
+    )
+    
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    
+    # Set a random user agent
+    session.headers.update({'User-Agent': random.choice(USER_AGENTS)})
+    
+    return session
 
 
 def calculate_price_to_data(financial_data, column_name):
@@ -33,7 +103,7 @@ def adjust_assets(balance_sheet, asset_type, adjustment_factor, additional_subtr
         return asset_value
     # Make the adjustment
     try:
-        # inventory = balance_sheet.iloc[-1]['Inventory'] if not int else balance_sheet.iloc[-2]['Inventory']\
+        # inventory = balance_sheet.iloc[-1]['Inventory'] if not int else balance_sheet.iloc[-2]['Inventory']
         inventory = balance_sheet['Inventory'].iloc[1]  # if not int else balance_sheet.iloc[-2]['Inventory']
     except KeyError:
         inventory = None
@@ -43,53 +113,93 @@ def adjust_assets(balance_sheet, asset_type, adjustment_factor, additional_subtr
 
 
 def get_financial_data(ticker_name: str):
+    # Check cache first
+    cached_data = get_from_cache(ticker_name)
+    if cached_data:
+        logger.info(f"Using cached data for {ticker_name}")
+        return cached_data
+    
     # Get the ticker object
-    try:
-        ticker = yf.Ticker(ticker_name)
+    max_retries = 3
+    for retry_count in range(max_retries):
+        try:
+            # Add a delay before each API call to avoid rate limiting
+            # Increase delay with each retry
+            delay = (2 + retry_count * 2) + random.uniform(0, 1)
+            if retry_count > 0:
+                logger.error(f"Retry attempt {retry_count} for {ticker_name} with {delay:.2f}s delay")
+            time.sleep(delay)
+            
+            # Create a custom session with retry logic
+            session = create_session()
+            
+            # Use the session with yfinance
+            ticker = yf.Ticker(ticker_name, session=session)
 
-    # Get the financial data
-        balance_sheet = ticker.quarterly_balance_sheet
-        if balance_sheet is None:
-            logger.error(
-                f"Error getting balance sheet for ticker {ticker_name}")
-            return None
-        if ticker.info is None:
-            logger.error(
-                f"Error getting summary_detail for ticker {ticker_name}")
-            return None
-        # if ticker.key_stats is None:
-        #     logger.error(f"Error getting key_stats for ticker {ticker_name}")
-        #     return None
-    except Exception as e:
-        logger.error(f"Error getting ticker {ticker_name} - {e}")
-        return None
-    shares_outstanding = ticker.info['sharesOutstanding']
-    market_cap = ticker.info['marketCap']
+            # Get the financial data
+            balance_sheet = ticker.quarterly_balance_sheet
+            if balance_sheet is None:
+                logger.error(
+                    f"Error getting balance sheet for ticker {ticker_name}")
+                return None
+            if ticker.info is None:
+                logger.error(
+                    f"Error getting summary_detail for ticker {ticker_name}")
+                return None
+                
+            # If we got here, we successfully retrieved the data
+            shares_outstanding = ticker.info['sharesOutstanding']
+            market_cap = ticker.info['marketCap']
 
-    # shares_outstanding = ticker.info[ticker_name]['sharesOutstanding']
-    # market_cap = ticker.info[ticker_name]['marketCap']
+            # .iloc[1] will get you the last year / quarter
+            total_assets = balance_sheet.loc['Total Assets'].iloc[1]
+            total_equity = balance_sheet.loc['Stockholders Equity'].iloc[1]
 
-    # .iloc[1] will get you the last year / quarter
-    total_assets = balance_sheet.loc['Total Assets'].iloc[1]
-    total_equity = balance_sheet.loc['Stockholders Equity'].iloc[1]
+            # Get the average price in the last 30 days
+            history_30d = ticker.history()
+            average_price_30d = history_30d['Close'].quantile(0.5)
 
-    # Get the average price in the last 30 days
-    history_30d = ticker.history()
-    average_price_30d = history_30d['Close'].quantile(0.5)
+            # Adjust the current and total assets
+            adjusted_current_assets = adjust_assets(
+                balance_sheet,  'Current Assets', 0.3, ['Other Current Assets'])
+            adjusted_total_assets = adjust_assets(balance_sheet, "Total Assets", 0, [
+                "Goodwill",  'Other Non Current Assets'])
 
-    # Adjust the current and total assets
-    adjusted_current_assets = adjust_assets(
-        balance_sheet,  'Current Assets', 0.3, ['Other Current Assets'])
-    adjusted_total_assets = adjust_assets(balance_sheet, "Total Assets", 0, [
-        "Goodwill",  'Other Non Current Assets'])
+            result = {
+                'Symbol': ticker_name,
+                'Market Cap': market_cap,
+                'Shares Outstanding': shares_outstanding,
+                'Total Assets': total_assets,
+                'Adjusted Total Assets': adjusted_total_assets,
+                'Adjusted Total Current Assets': adjusted_current_assets,
+                'Total Equity': total_equity,
+                'Average Price in Last 30 Days': average_price_30d,
+            }
+            
+            # Save to cache
+            save_to_cache(ticker_name, result)
+            
+            return result
+            
+        except Exception as e:
+            error_msg = str(e)
+            # Check if it's a rate limiting error
+            if "429" in error_msg or "Too Many Requests" in error_msg:
+                if retry_count < max_retries - 1:
+                    # Will retry in the next iteration
+                    continue
+                else:
+                    logger.error(f"Rate limit exceeded for {ticker_name} after {max_retries} retries")
+            else:
+                logger.error(f"Error getting ticker {ticker_name} - {e}")
+            
+    # If we get here, all retries failed
+    return None
 
-    return {
-        'Symbol': ticker_name,
-        'Market Cap': market_cap,
-        'Shares Outstanding': shares_outstanding,
-        'Total Assets': total_assets,
-        'Adjusted Total Assets': adjusted_total_assets,
-        'Adjusted Total Current Assets': adjusted_current_assets,
-        'Total Equity': total_equity,
-        'Average Price in Last 30 Days': average_price_30d,
-    }
+def clear_cache():
+    """Clear the in-memory cache"""
+    global MEMORY_CACHE
+    cache_size = len(MEMORY_CACHE)
+    MEMORY_CACHE = {}
+    logger.info(f"Cleared in-memory cache ({cache_size} entries)")
+    return cache_size
