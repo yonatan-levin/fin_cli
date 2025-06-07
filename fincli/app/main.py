@@ -1,6 +1,7 @@
 import logging
 import pandas as pd
-from core.configuration import configurator
+from concurrent.futures import ThreadPoolExecutor
+from shared.infrastructure.config import get_stock_screener_config, build_config
 from fincli.stock_screening.content.stock_table import StockTableScreeningContent
 from fincli.cli.cli_stock_screener import select_filters_and_values
 from logger.logger import logger
@@ -10,7 +11,18 @@ from fincli.utils.web_scraper import fetch_page_sync
 
 def fetch_urls(quarry, page_count):
     urls = [f"{quarry}&r={abs(20*(i) + 1)}" for i in range(page_count + 1)]
-    return [fetch_page_sync(url) for url in urls]
+
+    # Use ThreadPoolExecutor for parallel fetching
+    with ThreadPoolExecutor() as executor:
+        results = list(executor.map(fetch_page_sync, urls))
+
+    # Filter out None results (failed requests)
+    valid_results = [result for result in results if result is not None]
+    logger.info(
+        f"Successfully fetched {len(valid_results)} out of {len(urls)} pages")
+
+    return valid_results
+
 
 def aggregate_rows(pages):
     rows = []
@@ -19,34 +31,38 @@ def aggregate_rows(pages):
         rows.extend(tab.all_table_content)
     return [row.table_data for row in rows]
 
+
 def build_data_frame(data_rows):
     df = pd.concat([pd.DataFrame(row) for row in data_rows])
     df.columns = StockTableLocators.PD_TABLE_COLUMNS
-    df["Market Cap"] = df["Market Cap"].apply(lambda x: convert_market_cap_to_numeric(x))
+    df["Market Cap"] = df["Market Cap"].apply(
+        lambda x: convert_market_cap_to_numeric(x))
     df['Symbol'] = df['Ticker']
     df['Ticker'] = '=HYPERLINK("' + df['Link'] + '", "' + df['Ticker'] + '")'
     df.drop(columns=['Link'], axis=1, inplace=True)
     return df
 
+
 def convert_market_cap_to_numeric(market_cap):
-    market_cap.replace("'","")
+    market_cap.replace("'", "")
     if market_cap.__contains__('B'):
-        return float(market_cap.replace("B","")) * 1000000000
+        return float(market_cap.replace("B", "")) * 1000000000
     elif market_cap.__contains__('M'):
-        return float(market_cap.replace("M","")) * 1000000
+        return float(market_cap.replace("M", "")) * 1000000
     elif market_cap.__contains__('T'):
-        return float(market_cap.replace("T","")) * 1000000000000
+        return float(market_cap.replace("T", "")) * 1000000000000
     elif market_cap.__contains__('_'):
-        return market_cap.replace("_","N/A")
+        return market_cap.replace("_", "N/A")
     elif market_cap.__contains__('-'):
-        return market_cap.replace("-","N/A")
+        return market_cap.replace("-", "N/A")
     else:
         return float(market_cap)
+
 
 def run_stock_screener(history: bool = False, debug: bool = False):
     logger.set_level(logging.DEBUG if debug else logging.INFO)
 
-    config = configurator.build_config(use_history=history)
+    config = build_config(use_history=history)
     logger.debug(f"Config: {config}", "Config created successfully:")
 
     quarry = select_filters_and_values(config)
@@ -64,8 +80,8 @@ def run_stock_screener(history: bool = False, debug: bool = False):
     data_rows = aggregate_rows(pages)
 
     if len(data_rows) == 0:
-        logger.error("Data Handling --->",f"No data was found for the given filters"
-                     )
+        logger.error("Data Handling --->",
+                     f"No data was found for the given filters")
         return
 
     final_df = build_data_frame(data_rows)
@@ -74,4 +90,3 @@ def run_stock_screener(history: bool = False, debug: bool = False):
     file_path = config.file_path("stock_screener")
     final_df.to_csv(file_path, index=False)
     logger.info(f"File saved to {file_path}", "Data Handling --->")
-

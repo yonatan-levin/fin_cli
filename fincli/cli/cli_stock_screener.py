@@ -1,19 +1,22 @@
 import json
 import os
 import click
+from typing import Union
 from config.config import Config
+from shared.infrastructure.config import BaseConfig
 from ..resource.params.fundamental_params import Fundamental_Params as fp
 from ..resource.params.descriptive_params import Descriptive_Params as dp
 from ..resource.params.technical_params import Technical_Params as tp
 from ..utils.quary_builders import build_stock_screener_query
 
 
-def select_filters_and_values(config: Config):
+def select_filters_and_values(config: Union[Config, BaseConfig]):
+    # Define filepath here so it's available throughout the function
+    filepath = os.path.join(os.path.realpath('fincli'), "stock_screening",
+                            "local_history", 'filter_history.json')
 
     # Add checks for use_history
     if config.use_history:
-        filepath = os.path.join(os.path.realpath('fincli'),"stock_screening",
-                                "local_history", 'filter_history.json')
         click.echo(f"Fetching user history from filter_history.json {filepath}")
 
         with open(filepath, 'r') as f:

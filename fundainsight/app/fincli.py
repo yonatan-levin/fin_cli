@@ -1,4 +1,4 @@
-from config import config
+from shared.infrastructure.config import get_config
 from fincli.app.main import aggregate_rows, build_data_frame, fetch_urls
 from fincli.stock_screening.content.stock_table import StockTableScreeningContent
 from fincli.utils.quary_builders import build_stock_screener_query
@@ -39,7 +39,7 @@ def get_recommended_stocks(filters: tuple, scrape_link: str = ""):
 
     logger.info(f"Data frame created successfully", "Data Handling --->")
 
-    file_path = config.Config.file_path("funda_insight_raw_result")
+    file_path = get_config().file_path("funda_insight_raw_result")
     final_df.to_csv(file_path, index=False)
 
     logger.info(f"File saved to {file_path}", "Data Handling --->")

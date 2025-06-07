@@ -3,12 +3,7 @@ import yfinance as yf
 from logger import logger
 import time
 import random
-import requests
-import os
-import json
 import datetime
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 # List of user agents to rotate through
 USER_AGENTS = [
@@ -51,37 +46,13 @@ def save_to_cache(ticker_name, data):
         'timestamp': datetime.datetime.now()
     }
 
-def create_session():
-    """Create a session with retry logic and random user agent"""
-    session = requests.Session()
-    
-    # Configure retry strategy
-    retry_strategy = Retry(
-        total=3,  # Maximum number of retries
-        backoff_factor=1,  # Exponential backoff
-        status_forcelist=[429, 500, 502, 503, 504],  # Retry on these status codes
-        allowed_methods=["HEAD", "GET", "OPTIONS"]  # Only retry for these methods
-    )
-    
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
-    
-    # Set a random user agent
-    session.headers.update({'User-Agent': random.choice(USER_AGENTS)})
-    
-    return session
-
-
 def calculate_price_to_data(financial_data, column_name):
     return financial_data[column_name]/financial_data['Shares Outstanding']
-
 
 def ratio_between_two_values(value1, value2):
     if value2 == 0:
         return 0
     return value1/value2
-
 
 def adjust_assets(balance_sheet, asset_type, adjustment_factor, additional_subtracts):
     try:
@@ -107,10 +78,8 @@ def adjust_assets(balance_sheet, asset_type, adjustment_factor, additional_subtr
         inventory = balance_sheet['Inventory'].iloc[1]  # if not int else balance_sheet.iloc[-2]['Inventory']
     except KeyError:
         inventory = None
-    asset_value += (adjustment_factor *
-                    inventory) if not int else 0
+    asset_value += (adjustment_factor * inventory) if not int else 0
     return asset_value
-
 
 def get_financial_data(ticker_name: str):
     # Check cache first
@@ -130,21 +99,15 @@ def get_financial_data(ticker_name: str):
                 logger.error(f"Retry attempt {retry_count} for {ticker_name} with {delay:.2f}s delay")
             time.sleep(delay)
             
-            # Create a custom session with retry logic
-            session = create_session()
-            
-            # Use the session with yfinance
-            ticker = yf.Ticker(ticker_name, session=session)
+            ticker = yf.Ticker(ticker_name)
 
             # Get the financial data
             balance_sheet = ticker.quarterly_balance_sheet
             if balance_sheet is None:
-                logger.error(
-                    f"Error getting balance sheet for ticker {ticker_name}")
+                logger.error(f"Error getting balance sheet for ticker {ticker_name}")
                 return None
             if ticker.info is None:
-                logger.error(
-                    f"Error getting summary_detail for ticker {ticker_name}")
+                logger.error( f"Error getting summary_detail for ticker {ticker_name}")
                 return None
                 
             # If we got here, we successfully retrieved the data

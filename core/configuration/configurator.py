@@ -1,25 +1,28 @@
+"""
+Configuration builder module.
+
+This module provides backward compatibility while delegating to the new shared configuration system.
+"""
 import json
 import os
-from config.config import Config
+from shared.infrastructure.config import build_config as shared_build_config, BaseConfig
 from ..converters.json import json_to_tuples
 
 
 def build_config(
     use_history: bool = False,
     filters: str = ""
-) -> Config:
-    """Create the configuration."""
-    config = Config()
-    
-    if use_history:
-        config.use_history = use_history
-        
-        filepath = os.path.join(os.path.realpath('fundainsight'),"local_history", 'filter_history.json')
-        with open(filepath, 'r') as f:
-            filters = json.load(f)
-            config.filters = tuple(filters.items())
-    
-    if filters != "" and not use_history:
-        config.filters = json_to_tuples(filters)
+) -> BaseConfig:
+    """
+    Create the configuration using the new shared configuration system.
 
-    return config
+    This function maintains backward compatibility while using the enhanced configuration system.
+
+    Args:
+        use_history: Whether to use filter history
+        filters: Filter string to parse
+
+    Returns:
+        BaseConfig instance with the requested configuration
+    """
+    return shared_build_config(use_history=use_history, filters=filters)

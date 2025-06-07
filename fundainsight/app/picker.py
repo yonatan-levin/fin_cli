@@ -3,7 +3,7 @@ from pandas import DataFrame
 import cProfile
 from concurrent.futures import ThreadPoolExecutor
 
-from config import config
+from shared.infrastructure.config import get_config
 from ..calculators.equity_calc import get_financial_data, calculate_price_to_data, ratio_between_two_values
 from ..calculators.filters import Filters
 from logger import logger
@@ -60,12 +60,11 @@ def picker(df: DataFrame | None):
     ]
 
     df_fundamentals = df_fundamentals[columns_to_retain]
-    
-    
-    file_path = config.Config.file_path("funda_insight_result_unfiltered.csv")
+
+    file_path = get_config().file_path("funda_insight_result_unfiltered")
     df_fundamentals.to_csv(file_path, index=False)
-    
-    df_fundamentals = Filters(df_fundamentals).filter_countries(["Brazil", "Chile", "India", "Bermuda","China"]).filter_sector(
+
+    df_fundamentals = Filters(df_fundamentals).filter_countries(["Brazil", "Chile", "India", "Bermuda", "China"]).filter_sector(
         "Energy").filter_price("price/price_to_current_assets_ratio", 1).get_data()
 
     return df_fundamentals
