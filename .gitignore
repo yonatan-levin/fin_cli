@@ -29,7 +29,7 @@ fundainsight/__main__.exe
 fundainsight/stock_screening/local_history/*
 fundainsight/workspace_output/*
 fundainsight/cache/*
-
+docs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

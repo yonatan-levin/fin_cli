@@ -7,8 +7,29 @@ Use shared.infrastructure.config instead for new code.
 import datetime
 import os
 from typing import Any
-from core.configuration.config_base import Configurable, SystemSettings
 from shared.infrastructure.config import BaseConfig, get_stock_screener_config
+
+
+# ---- Legacy stubs to remove dependency on deprecated *core* package ----
+# These minimal classes preserve the previous public API surface without
+# importing `core.configuration.config_base`.
+
+class SystemSettings:
+    """Very thin placeholder that mimics the old pydantic-based SystemSettings."""
+
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+
+class Configurable:
+    """Placeholder generic base – kept only for backward compatibility."""
+
+    default_settings = None
+
+    @classmethod
+    def get_user_config(cls):
+        return cls.default_settings
 
 
 class Config(SystemSettings):
@@ -54,7 +75,7 @@ class Config(SystemSettings):
 
 
 # For late use if needed to define a strongly typed config builder.
-class ConfigBuilder(Configurable[Config]):
+class ConfigBuilder(Configurable):
     """
     Configuration builder class.
 

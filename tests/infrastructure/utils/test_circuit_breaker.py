@@ -5,7 +5,7 @@ import unittest
 import time
 from unittest.mock import patch, MagicMock
 
-from fundainsight.infrastructure.utils.circuit_breaker import (
+from shared.infrastructure.utils.circuit_breaker import (
     CircuitBreaker,
     CircuitState,
     get_circuit_breaker,
@@ -188,7 +188,7 @@ class TestCircuitBreakerRegistry(unittest.TestCase):
     def setUp(self):
         """Set up registry tests."""
         # Clear the registry before each test
-        from fundainsight.infrastructure.utils.circuit_breaker import _circuit_breakers
+        from shared.infrastructure.utils.circuit_breaker import _circuit_breakers
         _circuit_breakers.clear()
     
     def test_get_circuit_breaker(self):

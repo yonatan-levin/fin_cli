@@ -10,6 +10,7 @@ from pandas import DataFrame
 import pandas as pd
 
 from shared.infrastructure.logging.log_manager import LogManager
+from shared.infrastructure.utils.user_agent_rotator import create_session_with_rotation
 from .financial_calculation_service import FinancialCalculationService
 
 logger = LogManager().get_logger("financial_data_provider")
@@ -23,16 +24,9 @@ class YFinanceDataProvider:
     - Built-in caching and session management
     - Native retry logic and rate limiting
     - Comprehensive data access through simple APIs
+    - User agent rotation to avoid detection
     """
 
-    def __init__(self, session=None):
-        """
-        Initialize the provider.
-
-        Args:
-            session: Optional requests session to use with yfinance
-        """
-        self._session = session
 
     def get_financial_data(self, ticker: str) -> Optional[Dict[str, Any]]:
         """
@@ -51,7 +45,7 @@ class YFinanceDataProvider:
 
         try:
             # Create yfinance Ticker object (yfinance handles caching and sessions)
-            yf_ticker = yf.Ticker(ticker, session=self._session)
+            yf_ticker = yf.Ticker(ticker)
 
             # Get basic info (yfinance handles retries and rate limiting)
             ticker_info = yf_ticker.info
@@ -161,8 +155,9 @@ class YFinanceDataProvider:
         logger.info(f"Retrieving financial data for {len(tickers)} tickers")
 
         try:
+
             # Use yfinance's native multi-ticker support
-            tickers_obj = yf.Tickers(' '.join(tickers), session=self._session)
+            tickers_obj = yf.Tickers(' '.join(tickers))
 
             results = {}
             for ticker in tickers:
@@ -315,10 +310,17 @@ class YFinanceDataProvider:
             # Get price data
             try:
                 history_30d = ticker_obj.history(period="1mo")
-                average_price_30d = float(history_30d['Close'].median(
-                )) if not history_30d.empty else ticker_info.get('currentPrice', 0)
-            except:
-                average_price_30d = ticker_info.get('currentPrice', 0)
+                if not history_30d.empty:
+                    median_price = history_30d['Close'].median()
+                    average_price_30d = float(
+                        median_price) if pd.notna(median_price) else 0.0
+                else:
+                    average_price_30d = float(ticker_info.get(
+                        'currentPrice', 0)) if ticker_info.get('currentPrice') else 0.0
+            except Exception:
+                current_price = ticker_info.get('currentPrice', 0)
+                average_price_30d = float(
+                    current_price) if current_price else 0.0
 
             # Calculate adjustments
             adjusted_total_assets = FinancialCalculationService.calculate_adjusted_assets(
@@ -377,6 +379,126 @@ class FinancialDataProviderFactory:
             YFinanceDataProvider with default configuration
         """
         return YFinanceDataProvider()
+
+    @staticmethod
+    def create_composite_provider(config=None):
+        """
+        Create a composite data provider with multiple sources.
+
+        Args:
+            config: Optional configuration object with provider settings
+
+        Returns:
+            CompositeDataProvider with configured providers
+        """
+        from .composite_data_provider import CompositeDataProviderFactory
+        from .alpha_vantage_provider import AlphaVantageProviderFactory
+        from .iex_cloud_provider import IEXCloudProviderFactory
+        from .polygon_provider import PolygonProviderFactory
+
+        # Create individual providers based on configuration
+        yfinance_provider = YFinanceDataProvider()
+
+        alpha_vantage_provider = None
+        iex_cloud_provider = None
+        polygon_provider = None
+
+        if config:
+            # Create Alpha Vantage provider if configured
+            if (hasattr(config, 'alpha_vantage_enabled') and config.alpha_vantage_enabled and
+                    hasattr(config, 'alpha_vantage_api_key') and config.alpha_vantage_api_key):
+                try:
+                    alpha_vantage_provider = AlphaVantageProviderFactory.create_provider(
+                        api_key=config.alpha_vantage_api_key,
+                        requests_per_minute=getattr(
+                            config, 'alpha_vantage_rate_limit', 5)
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to create Alpha Vantage provider: {e}")
+
+            # Create IEX Cloud provider if configured
+            if (hasattr(config, 'iex_cloud_enabled') and config.iex_cloud_enabled and
+                    hasattr(config, 'iex_cloud_api_token') and config.iex_cloud_api_token):
+                try:
+                    iex_cloud_provider = IEXCloudProviderFactory.create_provider(
+                        api_token=config.iex_cloud_api_token,
+                        is_sandbox=getattr(
+                            config, 'iex_cloud_is_sandbox', True),
+                        requests_per_second=getattr(
+                            config, 'iex_cloud_rate_limit', 100)
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to create IEX Cloud provider: {e}")
+
+            # Create Polygon provider if configured
+            if (hasattr(config, 'polygon_enabled') and config.polygon_enabled and
+                    hasattr(config, 'polygon_api_key') and config.polygon_api_key):
+                try:
+                    polygon_provider = PolygonProviderFactory.create_provider(
+                        api_key=config.polygon_api_key,
+                        requests_per_minute=getattr(
+                            config, 'polygon_rate_limit', 5)
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to create Polygon provider: {e}")
+
+        # Create composite provider
+        return CompositeDataProviderFactory.create_multi_provider_composite(
+            yfinance_provider=yfinance_provider,
+            alpha_vantage_provider=alpha_vantage_provider,
+            iex_cloud_provider=iex_cloud_provider,
+            polygon_provider=polygon_provider,
+            cache_ttl=getattr(config, 'cache_ttl', 3600) if config else 3600
+        )
+
+    @staticmethod
+    def create_provider_from_config(config=None):
+        """
+        Create the appropriate data provider based on configuration.
+
+        Args:
+            config: Configuration object with provider settings
+
+        Returns:
+            Configured data provider instance
+        """
+        if not config:
+            return FinancialDataProviderFactory.create_default_provider()
+
+        primary_provider = getattr(config, 'primary_provider', 'yfinance')
+        enable_fallback = getattr(config, 'enable_fallback_providers', True)
+
+        if primary_provider == 'composite' or enable_fallback:
+            return FinancialDataProviderFactory.create_composite_provider(config)
+        elif primary_provider == 'alpha_vantage':
+            if (hasattr(config, 'alpha_vantage_api_key') and config.alpha_vantage_api_key):
+                from .alpha_vantage_provider import AlphaVantageProviderFactory
+                return AlphaVantageProviderFactory.create_provider(
+                    api_key=config.alpha_vantage_api_key,
+                    requests_per_minute=getattr(
+                        config, 'alpha_vantage_rate_limit', 5)
+                )
+            else:
+                logger.warning(
+                    "Alpha Vantage selected but no API key provided, falling back to yfinance")
+                return FinancialDataProviderFactory.create_default_provider()
+        elif primary_provider == 'iex_cloud':
+            if (hasattr(config, 'iex_cloud_api_token') and config.iex_cloud_api_token):
+                from .iex_cloud_provider import IEXCloudProviderFactory
+                return IEXCloudProviderFactory.create_provider(
+                    api_token=config.iex_cloud_api_token,
+                    is_sandbox=getattr(config, 'iex_cloud_is_sandbox', True),
+                    requests_per_second=getattr(
+                        config, 'iex_cloud_rate_limit', 100)
+                )
+            else:
+                logger.warning(
+                    "IEX Cloud selected but no API token provided, falling back to yfinance")
+                return FinancialDataProviderFactory.create_default_provider()
+        else:
+            # Default to yfinance
+            return FinancialDataProviderFactory.create_default_provider()
 
 
 # Global default provider instance for backward compatibility

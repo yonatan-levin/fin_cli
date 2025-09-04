@@ -2,12 +2,11 @@ import logging
 from pandas import DataFrame
 from shared.infrastructure.config import get_financial_config, build_config
 from logger.logger import logger
-from .picker import  picker
-from .stock_picker import picker as stock_picker
+from .stock_picker import picker
 from .fincli import get_recommended_stocks
 
 
-def get_opportunities(history: bool = False, debug: bool = False, set_filters: str = "",scrape_link: str = "") -> DataFrame | None:
+def get_opportunities(history: bool = False, debug: bool = False, set_filters: str = "", scrape_link: str = "") -> DataFrame | None:
     logger.set_level(logging.DEBUG if debug else logging.INFO)
 
     # Enhanced logging with context
@@ -28,9 +27,10 @@ def get_opportunities(history: bool = False, debug: bool = False, set_filters: s
         })
         return
 
-    df_stocks = get_recommended_stocks(filters=config.filters, scrape_link=scrape_link)
+    df_stocks = get_recommended_stocks(
+        filters=config.filters, scrape_link=scrape_link)
 
-    data = stock_picker(df_stocks)
+    data = picker(df_stocks)
 
     if data is None:
         logger.warn("Picker returned no data", context={
@@ -42,7 +42,7 @@ def get_opportunities(history: bool = False, debug: bool = False, set_filters: s
         "result_count": len(data),
         "file_path": config.file_path("funda_insight_result")
     })
-    data.to_csv(config.file_path("funda_insight_result"))
+    data.to_csv(config.file_path("funda_insight_result"), index=False)
     logger.info("Results saved to csv successfully", context={
         "result_count": len(data)
     })

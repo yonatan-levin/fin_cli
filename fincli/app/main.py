@@ -1,7 +1,7 @@
 import logging
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
-from shared.infrastructure.config import get_stock_screener_config, build_config
+from shared.infrastructure.config import build_config
 from fincli.stock_screening.content.stock_table import StockTableScreeningContent
 from fincli.cli.cli_stock_screener import select_filters_and_values
 from logger.logger import logger
@@ -9,12 +9,19 @@ from fincli.stock_screening.locators.stock_table_locators import StockTableLocat
 from fincli.utils.web_scraper import fetch_page_sync
 
 
-def fetch_urls(quarry, page_count):
+def fetch_urls(quarry, page_count, max_workers: int | None = None, fetch_fn=fetch_page_sync):
+    """Fetch all pagination URLs with optional concurrency control.
+
+    Args:
+        quarry: Base URL
+        page_count: Number of additional pages
+        max_workers: Optional limit for threads. If None, defaults to ThreadPoolExecutor heuristic.
+    """
     urls = [f"{quarry}&r={abs(20*(i) + 1)}" for i in range(page_count + 1)]
 
     # Use ThreadPoolExecutor for parallel fetching
-    with ThreadPoolExecutor() as executor:
-        results = list(executor.map(fetch_page_sync, urls))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        results = list(executor.map(fetch_fn, urls))
 
     # Filter out None results (failed requests)
     valid_results = [result for result in results if result is not None]
@@ -35,8 +42,7 @@ def aggregate_rows(pages):
 def build_data_frame(data_rows):
     df = pd.concat([pd.DataFrame(row) for row in data_rows])
     df.columns = StockTableLocators.PD_TABLE_COLUMNS
-    df["Market Cap"] = df["Market Cap"].apply(
-        lambda x: convert_market_cap_to_numeric(x))
+    df["Market Cap"] = df["Market Cap"].apply(convert_market_cap_to_numeric)
     df['Symbol'] = df['Ticker']
     df['Ticker'] = '=HYPERLINK("' + df['Link'] + '", "' + df['Ticker'] + '")'
     df.drop(columns=['Link'], axis=1, inplace=True)
@@ -85,8 +91,8 @@ def run_stock_screener(history: bool = False, debug: bool = False):
         return
 
     final_df = build_data_frame(data_rows)
-    logger.info(f"Data frame created successfully", "Data Handling --->")
-    logger.info(f"Saving data frame to csv file", "Data Handling --->")
+    logger.info("Data frame created successfully", "Data Handling --->")
+    logger.info("Saving data frame to csv file", "Data Handling --->")
     file_path = config.file_path("stock_screener")
     final_df.to_csv(file_path, index=False)
     logger.info(f"File saved to {file_path}", "Data Handling --->")

@@ -14,6 +14,7 @@ from dataclasses import dataclass, field, asdict
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, TypeVar, Generic, cast
+from shared.infrastructure.utils.json_utils import json_to_tuples
 
 # Type variable for configuration classes
 T = TypeVar('T', bound='BaseConfig')
@@ -388,11 +389,9 @@ def build_config(use_history: bool = False, filters: str = "", **kwargs) -> Base
 
     # Parse filters if provided
     if filters and not use_history:
-        from core.converters.json import json_to_tuples
         config_kwargs['filters'] = json_to_tuples(filters)
     elif use_history:
         # Load filters from history file
-        import json
         filepath = os.path.join(os.path.realpath('fincli'), "stock_screening",
                                 "local_history", 'filter_history.json')
         try:

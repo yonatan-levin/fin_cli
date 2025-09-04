@@ -1,13 +1,14 @@
 [project]
 name = "finscrape"
+version = "0.1.0"
+description = "Financial data scraping and analysis tool"
+authors = [{ name = "AlgoBeta Team" }]
 
 dependencies = [
-    "requests",
+    "requests>=2.31.0",
     "urllib3<2",
-    "requests",
-    "urllib3<2",
-    "pandas",
-    "yfinance",
+    "pandas>=1.3.0",
+    "yfinance>=0.2.63",
     "cfscrape",
     "click",
 ]

@@ -1,0 +1,27 @@
+{
+    "_comment": "Sample API keys configuration file",
+    "_instructions": {
+        "alpha_vantage": "Get your free API key from: https://www.alphavantage.co/support/#api-key",
+        "iex_cloud": "Get your API token from: https://iexcloud.io/console/",
+        "polygon": "Get your API key from: https://polygon.io/dashboard",
+        "fmp": "Get your API key from: https://financialmodelingprep.com/developer/docs"
+    },
+    "alpha_vantage_api_key": "YOUR_ALPHA_VANTAGE_API_KEY_HERE",
+    "alpha_vantage_enabled": false,
+    "alpha_vantage_rate_limit": 5,
+    "iex_cloud_api_token": "YOUR_IEX_CLOUD_API_TOKEN_HERE",
+    "iex_cloud_enabled": false,
+    "iex_cloud_is_sandbox": true,
+    "iex_cloud_rate_limit": 100,
+    "polygon_api_key": "YOUR_POLYGON_API_KEY_HERE",
+    "polygon_enabled": false,
+    "polygon_rate_limit": 5,
+    "fmp_api_key": "YOUR_FMP_API_KEY_HERE",
+    "fmp_enabled": false,
+    "fmp_rate_limit": 250,
+    "primary_provider": "composite",
+    "enable_fallback_providers": true,
+    "provider_timeout": 30,
+    "cache_ttl": 3600,
+    "enable_memory_cache": true
+}

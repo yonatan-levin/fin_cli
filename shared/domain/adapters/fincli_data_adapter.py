@@ -71,16 +71,19 @@ class FinCliDataAdapter:
             List of FinancialData domain objects
         """
         if df is None or df.empty:
-            logger.warn("Empty DataFrame provided to convert_to_financial_data")
+            logger.warn(
+                "Empty DataFrame provided to convert_to_financial_data")
             return []
 
         if self.financial_data_provider is None:
-            raise ValueError("financial_data_provider must be set to convert to FinancialData")
+            raise ValueError(
+                "financial_data_provider must be set to convert to FinancialData")
 
         logger.info(f"Converting {len(df)} rows to FinancialData objects")
 
         # Extract tickers for financial data retrieval
-        tickers = df['Symbol'].tolist() if 'Symbol' in df.columns else df['Ticker'].tolist()
+        tickers = df['Symbol'].tolist(
+        ) if 'Symbol' in df.columns else df['Ticker'].tolist()
 
         # Get detailed financial data
         if use_parallel:
@@ -112,8 +115,9 @@ class FinCliDataAdapter:
                 logger.error(f"Failed to create FinancialData from row: {e}")
                 continue
 
-        logger.info(f"Successfully created {len(financial_data_objects)} FinancialData objects")
-        
+        logger.info(
+            f"Successfully created {len(financial_data_objects)} FinancialData objects")
+
         return financial_data_objects
 
     def _convert_row_to_stock(self, row: Series) -> Stock:
@@ -188,32 +192,70 @@ class FinCliDataAdapter:
         """
         Merge original DataFrame with financial data DataFrame.
 
-        This function replicates the logic from the old assign_old_df_to_new_df function,
-        which assigns columns by position rather than using complex DataFrame merging.
+        This function properly merges DataFrames based on symbol matching,
+        fixing the previous position-based assignment that caused data misalignment.
 
         Args:
             original_df: Original DataFrame from fincli
             financial_df: DataFrame with detailed financial data
 
         Returns:
-            Financial DataFrame with additional columns assigned from original_df
+            Financial DataFrame with additional columns properly merged from original_df
         """
-        logger.info(f"Merging DataFrames: original={len(original_df)}, financial={len(financial_df)}")
+        logger.info(
+            f"Merging DataFrames: original={len(original_df)}, financial={len(financial_df)}")
 
         # Make a copy to avoid modifying the original financial_df
         result_df = financial_df.copy()
 
-        # Columns to assign from original DataFrame (matching old code)
-        columns_to_assign = ['Ticker', 'Sector', 'Industry', 'Country']
+        # Determine the symbol column name in both DataFrames
+        original_symbol_col = 'Symbol' if 'Symbol' in original_df.columns else 'Ticker'
+        financial_symbol_col = 'Symbol' if 'Symbol' in financial_df.columns else 'Ticker'
 
-        for column in columns_to_assign:
-            if column in original_df.columns:
+        # Columns to merge from original DataFrame
+        columns_to_merge = ['Ticker', 'Sector', 'Industry', 'Country']
+        available_columns = [
+            col for col in columns_to_merge if col in original_df.columns]
+
+        if not available_columns:
+            logger.warn(
+                "No columns available to merge from original DataFrame")
+            return result_df
+
+        # Create merge columns list (symbol + other columns)
+        merge_columns = [original_symbol_col] + available_columns
+        original_subset = original_df[merge_columns].copy()
+
+        # Perform proper symbol-based merge
+        try:
+            merged_df = result_df.merge(
+                original_subset,
+                left_on=financial_symbol_col,
+                right_on=original_symbol_col,
+                how='left',
+                suffixes=('', '_original')
+            )
+
+            # Clean up duplicate symbol columns if they exist
+            if original_symbol_col != financial_symbol_col and f"{original_symbol_col}_original" in merged_df.columns:
+                merged_df = merged_df.drop(
+                    columns=[f"{original_symbol_col}_original"])
+
+            # Update columns from the merge
+            for col in available_columns:
+                if col in merged_df.columns:
+                    result_df[col] = merged_df[col]
+
+            logger.info(
+                f"Successfully merged DataFrames using symbol matching, result has {len(result_df)} rows")
+
+        except Exception as e:
+            logger.error(f"Error during DataFrame merge: {e}")
+            # Fallback to previous behavior if merge fails
+            logger.warn("Falling back to position-based assignment")
+            for column in available_columns:
                 self._assign_column_by_position(original_df, result_df, column)
-            else:
-                logger.warn(f"Column '{column}' not found in original DataFrame")
 
-        logger.info(f"Successfully merged DataFrames, result has {len(result_df)} rows")
-        
         return result_df
 
     def _assign_column_by_position(self, source_df: DataFrame, target_df: DataFrame, column: str) -> None:
@@ -228,21 +270,20 @@ class FinCliDataAdapter:
             column: Name of the column to assign
         """
         if len(target_df) == len(source_df[column]):
-            # Same length - direct assignment
+            # Same length - direct assignment (exact match with original logic)
             target_df[column] = source_df[column].values
             logger.debug(
                 f"Assigned column '{column}' - lengths match ({len(target_df)})")
         else:
-            # Different lengths - assign up to minimum length, fill rest with NaN
+            # Different lengths - replicate exact original logic
             min_length = min(len(target_df), len(source_df[column]))
 
-            # Initialize the column with NaN first
-            target_df[column] = np.nan
+            # Direct assignment up to min_length (matches original exactly)
+            target_df[column] = source_df[column].values[:min_length]
 
-            # Assign values up to min_length using .loc to avoid the warning
-            if min_length > 0:
-                target_df.loc[:min_length-1,
-                              column] = source_df[column].values[:min_length]
+            # Fill remaining positions with NaN only if target is longer (matches original)
+            if len(target_df) > min_length:
+                target_df[column][min_length:] = np.nan
 
             logger.warn(
                 f"Column '{column}' length mismatch: target={len(target_df)}, source={len(source_df[column])}, assigned={min_length}")
