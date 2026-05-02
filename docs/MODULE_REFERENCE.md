@@ -29,7 +29,7 @@ This module operates entirely synchronously — no threading.
 | File | Role |
 |------|------|
 | `fincli/app/cli.py` | Click entry point. Defines the `@click.group` with `--history`, `--debug` flags. Invokes `run_stock_screener`. |
-| `fincli/app/main.py` | Orchestrator. `run_stock_screener(config)` → `fetch_urls(urls)` → `aggregate_rows(pages)` → `build_data_frame(rows)` → `convert_market_cap_to_numeric(df)`. Writes the final CSV. |
+| `fincli/app/main.py` | Orchestrator. `run_stock_screener(history, debug)` → `fetch_urls(quarry, page_count)` → `aggregate_rows(pages)` → `build_data_frame(rows)` → `convert_market_cap_to_numeric(df)`. Writes the final CSV. |
 | `fincli/cli/cli_stock_screener.py` | Interactive filter-selection UI. Prompts the user through Fundamental / Descriptive / Technical filter categories and returns a list of `(query_key, value_code)` tuples. |
 | `fincli/utils/web_scraper.py` | `fetch_page_sync(url)` — makes one HTTPS request via `cfscrape` with a randomized User-Agent and 10-second timeout. Implements exponential backoff on rate-limit responses. |
 | `fincli/utils/quary_builders.py` | `build_stock_screener_query(filters)` — takes the list of selected filter tuples and assembles the Finviz screener URL (`https://finviz.com/screener.ashx?v=111&f=<codes>&ft=2`). Handles pagination by appending `&r=<offset>`. |
@@ -53,8 +53,15 @@ Internal function signatures (for testing and `fundainsight` integration):
 
 ```python
 # fincli/app/main.py
-def run_stock_screener(config: Config) -> DataFrame | None
-def fetch_urls(urls: list[str]) -> list[str]          # list of raw HTML pages
+def run_stock_screener(history: bool = False, debug: bool = False)
+    # Builds config internally via build_config(use_history=history).
+    # Does NOT accept a Config argument and does NOT return a DataFrame to the caller.
+    # Writes the final CSV to workspace_output/ and returns None on both success and failure.
+def fetch_urls(quarry, page_count)
+    # Fetches page_count pages from the Finviz query URL quarry.
+    # Constructs paginated URLs by appending &r=<offset> and delegates each to
+    # fetch_page_sync. Returns a list[str] where each element is the raw HTML
+    # of one result page.
 def aggregate_rows(pages: list[str]) -> list[dict]    # parsed rows from all pages
 def build_data_frame(rows: list[dict]) -> DataFrame
 def convert_market_cap_to_numeric(df: DataFrame) -> DataFrame
@@ -75,7 +82,7 @@ Output `DataFrame` columns (from Finviz screener table — exact column set depe
 | ... | ... | Other Finviz columns depending on screener view |
 | `Ticker` (Excel) | `str` | `=HYPERLINK(...)` formula wrapping the symbol — preserved for Excel use |
 
-Filter history saved as `fundainsight/local_history/filter_history.json` (known bug: path is hard-coded in `core/configurator.py` regardless of calling CLI — see Known Issues in `CLAUDE.md`).
+Filter history saved as `fundainsight/local_history/filter_history.json` (known bug: path is hard-coded in `core/configuration/configurator.py` regardless of calling CLI — see Known Issues in `CLAUDE.md`).
 
 CSV written to: `workspace_output/stock_screener_{YYYY-MM-DD_HH-MM}.csv`.
 
@@ -112,7 +119,7 @@ The Yahoo enrichment step is parallelized with `concurrent.futures.ThreadPoolExe
 | `fundainsight/app/main.py` | `get_opportunities(config)` orchestrator — wires the screener run, the picker enrichment, and CSV output. |
 | `fundainsight/app/picker.py` | Core enrichment loop. `picker(df)` runs `get_financial_data` over all tickers via `ThreadPoolExecutor`, assembles `df_fundamentals`, calls `add_new_columns` for ratio computation, applies the `Filters` chain, writes pre-filter CSV. |
 | `fundainsight/app/fincli.py` | Adapter that re-runs the `fincli` screener inline and exposes its DataFrame — used when fundainsight is invoked without a pre-existing screener CSV. |
-| `fundainsight/calculators/equity_calc.py` | Financial calculations. `get_financial_data(ticker)` → dict with balance-sheet fields + market cap + average price. `adjust_assets(data)` → adjusted totals. `calculate_price_to_data(row, col)` → ratio. `ratio_between_two_values(a, b)` → `a / b`. |
+| `fundainsight/calculators/equity_calc.py` | Financial calculations. `get_financial_data(ticker_name)` → dict with balance-sheet fields + market cap + average price. `adjust_assets(balance_sheet, asset_type, adjustment_factor, additional_subtracts)` → adjusted total (operates on a DataFrame slice, not a dict). `calculate_price_to_data(row, col)` → ratio. `ratio_between_two_values(a, b)` → `a / b`. |
 | `fundainsight/calculators/filters.py` | `Filters` class — fluent-interface DataFrame filter chain. `filter_countries([...])`, `filter_sector(sector)`, `filter_price(col, threshold)`, `get_data()`. |
 
 ### Public surface
@@ -134,8 +141,12 @@ Internal functions (for testing):
 def picker(df: DataFrame | None) -> DataFrame | None
 
 # fundainsight/calculators/equity_calc.py
-def get_financial_data(ticker: str) -> dict | None
-def adjust_assets(data: dict) -> dict
+def get_financial_data(ticker_name: str) -> dict | None
+    # Parameter is ticker_name, not ticker. Returns a dict on success; None on
+    # any yahooquery failure or missing field.
+def adjust_assets(balance_sheet, asset_type, adjustment_factor, additional_subtracts)
+    # Takes a DataFrame balance-sheet slice (not a dict).
+    # Returns the adjusted asset value (numeric) or None if the key is missing.
 def calculate_price_to_data(row: Series, col: str) -> float | None
 def ratio_between_two_values(a: float | None, b: float | None) -> float | None
 
@@ -194,7 +205,7 @@ Pure-Python configuration framework. Provides Pydantic base classes, a generic `
 | File | Role |
 |------|------|
 | `core/configuration/config_base.py` | `SystemSettings(BaseModel)` — Pydantic base class with `use_history: bool`, `filters: list`, `scrape_link: str`, `debug: bool`. `Configurable[S]` generic protocol. |
-| `core/configuration/configurator.py` | `build_config(cli_args, config_class)` — constructs and validates a config instance; loads `filter_history.json` when `use_history=True`. **Known issue:** history path is hard-coded to `fundainsight/local_history/` regardless of calling CLI. |
+| `core/configuration/configurator.py` | `build_config(use_history, filters)` — constructs and returns a `Config` instance; loads `filter_history.json` when `use_history=True`, or parses a JSON filter string when `filters` is provided. **Known issue:** history path is hard-coded to `fundainsight/local_history/` regardless of calling CLI. |
 | `core/converters/json.py` | `json_to_tuples(json_str)` — parses the `--set-filters` JSON string into a list of `(query_key, value_code)` tuples for consumption by the Finviz URL builder. |
 
 ### Public surface
@@ -208,7 +219,10 @@ class SystemSettings(BaseModel):
     debug: bool
 
 # core/configuration/configurator.py
-def build_config(cli_args: dict, config_class: type[S]) -> S
+def build_config(use_history: bool = False, filters: str = "") -> Config
+    # Returns a concrete Config instance (not a generic S).
+    # The Configurable[S] generic defined in config_base.py is NOT used by
+    # build_config — it is a protocol for future extension only.
 
 # core/converters/json.py
 def json_to_tuples(json_str: str) -> list[tuple[str, str]]
@@ -293,11 +307,14 @@ Singleton logger with three handlers: a typing-effect console handler (colorama 
 
 ### Key files
 
+The `logger/` package is a flat set of files — there are no subdirectories.
+
 | File | Role |
 |------|------|
+| `logger/__init__.py` | Package init; re-exports the logger singleton. |
 | `logger/logger.py` | `Logger` class (Singleton). Exposes `.info`, `.warning`, `.error`, `.debug`. Initializes all three handlers on first construction; subsequent imports return the same instance. |
-| `logger/handlers/` | Three handler implementations: `TypingConsoleHandler` (typing-animation with colorama), `PlainConsoleHandler` (bare stdout), `JsonFileHandler` (structured JSON to `logs/activity.log` and `logs/error.log`). |
-| `logger/formatters/` | One formatter per handler. Typing console uses colorized format. JSON handler uses `json.dumps`-based format with timestamp, level, message, and caller. |
+| `logger/handlers.py` | Three handler classes in a single file: `ConsoleHandler` (plain stdout, extends `logging.StreamHandler`), `TypingConsoleHandler` (typing-animation word-by-word output, extends `logging.StreamHandler`), `JsonFileHandler` (structured JSON to a log file, extends `logging.FileHandler`). |
+| `logger/formatters.py` | Two formatter classes: `AlgoFormatter` (supports `color` and `title` log extras; produces ANSI-colored output via colorama `Style`), `JsonFormatter` (passes the raw message through as JSON). Also contains `remove_color_codes(s)` helper. |
 | `logger/log_cycle.py` | Internal typing-animation state machine used by `TypingConsoleHandler`. |
 | `singleton.py` (repo root) | Metaclass `Singleton` — ensures only one instance of `Logger` exists per process. Imported by `logger.py`. |
 

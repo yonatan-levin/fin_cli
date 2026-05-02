@@ -68,7 +68,7 @@ Tracked in `docs/superpowers/specs/2026-05-02-agent-harness-replication-design.m
 
 ### Phase 3 — Coverage gate at 90%
 
-- Enable the coverage gate in `.claude/hooks/on-stop.js` at **90%** — matching the Midas project's threshold.
+- Enable the coverage gate in `.claude/hooks/on-stop.js` at **90%**.
 - Update `TESTING.md`, `agents/roles/verifier.md`, and `agents/rules/_shared-workflow.md` to document the enforced threshold.
 - Coverage gate applies to `fundainsight/calculators/`, `core/`, and `config/` at minimum.
 

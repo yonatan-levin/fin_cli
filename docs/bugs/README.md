@@ -8,7 +8,7 @@ This folder is a flat list of bug specs. Each bug gets one Markdown file.
 
 ## Template
 
-````markdown
+`````markdown
 # BUG-NNN — Title
 
 **Date opened:** YYYY-MM-DD
@@ -34,7 +34,7 @@ Once known. Reference commit/PR.
 ## Regression test
 
 Once written. Reference test file.
-````
+`````
 
 ## Lifecycle
 
