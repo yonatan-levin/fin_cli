@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "finscrape"
 version = "0.1.0"
@@ -5,7 +9,7 @@ requires-python = ">=3.12"
 
 dependencies = [
     "requests",
-    "urllib3<2",
+    "urllib3<2",  # cfscrape requires urllib3 1.x API
     "pandas",
     "yahooquery",
     "cfscrape",

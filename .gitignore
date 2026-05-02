@@ -179,10 +179,9 @@ agbenchmark/reports/
 package-lock.json
 package.json
 
+# Claude Code local runtime + per-user state
 .worktrees/
 .claude/worktrees/
 .claude/hooks/.session-edits.json
 .claude/hooks/.rules-loaded
-
-# Claude Code hook session state
 .claude/projects/
