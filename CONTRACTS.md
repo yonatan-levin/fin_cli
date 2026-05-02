@@ -229,30 +229,25 @@ Produced by `fincli/app/main.py:build_data_frame`.
 
 ### 4.2 `funda_insight_result_unfiltered_*.csv`
 
-Produced by `fundainsight/app/picker.py` after enrichment + ratio calculation, before filters.
-
-Includes all surviving columns from the screener DataFrame plus:
+Produced by `fundainsight/app/picker.py` after enrichment + ratio calculation, before filters. The file contains exactly the columns retained by `columns_to_retain` in `picker.py` lines 48-58:
 
 | Column | dtype | Description |
 |---|---|---|
-| `Symbol` | str | Ticker symbol |
+| `Ticker` | str | Ticker symbol |
+| `Sector` | str | Industry sector (assigned from screener DataFrame) |
+| `Country` | str | Country of incorporation (assigned from screener DataFrame) |
 | `Market Cap` | float | From Yahoo `summary_detail.marketCap` |
-| `Shares Outstanding` | int | From Yahoo `key_stats.sharesOutstanding` |
-| `Total Assets` | float | From Yahoo `balance_sheet.TotalAssets` |
-| `Adjusted Total Assets` | float \| None | After subtracting `Goodwill` and `OtherNonCurrentAssets` |
-| `Adjusted Total Current Assets` | float \| None | After subtracting `OtherCurrentAssets` and adding back 30% of `Inventory` |
-| `Total Equity` | float | From Yahoo `balance_sheet.StockholdersEquity` |
 | `Average Price in Last 30 Days` | float | Median `close` over the 1-month price history |
 | `price_by_assets` | float | `Adjusted Total Assets / Shares Outstanding` |
 | `price_by_current_assets` | float | `Adjusted Total Current Assets / Shares Outstanding` |
-| `price/price_to_assets_ratio` | float | `Average Price in Last 30 Days / price_by_assets` |
 | `price/price_to_current_assets_ratio` | float | `Average Price in Last 30 Days / price_by_current_assets` |
+| `price/price_to_assets_ratio` | float | `Average Price in Last 30 Days / price_by_assets` |
 
-Tickers that returned `None` from `get_financial_data` are dropped before this CSV is written.
+These are the only 9 columns written. Intermediate computation columns (`Total Assets`, `Adjusted Total Assets`, `Adjusted Total Current Assets`, `Shares Outstanding`, `Total Equity`, etc.) are used during enrichment but are not retained in the output CSV. Tickers that returned `None` from `get_financial_data` are dropped before this CSV is written.
 
 ### 4.3 `funda_insight_result_*.csv`
 
-Same shape as `funda_insight_result_unfiltered_*.csv` after the filter chain in `picker.py`:
+Same 9 columns as `funda_insight_result_unfiltered_*.csv` (the filter chain in `picker.py` only removes rows; it adds no new columns). The filter chain applied is:
 
 ```python
 .filter_countries(["Brazil", "Chile", "India", "Bermuda", "China"])
@@ -400,7 +395,7 @@ def add_new_columns(df: pandas.DataFrame) -> pandas.DataFrame
 def assign_old_df_to_new_df(
     old_df: pandas.DataFrame,
     new_df: pandas.DataFrame,
-    column: str,
+    colum: str,          # (parameter name `colum` is a known typo in source — see CLAUDE.md Known Issues)
 ) -> pandas.DataFrame
 ```
 

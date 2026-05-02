@@ -282,7 +282,7 @@ algo_beta/
   README.md
   TESTING.md
   TOOLS_REFERENCE.md
-  AGENTS.md                    # (planned — Phase 6 of harness work)
+  AGENTS.md                    # (planned — C6 — final commit of the Phase 1 harness rollout)
 
   pyproject.toml
   requirements.txt

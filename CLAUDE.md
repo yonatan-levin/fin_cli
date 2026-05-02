@@ -110,6 +110,7 @@ Full diagram + per-section detail in `ARCHITECTURE.md`.
 | `docs/superpowers/specs/` | Chronological per-feature design specs |
 | `.claude/settings.json` | Hook wiring: `SessionStart` -> `load-rules.js`, `PostToolUse:Edit\|Write` -> `post-edit.js`, `Stop` -> `on-stop.js` |
 | `.claude/hooks/load-rules.js` | Auto-injects `_shared-workflow.md`, `preflight.md`, `orchestrator.md` at session start |
+| `.claude/hooks/pre-read.js` | Read-time guardrails: blocks reads of secrets/sensitive paths and surfaces stale-cache warnings (C5 work; not yet present) |
 | `.claude/hooks/post-edit.js` | Per-edit lint+format+mypy on the saved file; secret/OWASP scan; doc-update reminders |
 | `.claude/hooks/on-stop.js` | Repo-wide ruff + mypy + pytest at Stop event; coverage skipped (Phase 3); mypy via `warnings` channel (Phase 4 promotes to gate) |
 
@@ -187,6 +188,7 @@ A full reference of all available skills, slash commands, and MCP tools (includi
 - **`wisdom_fruit/`** is incomplete and abandoned — slated for removal once it is confirmed nothing depends on it.
 - **`shared/`, `example/`, `src/finpack/`** are empty scaffolds left behind by an earlier reorganization. Removing them is queued.
 - **`mypy strict = true` produces a large day-one error count** because the codebase has almost no type hints. This is intentional — see Phase 4 below. Do not weaken `strict` to silence the count; instead add hints to the file you are editing.
+- **Hard-coded history path in `core/configuration/configurator.py`** — `build_config` derives the `filter_history.json` location from `os.path.realpath('fundainsight')` regardless of which CLI invoked it. `fincli --history` therefore reads/writes to `fundainsight/local_history/` rather than `fincli/local_history/`. Phase 2 fix candidate.
 
 ## Phase Status
 
