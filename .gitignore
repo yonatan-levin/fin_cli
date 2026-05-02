@@ -182,7 +182,6 @@ package.json
 .worktrees/
 .claude/worktrees/
 .claude/hooks/.session-edits.json
-.claude/settings.local.json
 .claude/hooks/.rules-loaded
 
 # Claude Code hook session state
