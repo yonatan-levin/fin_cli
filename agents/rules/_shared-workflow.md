@@ -13,16 +13,16 @@ This file contains shared workflow patterns used across all roles and modes for 
    - `ARCHITECTURE.md`
    - `CONTRACTS.md` (CLI command surface + CSV output schema)
    - `TESTING.md`
-   - `AGENTS.md`
+   - `AGENTS.md` (created in C6 of the harness rollout — skip gracefully if not present)
 
 2. **USE MCP TOOLS** - You MUST call:
 - **sequential-thinking**: Break down complex tasks into smaller steps
 - **memory**: Store work context, thoughts, and conclusions
 - **perplexity-ask**: Research unknown problems, search web for answers
 - **context7**: Look up documentation for any code subject (yahooquery, pandas, Click, Pydantic, cfscrape)
-- **zen-mcp thinkdeep**: Deep thinking about architecture and complex problems
-- **zen-mcp codereview**: Systematic code review.
-- **zen-mcp debug**: Root cause analysis for bugs
+- **mcp__zen__thinkdeep**: Deep thinking about architecture and complex problems
+- **mcp__zen__codereview**: Systematic code review.
+- **mcp__zen__debug**: Root cause analysis for bugs
 
 3. **SHOW YOUR WORK** - Response must include:
    - Checklist acknowledgment
@@ -372,7 +372,7 @@ Bug Found
 ### Issue Templates
 
 Use provided templates in `.github/ISSUE_TEMPLATE/` if present:
-- `feature-request.md` - For new features
-- `bug-report.md` - For bug reports
+- `feature_request.md` - For new features
+- `bug_report.md` - For bug reports
 
 ---

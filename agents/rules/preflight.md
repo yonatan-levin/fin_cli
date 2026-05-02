@@ -23,7 +23,7 @@ Use `sequential-thinking` MCP tool to:
 
 Based on the task, read these files using the Read tool:
 - Root `CLAUDE.md` — project identity, tech stack, conventions, important files
-- Root `AGENTS.md` — loading contract and cross-file relationships
+- Root `AGENTS.md` — loading contract and cross-file relationships (created in C6 of the harness rollout — skip gracefully if not present)
 - Root `ARCHITECTURE.md` — overall system architecture (fincli + fundainsight + supporting modules)
 - Root `CONTRACTS.md` — CLI command surface + CSV output schema
 - Root `TESTING.md` — testing requirements and pytest layout
@@ -36,7 +36,7 @@ Based on the task, read these files using the Read tool:
 
 Determine from context:
 - **Mode**: PLAN_AND_CREATE | EXECUTE | REFACTOR | DEBUG | CODE_REVIEW
-- **Role**: ARCH | BACKEND | FRONTEND | UX_UI | QA | REVIEWER
+- **Role**: ARCH | BACKEND | FRONTEND | UX_UI | VERIFIER | QA | REVIEWER
 
 ### Step 4: Run Local Quality Probes (advisory in Phase 1)
 
@@ -81,7 +81,7 @@ Check for previous session data:
 - [x] ARCHITECTURE.md - {1-line summary}
 - [x] CONTRACTS.md - {1-line summary}
 - [x] TESTING.md - {1-line summary}
-- [x] AGENTS.md - {1-line summary}
+- [x] AGENTS.md - {1-line summary} (created in C6 of the harness rollout — skip gracefully if not present)
 - [x] docs/THESIS.md or docs/MODULE_REFERENCE.md - {if applicable}
 
 ### Task Breakdown (via sequential-thinking)

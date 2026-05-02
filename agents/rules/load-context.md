@@ -67,7 +67,7 @@ Universal context loader that handles any path in the algo_beta project — modu
 | `testing` | `TESTING.md` | Test strategy and pytest layout |
 | `tools-ref` | `TOOLS_REFERENCE.md` | MCP tools reference |
 | `claude` | `CLAUDE.md` | Project guide for AI agents |
-| `agents-md` | `AGENTS.md` | Loading contract |
+| `agents-md` | `AGENTS.md` | Loading contract (created in C6 of the harness rollout — skip gracefully if not present) |
 
 ## Automatic Actions
 
@@ -85,7 +85,7 @@ Input -> Category Detection:
 +-- scripts/*                      -> SCRIPTS
 +-- tests/*                        -> TESTS
 +-- docs/*                         -> DOCS
-+-- ARCHITECTURE.md / CONTRACTS.md / TESTING.md / CLAUDE.md / AGENTS.md / TOOLS_REFERENCE.md -> TOP_DOC
++-- ARCHITECTURE.md / CONTRACTS.md / TESTING.md / CLAUDE.md / AGENTS.md (created in C6 of the harness rollout — skip gracefully if not present) / TOOLS_REFERENCE.md -> TOP_DOC
 +-- (file path)                    -> SINGLE_FILE
 ```
 

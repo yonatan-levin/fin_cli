@@ -65,7 +65,7 @@ If a fix is needed, describe the smallest safe fix and hand off to the appropria
    - Verify **PEP 8 via ruff** — `ruff check` and `ruff format --check` should be clean.
    - Verify **type hints**: `from __future__ import annotations` at top, type hints on public functions, use of `typing` module / `collections.abc` as appropriate.
    - Verify **Pydantic patterns**: `Field` defaults, `model_validator` / `field_validator` for non-trivial validation, `model_config = {...}` for strictness, `SystemSettings` base class extension for config classes.
-   - Verify **Google-style docstrings** on public functions (per spec OQ4 / `CLAUDE.md` conventions): `Args:`, `Returns:`, `Raises:` sections.
+   - Verify **Google-style docstrings** on public functions (per `CLAUDE.md` conventions): `Args:`, `Returns:`, `Raises:` sections.
    - Comments should explain *why*, non-obvious business rules (e.g., why a balance-sheet row label differs by issuer country), invariants, tradeoffs, security constraints, or integration quirks. They should not merely restate what the code does.
    - TODOs should be real follow-up work with enough context and, when available, an issue reference.
    - If the change affects public behavior, CLI surface, CSV schema, operations, or developer workflow, verify relevant docs/specs were updated or request a docs-update handoff.
