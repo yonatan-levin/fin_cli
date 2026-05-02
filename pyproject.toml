@@ -1,13 +1,68 @@
 [project]
 name = "finscrape"
+requires-python = ">=3.12"
 
 dependencies = [
     "requests",
     "urllib3<2",
-    "requests",
-    "urllib3<2",
     "pandas",
-    "yfinance",
+    "yahooquery",
     "cfscrape",
     "click",
+    "pydantic",
+    "colorama",
+    "beautifulsoup4",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "pytest>=8",
+    "pytest-cov>=5",
+    "types-beautifulsoup4",
+    "pip-audit",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [
+    "workspace_output",
+    "workspace_materials",
+    "dist",
+    "htmlcov",
+    "wisdom_fruit",
+    "shared",
+    "example",
+    "src",
+    "benchmarks",
+    "__pycache__",
+    ".venv",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "SIM"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+files = ["fundainsight", "fincli", "core", "config", "logger"]
+strict = true
+warn_unused_ignores = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = ["cfscrape", "cfscrape.*", "yahooquery", "yahooquery.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-ra"
