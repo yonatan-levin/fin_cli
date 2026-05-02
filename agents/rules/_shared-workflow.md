@@ -257,7 +257,7 @@ HANDOFF_TO: <ARCH | BACKEND | FRONTEND | UX_UI | VERIFIER | QA | REVIEWER | HUMA
 Non-trivial work SHOULD be tracked via GitHub issues when the user opts in. Use the `@github-tracking` skill for issue operations.
 
 ### Repository
-- **Target**: `yonatan-levin/algo_beta` (default; verify against `git remote`)
+- **Target**: `GoBoldMS/fin_cli` (per `git remote -v` on the canonical branch)
 
 ### Issue Lifecycle Flow
 
