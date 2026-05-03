@@ -77,7 +77,7 @@ function runCommand(command, opts = {}) {
       windowsHide: true,
       // Explicitly use cmd.exe on Windows to avoid Git Bash path splitting
       // issues when the cwd contains spaces (e.g., "Yonatan Levin")
-      shell: process.platform === 'win32' ? process.env.COMSPEC || true : true
+      shell: process.platform === 'win32' ? process.env.COMSPEC || 'cmd.exe' : true
     });
     return { success: true, output: (output || '').substring(0, 500) };
   } catch (e) {
@@ -111,7 +111,7 @@ function runDependencyAudit() {
       stdio: 'pipe',
       timeout: CONFIG.auditTimeout,
       windowsHide: true,
-      shell: process.platform === 'win32' ? process.env.COMSPEC || true : true
+      shell: process.platform === 'win32' ? process.env.COMSPEC || 'cmd.exe' : true
     });
     return { success: true };
   } catch (e) {
@@ -139,7 +139,7 @@ function runDependencyAudit() {
 function getGitDiffAffectedServices() {
   try {
     const result = runCommand(
-      'git diff --name-only HEAD 2>/dev/null || git diff --name-only',
+      'git diff --name-only HEAD || git diff --name-only',
       { timeout: 30000 }
     );
     if (!result.success || !result.output) return [];

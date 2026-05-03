@@ -112,19 +112,19 @@ function runLintFix(filePath) {
     // Python files: ruff check --fix, ruff format, mypy (advisory in Phase 1)
     if (ext === '.py') {
       try {
-        execSync(`ruff check --fix "${filePath}"`, { stdio: 'pipe', timeout: 30000 });
-      } catch (e) {
-        // ruff exits non-zero if findings remain after fix — capture for systemMessage but don't block
+        execSync(`ruff check --fix "${filePath}"`, { stdio: 'pipe', timeout: 30000, cwd: PROJECT_ROOT });
+      } catch {
+        // swallow advisory output — ruff exits non-zero if findings remain after fix
       }
       try {
-        execSync(`ruff format "${filePath}"`, { stdio: 'pipe', timeout: 15000 });
-      } catch (e) {
-        // formatting failure is rare; log but don't block
+        execSync(`ruff format "${filePath}"`, { stdio: 'pipe', timeout: 15000, cwd: PROJECT_ROOT });
+      } catch {
+        // swallow advisory output — formatting failure is rare; don't block
       }
       try {
-        execSync(`mypy "${filePath}"`, { stdio: 'pipe', timeout: 30000 });
-      } catch (e) {
-        // mypy errors are advisory in Phase 1 — surface in systemMessage but don't block
+        execSync(`mypy "${filePath}"`, { stdio: 'pipe', timeout: 30000, cwd: PROJECT_ROOT });
+      } catch {
+        // swallow advisory output — mypy errors are advisory in Phase 1
       }
       return { success: true };
     }
