@@ -1,0 +1,16 @@
+{
+  "outputStyle": "Explanatory",
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(python -m:*)",
+      "Bash(pytest:*)",
+      "Bash(ruff:*)",
+      "Bash(mypy:*)",
+      "Bash(pip:*)",
+      "Bash(pip-audit:*)",
+      "Bash(git:*)",
+      "Bash(node:*)"
+    ]
+  }
+}
