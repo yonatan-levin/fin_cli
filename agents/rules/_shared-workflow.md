@@ -257,7 +257,7 @@ HANDOFF_TO: <ARCH | BACKEND | FRONTEND | UX_UI | VERIFIER | QA | REVIEWER | HUMA
 Non-trivial work SHOULD be tracked via GitHub issues when the user opts in. Use the `@github-tracking` skill for issue operations.
 
 ### Repository
-- **Target**: `GoBoldMS/fin_cli` (per `git remote -v` on the canonical branch)
+- **Target**: `yonatan-levin/fin_cli` (canonical; the local `origin` may still point at `GoBoldMS/fin_cli` which redirects)
 
 ### Issue Lifecycle Flow
 
