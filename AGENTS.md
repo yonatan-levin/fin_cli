@@ -28,6 +28,8 @@ At the start of any work session, read these files in order. Stop at the first t
 | 5 | `docs/FEEDBACK-LOG.md` | User corrections and preferences not yet promoted to MEMORY |
 | 6 | `.claude/projects/<project-hash>/memory/daily/YYYY-MM-DD.md` | Today's session notes (if exists) |
 
+> **Note:** Tier 2 files are populated as the project matures. If `MEMORY.md`, the daily log, or `FEEDBACK-LOG.md` are absent or empty, skip gracefully — they accumulate over time as durable insights are recorded.
+
 ### Tier 3 — Operational Rules (Read When Acting in a Specific Role)
 
 | # | File | Purpose |
@@ -37,7 +39,7 @@ At the start of any work session, read these files in order. Stop at the first t
 | 9 | `agents/rules/orchestrator.md` | Routing logic and specialist dispatch (auto-loaded by hook) |
 | 10 | `agents/rules/load-context.md` | On-demand context loading patterns (read when acting in load-context mode) |
 | 11 | `agents/rules/scaffold-module.md` | Module scaffolding rules (read when creating new Python modules) |
-| 12 | `agents/roles/<role>.md` | Role-specific operational rules (BACKEND, ARCH, QA, REVIEWER, etc.) |
+| 12 | `agents/roles/<role>.md` | Role-specific operational rules: `backend-architect`, `code-architect`, `code-reviewer`, `frontend-developer`, `project-planning-handoff-specialist`, `qa-debugger`, `ui-designer`, `verifier` (8 roles total) |
 
 ### Tier 4 — Task-Specific Deep Dive (Read Only When Relevant)
 
@@ -155,4 +157,4 @@ Cursor auto-discovers rules from `.cursor/rules/` only. Since the canonical loca
 
 | Date | Change |
 |------|--------|
-| 2026-05-02 | Initial file. Mirrored from midas. Retargeted Go→Python, REST→CLI. Tier 3 references `.md` (not `.mdc`) extensions matching algo_beta conventions. Tier 4 retargeted from midas REST/API docs to algo_beta CLI module reference, CONTRACTS, ARCHITECTURE, TESTING, TOOLS_REFERENCE, and source packages (fincli, fundainsight, core, config, logger). 8 roles catalogued (FRONTEND/UX_UI hedged for future UI surface). |
+| 2026-05-02 | Initial file. Adapted from upstream reference project. Retargeted Go→Python, REST→CLI. Tier 3 references `.md` (not `.mdc`) extensions matching algo_beta conventions. Tier 4 retargeted from upstream REST/API docs to algo_beta CLI module reference, CONTRACTS, ARCHITECTURE, TESTING, TOOLS_REFERENCE, and source packages (fincli, fundainsight, core, config, logger). 8 roles catalogued (FRONTEND/UX_UI hedged for future UI surface). |
