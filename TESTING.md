@@ -235,6 +235,10 @@ Both are run automatically by `.claude/hooks/post-edit.js` on every saved `.py` 
 
 The lint rule set is the conservative `["E", "F", "W", "I", "B", "UP", "N", "SIM"]`. The `D` (pydocstyle / Google docstrings) rule family is **not** enabled in Phase 1 to avoid drowning in style violations before type-hint adoption stabilizes; Phase 4 may enable `D` rules at the same time mypy promotes to a hard gate.
 
+### First-run ruff baseline
+
+The Phase 1 harness lands against pre-existing source code that has not been linted before. The first `on-stop.js` run will surface a backlog of ~229 ruff findings and ~105 mypy errors across `fincli/`, `fundainsight/`, `core/`, `config/`, `logger/`. Both totals will appear in the Stop hook's `systemMessage` — ruff under `issues`, mypy under `warnings` (advisory until Phase 4). This is expected and is the calibration baseline for Phase 2 cleanup; it does not block work. Sweeping the backlog down is opportunistic — fix what you touch, defer the rest.
+
 ## Phased Roadmap
 
 This section is the source of truth for *when* the deferred test work happens. All three phases are tracked, not informal — this is by design (the user explicitly flagged the risk of "deferred test work" silently disappearing).
