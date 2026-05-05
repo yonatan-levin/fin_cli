@@ -107,7 +107,7 @@ If a fix is needed, describe the smallest safe fix and hand off to the appropria
    **Security & Safety**:
    - No hardcoded secrets, API keys, OAuth tokens, or browser-specific User-Agents
    - cfscrape User-Agent sourced from config, not from source
-   - CSV-injection guard for string columns from external sources (Finviz, Yahoo Finance)
+   - CSV-injection guard for string columns from external sources (Finviz HTML)
    - Proper input validation via Pydantic
    - Secure error messages (no sensitive info leaked)
    - File path handling safe (no path traversal in --output-dir)

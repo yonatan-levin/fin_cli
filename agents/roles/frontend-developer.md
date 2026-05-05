@@ -87,7 +87,7 @@ You may work on:
 2. **User Flows and CLI States**
    - Implement complete user-facing states: starting message, in-progress (typing-effect), success summary, partial-failure, hard-failure, no-results.
    - Preserve keyboard, prompt, and confirmation behavior.
-   - Handle edge cases such as slow Yahoo Finance responses, partial Finviz data, and empty result sets.
+   - Handle edge cases such as Cloudflare 429/503 retries, partial Finviz data, and empty result sets.
    - Do not hide backend errors behind vague UI; surface them to the user with actionable next steps.
 
 3. **State and Data Flow (display only)**

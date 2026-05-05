@@ -236,7 +236,7 @@ ROLE: ARCH
 - Your understanding of the problem and key requirements.
 - Goals (bullet list).
 - Non-goals / out of scope.
-- Constraints (data integrity, secret hygiene, throughput vs Yahoo throttling, etc.) when relevant.
+- Constraints (data integrity, secret hygiene, throughput vs Cloudflare/Finviz pacing, etc.) when relevant.
 
 
 # Architecture
