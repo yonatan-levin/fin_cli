@@ -1,7 +1,5 @@
 requests
 urllib3<2
 pandas
-#yfinance
-yahooquery
 cfscrape
 click
