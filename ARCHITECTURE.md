@@ -4,7 +4,7 @@ This document is the source of truth for Fin CLI's system architecture.
 
 ## System Overview
 
-**Fin CLI** is a two-mode Python command-line application that screens stocks from Finviz.com and runs price-to-asset fundamental analysis on the screening results using Yahoo Finance data. It is built as a library-style monorepo: each operating mode is its own importable package (`fincli`, `fundainsight`) with a Click entry point under `app/`. There is no server, no database, no network listener — outputs land as timestamped CSVs in `workspace_output/`.
+**Fin CLI** is a single-mode Python command-line application that screens stocks from Finviz.com. It is built as one importable package (`fincli`) with a Click entry point under `app/`, plus a small set of shared cross-cutting packages (`core`, `config`, `logger`). There is no server, no database, no network listener — outputs land as timestamped CSVs in `workspace_output/`.
 
 ```
                     +---------------------------+
@@ -16,31 +16,23 @@ This document is the source of truth for Fin CLI's system architecture.
                     +---------------------------+
                     |      Click CLI Layer      |
                     |  fincli/app/cli.py        |
-                    |  fundainsight/app/cli.py  |
                     +-------------+-------------+
                                   |
                                   v
-              +----------------------------------------+
-              |          Orchestration Layer           |
-              |  fincli/app/main.py                    |
-              |  fundainsight/app/main.py + picker.py  |
-              +-----+-------------------+--------------+
-                    |                   |
-        +-----------v--+              +-v--------------------+
-        |   Screener   |              |   Fundamental        |
-        |   pipeline   |              |   analysis pipeline  |
-        | (HTML scrape)|              | (Yahoo enrichment)   |
-        +------+-------+              +----------+-----------+
-               |                                  |
-               v                                  v
-        +------+-------+                 +--------+--------+
-        |  cfscrape    |                 |   yahooquery    |
-        |  + BS4       |                 |   ThreadPool    |
-        +------+-------+                 +--------+--------+
-               |                                  |
-        Finviz.com                       Yahoo Finance
-        (Cloudflare-                     (balance sheet,
-        protected HTML)                  market cap, prices)
+                    +---------------------------+
+                    |    Orchestration Layer    |
+                    |    fincli/app/main.py     |
+                    +-------------+-------------+
+                                  |
+                                  v
+                    +---------------------------+
+                    |   Screener pipeline       |
+                    |   (Finviz HTML scrape)    |
+                    |   cfscrape + BS4          |
+                    +-------------+-------------+
+                                  |
+                                  v
+                       Finviz.com (Cloudflare-protected HTML)
 ```
 
 ## Module Map
@@ -48,7 +40,6 @@ This document is the source of truth for Fin CLI's system architecture.
 | Module | Purpose | Key Files |
 |---|---|---|
 | `fincli/` | Stock screener — builds a Finviz query URL, fetches all paginated pages, parses the HTML stock table, writes CSV. | `fincli/app/cli.py`, `fincli/app/main.py`, `fincli/cli/cli_stock_screener.py`, `fincli/utils/web_scraper.py`, `fincli/utils/quary_builders.py`, `fincli/stock_screening/`, `fincli/resource/params/` |
-| `fundainsight/` | Fundamental analysis — reuses the screener, enriches each ticker with Yahoo Finance balance-sheet + market-cap + price data, computes price-to-asset and price-to-current-asset ratios, applies country/sector/price filters. | `fundainsight/app/cli.py`, `fundainsight/app/main.py`, `fundainsight/app/picker.py`, `fundainsight/app/fincli.py`, `fundainsight/calculators/equity_calc.py`, `fundainsight/calculators/filters.py` |
 | `core/` | Pure Python configuration framework — Pydantic base classes (`SystemSettings`), JSON-to-tuple conversion, Configurator builder. Has no external service dependencies. | `core/configuration/config_base.py`, `core/configuration/configurator.py`, `core/converters/json.py` |
 | `config/` | Concrete `Config` instance for the application — extends `SystemSettings`, exposes `use_history`, `filters`, `scrape_link`, and `file_path(name)` for timestamped CSV destinations. | `config/config.py` |
 | `logger/` | Singleton logger with three named handlers: a typing-effect console handler, plain console handler, and a JSON file handler. Imported as `from logger import logger`. | `logger/logger.py`, `logger/handlers/`, `logger/formatters/` |
@@ -58,13 +49,9 @@ Supporting (not part of the active runtime path):
 | Module | Status |
 |---|---|
 | `scripts/` | Dependency-checking utilities. |
-| `wisdom_fruit/` | Experimental, incomplete — do not depend on. |
-| `shared/`, `example/`, `src/` | Empty scaffolding — slated for cleanup. |
-| `tests/` | Folder layout exists (`tests/unit`, `tests/domain`, `tests/e2e`); test bodies will land in Phase 2 (see CLAUDE.md). |
+| `tests/` | Folder layout exists (`tests/unit`, `tests/domain`, `tests/e2e`); test bodies will land in Phase 2 (see `CLAUDE.md`). |
 
 ## Data Flow
-
-### Screening (`fincli`)
 
 ```
 [1] Click CLI                       fincli/app/cli.py
@@ -97,71 +84,26 @@ Supporting (not part of the active runtime path):
        (done)
 ```
 
-### Fundamental analysis (`fundainsight`)
-
-```
-[1] Click CLI                       fundainsight/app/cli.py
-       |   --history / --debug / --set-filters / --scrape-link
-       v
-[2] get_opportunities()              fundainsight/app/main.py
-       |
-       v
-[3] Reuse screener                   fundainsight/app/fincli.py
-       |   calls into fincli to obtain a DataFrame of candidate symbols
-       v
-[4] picker(df)                       fundainsight/app/picker.py
-       |
-       +-> ThreadPoolExecutor parallel enrichment, one task per symbol:
-       |       fundainsight/calculators/equity_calc.get_financial_data(ticker)
-       |           -> yahooquery.Ticker(symbol).balance_sheet(frequency='q')
-       |           -> .summary_detail        (market cap)
-       |           -> .key_stats             (shares outstanding)
-       |           -> .history(period='1mo') (30-day price; median = "average")
-       |
-       v
-[5] add_new_columns(df)              fundainsight/app/picker.py
-       |   price_by_assets             = Adjusted Total Assets / Shares Outstanding
-       |   price_by_current_assets     = Adjusted Current Assets / Shares Outstanding
-       |   price_to_assets_ratio       = Avg Price 30D / price_by_assets
-       |   price_to_current_assets_ratio = Avg Price 30D / price_by_current_assets
-       v
-[6] Save unfiltered CSV              workspace_output/funda_insight_result_unfiltered_*.csv
-       |
-       v
-[7] Filters chain                    fundainsight/calculators/filters.py
-       |   .filter_countries([...])
-       |   .filter_sector("Energy")
-       |   .filter_price("price/price_to_current_assets_ratio", 1)   # < 1
-       v
-[8] Save final CSV                   workspace_output/funda_insight_result_*.csv
-       v
-       (done)
-```
-
 ## Layering
 
 ```
 +------------------------------------------------------------+
 |                     Click CLI Layer                        |
-|   fincli/app/cli.py            fundainsight/app/cli.py     |
+|   fincli/app/cli.py                                        |
 |   (option parsing, --help text, logger level toggling)     |
 +------------------------------------------------------------+
 |                    Orchestration Layer                     |
-|   fincli/app/main.py           fundainsight/app/main.py    |
-|                                 fundainsight/app/picker.py |
+|   fincli/app/main.py                                       |
 |   (pipeline composition: build query -> fetch -> parse     |
-|    -> DataFrame -> [enrich] -> filter -> write CSV)        |
+|    -> DataFrame -> write CSV)                              |
 +------------------------------------------------------------+
-|                Domain / Calculators Layer                  |
+|                Domain / UI Layer                           |
 |   fincli/cli/cli_stock_screener.py       (filter UI)       |
-|   fundainsight/calculators/equity_calc.py (asset adj.)     |
-|   fundainsight/calculators/filters.py     (DF filters)     |
 +------------------------------------------------------------+
 |                  Utility / I/O Layer                       |
 |   fincli/utils/web_scraper.py       (HTTP via cfscrape)    |
 |   fincli/utils/quary_builders.py    (URL construction)     |
 |   fincli/stock_screening/           (BeautifulSoup parser) |
-|   yahooquery (external library)     (Yahoo Finance API)    |
 +------------------------------------------------------------+
 |                  Cross-cutting                             |
 |   config/config.py                                         |
@@ -170,7 +112,7 @@ Supporting (not part of the active runtime path):
 +------------------------------------------------------------+
 ```
 
-**Layering rule**: orchestration calls down into calculators and utility/I/O, never the reverse. Calculators (`equity_calc.py`, `filters.py`) receive already-fetched data (a pandas DataFrame, a yahooquery balance-sheet frame) and have no awareness of how the data was retrieved. Utility I/O layers know nothing about price-to-asset ratios.
+**Layering rule:** orchestration calls down into the filter UI and utility/I/O, never the reverse. Utility/I/O modules receive primitive inputs (a URL, raw HTML bytes) and have no awareness of how they will be assembled into a DataFrame. Cross-cutting modules are imported anywhere they are needed.
 
 There is no formal dependency-injection container. Wiring is done by direct import and function call in the orchestration layer. The Singleton logger is the only globally-visible runtime object.
 
@@ -190,20 +132,10 @@ There is no formal dependency-injection container. Wiring is done by direct impo
 | Timeout | 10 seconds per page fetch |
 | Failure mode | Raised `Exception("Http Error:", err)` propagates up; logged |
 
-### Yahoo Finance (via `yahooquery`)
-
-| Aspect | Detail |
-|---|---|
-| Library | `yahooquery` (NOT `yfinance`) |
-| Auth | None |
-| Concurrency | `ThreadPoolExecutor` — one worker per ticker |
-| Calls used | `Ticker(symbol).balance_sheet(frequency='q')`, `.summary_detail`, `.key_stats`, `.history(period='1mo')` |
-| Failure mode | `equity_calc.get_financial_data()` returns `None` for the ticker on any exception or missing field; the row is filtered out of the result set |
-
 ## Folder Structure
 
 ```
-algo_beta/
+fin_cli/
   fincli/                      # Stock screener
     app/
       cli.py                   # Click entry point
@@ -224,17 +156,6 @@ algo_beta/
       web_scraper.py           # cfscrape wrapper
       quary_builders.py        # Finviz URL construction
       user_agent_rotator.py
-    local_history/             # filter_history.json (gitignored)
-
-  fundainsight/                # Fundamental analysis
-    app/
-      cli.py                   # Click entry point
-      main.py                  # get_opportunities() orchestrator
-      picker.py                # ThreadPool enrichment + ratio calc
-      fincli.py                # screener reuse adapter
-    calculators/
-      equity_calc.py           # asset adjustment + financial data fetch
-      filters.py               # fluent DataFrame filter chain
     local_history/             # filter_history.json (gitignored)
 
   core/                        # Pure Python configuration framework
@@ -262,12 +183,13 @@ algo_beta/
   logs/                        # activity.log + error.log (gitignored)
 
   docs/                        # Project documentation
-    THESIS.md                  # Vision + roadmap (Phase 2 of harness work)
-    MODULE_REFERENCE.md        # Per-module reference (Phase 2 of harness work)
+    THESIS.md
+    MODULE_REFERENCE.md
+    FEEDBACK-LOG.md
     bugs/, refactoring/, reviewer/
     superpowers/specs/
 
-  agents/                      # AI-agent rules + role files (Phase 2 of harness)
+  agents/                      # AI-agent rules + role files
     rules/
     roles/
 
@@ -282,7 +204,7 @@ algo_beta/
   README.md
   TESTING.md
   TOOLS_REFERENCE.md
-  AGENTS.md                    # (planned — C6 — final commit of the Phase 1 harness rollout)
+  AGENTS.md
 
   pyproject.toml
   requirements.txt
@@ -292,10 +214,11 @@ algo_beta/
 
 ## Threading Model
 
-- **Stock screening (`fincli`)** is fully synchronous. Pages from Finviz are fetched one at a time. This is intentional — the scraper cooperates with Finviz's anti-bot pacing by not flooding the host.
-- **Fundamental analysis (`fundainsight`)** uses `concurrent.futures.ThreadPoolExecutor` in `picker.py` to parallelize Yahoo Finance lookups across symbols. Each task runs `equity_calc.get_financial_data(ticker)` independently. This is I/O-bound work (HTTPS + JSON parsing inside `yahooquery`), so the GIL is not the bottleneck.
-- **Logger Singleton thread-safety**: the `Logger` Singleton is constructed once at import time. Its underlying `logging.Logger` handlers are Python's stdlib `logging` handlers, which are thread-safe by design. Concurrent `logger.info(...)` / `logger.error(...)` calls from the ThreadPool workers are safe. The typing-animation console handler serializes its writes to stdout under the same lock.
-- **No `asyncio`** — all I/O is synchronous. Adding `aiohttp` or `httpx` is on the long-term roadmap (`docs/THESIS.md`) but not in active scope.
+The screener pipeline is fully synchronous. Pages from Finviz are fetched one at a time. This is intentional — the scraper cooperates with Finviz's anti-bot pacing by not flooding the host.
+
+The Singleton `Logger` is constructed once at import time. Its underlying `logging.Logger` handlers are Python's stdlib `logging` handlers, which are thread-safe by design. The typing-animation console handler serializes its writes to stdout under the same lock, so any future fan-out work (none today) would be safe to log freely.
+
+There is no `asyncio` and no `ThreadPoolExecutor` in the active runtime path. Adding async I/O is on the long-term roadmap (`docs/THESIS.md`) but not in active scope.
 
 ## Configuration Shape
 
@@ -307,7 +230,7 @@ core/configuration/config_base.py
 
 core/configuration/configurator.py
     build_config(use_history: bool = False, filters: str = "") -> Config
-        - if use_history: read filter_history.json from local_history/
+        - if use_history: read fincli/local_history/filter_history.json
         - if filters:     parse JSON string -> tuple of (key, value) pairs
         - else:           empty Config (interactive selection will populate later)
 
@@ -323,7 +246,7 @@ config/config.py
             # Returns:  workspace_output/{name}_{YYYY-MM-DD_HH-MM}.csv
 ```
 
-The configuration object is constructed once per CLI invocation and threaded through `main.py` -> calculators by direct argument passing. There is no global config singleton; the only global state is the logger.
+The configuration object is constructed once per CLI invocation and threaded through `main.py` by direct argument passing. There is no global config singleton; the only global state is the logger.
 
 When `--history` is set, the most recent filter selection is replayed verbatim — useful for re-running the same screen on a fresh trading day. The history file is plain JSON of `{filter_key: value_code}` pairs, written by the interactive filter UI on each successful run.
 
@@ -332,14 +255,12 @@ When `--history` is set, the most recent filter selection is replayed verbatim �
 | Pattern | Where | Purpose |
 |---|---|---|
 | Singleton (metaclass) | `singleton.py` -> `logger/logger.py` | One process-wide logger instance |
-| Builder | `core/configuration/configurator.build_config()` | Produce a `Config` from many possible sources (interactive, history, JSON, scrape link) |
-| Fluent interface | `fundainsight/calculators/filters.Filters` | Chainable `.filter_country().filter_sector().filter_price()` calls |
+| Builder | `core/configuration/configurator.build_config()` | Produce a `Config` from many possible sources (interactive, history, JSON) |
 | Strategy (data) | `fincli/resource/params/*.py` | Each filter category is a pluggable `[query_key, {value_code: display_name}]` dict |
-| Template | `fincli/app/cli.py` and `fundainsight/app/cli.py` | Both modules follow an identical CLI -> orchestration -> domain layering, making the second module readable to anyone who has read the first |
+| Template | `fincli/app/cli.py` | Click `@click.group(invoke_without_command=True)` so `python -m fincli` with no subcommand executes the default flow |
 
 ## Performance & Resource Notes
 
 - **Screening** is dominated by sequential HTTP latency (~0.5–2 s per Finviz page; Cloudflare adds variance).
-- **Enrichment** parallelism is bounded by Yahoo Finance's tolerance — empirically the default `ThreadPoolExecutor` worker count works without observed throttling for typical screener result sizes (tens to a few hundred symbols).
-- **Memory** stays modest: each enrichment task holds one balance-sheet DataFrame (a few KB). The combined unfiltered DataFrame written to CSV is the largest object in memory and is dominated by row count, not column complexity.
-- **Failure mode for one ticker does not abort the run** — `get_financial_data` returns `None` for that symbol and `picker` filters Nones out before computing ratios.
+- **Memory** stays modest: each parsed page yields a few KB of row data; the combined DataFrame written to CSV is the largest object in memory and is dominated by row count, not column complexity.
+- **Failure on a single page does not necessarily abort the run** — the scraper logs the error and the surrounding loop decides whether to continue based on whether subsequent pages parse cleanly.

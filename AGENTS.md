@@ -1,6 +1,6 @@
 # AGENTS.md — Context Loading Contract
 
-This file defines the **canonical loading order** for any AI agent (Claude Code, Cursor, Copilot, etc.) working on the algo_beta codebase. If you are an AI agent opening this repository, **start here**.
+This file defines the **canonical loading order** for any AI agent (Claude Code, Cursor, Copilot, etc.) working on the fin_cli codebase. If you are an AI agent opening this repository, **start here**.
 
 The goal is simple: every agent reads the same files in the same order, so context is predictable and reproducible across sessions and tools.
 
@@ -45,21 +45,20 @@ At the start of any work session, read these files in order. Stop at the first t
 
 | # | File | Purpose |
 |---|------|---------|
-| 13 | `docs/MODULE_REFERENCE.md` | Full module reference: fincli, fundainsight, core, config, logger internals |
+| 13 | `docs/MODULE_REFERENCE.md` | Full module reference: fincli, core, config, logger internals |
 | 14 | `CONTRACTS.md` | Data contracts, function signatures, input/output schemas |
 | 15 | `ARCHITECTURE.md` | System architecture, data flow diagrams, component relationships |
 | 16 | `TESTING.md` | Testing strategy, test layout, how to run, coverage targets |
-| 17 | `TOOLS_REFERENCE.md` | Tool reference: Click CLI patterns, pandas idioms, yahooquery usage |
+| 17 | `TOOLS_REFERENCE.md` | Tool reference: Click CLI patterns, pandas idioms, cfscrape usage |
 | 18 | `docs/superpowers/specs/` | Per-feature design specs (chronological by date) |
 | 19 | `docs/superpowers/plans/` | Per-feature implementation plans (chronological by date) |
 | 20 | `docs/bugs/` | Bug tracker and known-issue registry |
 | 21 | `docs/refactoring/` | Refactoring specs and upgrade design docs |
 | 22 | `docs/reviewer/` | Review follow-up tracker |
 | 23 | `fincli/` | Stock screener source code |
-| 24 | `fundainsight/` | Fundamental analysis source code |
-| 25 | `core/` | Base configuration and JSON converter utilities |
-| 26 | `config/` | Pydantic-based configuration with history support |
-| 27 | `logger/` | Singleton logger (console typing effect, file, JSON handlers) |
+| 24 | `core/` | Base configuration and JSON converter utilities |
+| 25 | `config/` | Pydantic-based configuration with history support |
+| 26 | `logger/` | Singleton logger (console typing effect, file, JSON handlers) |
 
 ---
 
@@ -82,11 +81,11 @@ At the start of any work session, read these files in order. Stop at the first t
 ### Write to `MEMORY.md` (durable)
 - User tells you something non-obvious about the project that should persist across sessions
 - A design decision is made that constrains future work
-- A recurring pattern is identified (e.g., "always use yahooquery not yfinance")
+- A recurring pattern is identified (e.g., "always use `from logger import logger`, never `logging.getLogger`")
 
 ### Write to `FEEDBACK-LOG.md` (corrections)
 - User explicitly corrects an approach: "don't do X, do Y"
-- User validates a non-obvious choice: "yes, that ThreadPoolExecutor approach was right"
+- User validates a non-obvious choice: "yes, that synchronous-fetch decision was right"
 - Include **Why** and **How to apply** so future sessions can judge edge cases
 
 ### Write to `memory/daily/YYYY-MM-DD.md` (session notes)
@@ -127,7 +126,7 @@ This keeps sub-agent context tight and avoids compaction pressure.
 ## What This File Is NOT
 
 - **Not a tutorial** — see `docs/MODULE_REFERENCE.md` for that
-- **Not a personality/tone guide** — algo_beta has no agent personality; `CLAUDE.md` defines project conventions
+- **Not a personality/tone guide** — fin_cli has no agent personality; `CLAUDE.md` defines project conventions
 - **Not a replacement for `agents/rules/`** — those remain the authoritative mode/role rules; this file just tells you when to read them
 
 ---
@@ -157,4 +156,5 @@ Cursor auto-discovers rules from `.cursor/rules/` only. Since the canonical loca
 
 | Date | Change |
 |------|--------|
-| 2026-05-02 | Initial file. Adapted from upstream reference project. Retargeted Go→Python, REST→CLI. Tier 3 references `.md` (not `.mdc`) extensions matching algo_beta conventions. Tier 4 retargeted from upstream REST/API docs to algo_beta CLI module reference, CONTRACTS, ARCHITECTURE, TESTING, TOOLS_REFERENCE, and source packages (fincli, fundainsight, core, config, logger). 8 roles catalogued (FRONTEND/UX_UI hedged for future UI surface). |
+| 2026-05-04 | Single-mode reduction. Tier 4 module list trimmed to `fincli`, `core`, `config`, `logger` (the `fundainsight/` row was removed alongside the deletion of that package; see `docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md`). `TOOLS_REFERENCE.md` retargeted from `yahooquery` examples to `cfscrape` examples. `docs/MODULE_REFERENCE.md` description updated to single-mode. |
+| 2026-05-02 | Initial file. Adapted from upstream reference project. Retargeted Go→Python, REST→CLI. Tier 3 references `.md` (not `.mdc`) extensions matching fin_cli conventions. Tier 4 retargeted from upstream REST/API docs to fin_cli CLI module reference, CONTRACTS, ARCHITECTURE, TESTING, TOOLS_REFERENCE, and source packages. 8 roles catalogued (FRONTEND/UX_UI hedged for future UI surface). |

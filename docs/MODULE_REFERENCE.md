@@ -9,10 +9,9 @@ See `ARCHITECTURE.md` for the system-level diagram and data-flow narrative. See 
 ## Table of Contents
 
 1. [`fincli/`](#fincli) — Finviz stock screener
-2. [`fundainsight/`](#fundainsight) — Yahoo Finance enrichment and ratio filtering
-3. [`core/`](#core) — Configuration framework
-4. [`config/`](#config) — Project-level settings
-5. [`logger/`](#logger) — Singleton logger
+2. [`core/`](#core) — Configuration framework
+3. [`config/`](#config) — Project-level settings
+4. [`logger/`](#logger) — Singleton logger
 
 ---
 
@@ -49,7 +48,7 @@ python -m fincli --history          # reuse last filter selection
 python -m fincli --debug            # verbose logging
 ```
 
-Internal function signatures (for testing and `fundainsight` integration):
+Internal function signatures (for testing):
 
 ```python
 # fincli/app/main.py
@@ -82,7 +81,7 @@ Output `DataFrame` columns (from Finviz screener table — exact column set depe
 | ... | ... | Other Finviz columns depending on screener view |
 | `Ticker` (Excel) | `str` | `=HYPERLINK(...)` formula wrapping the symbol — preserved for Excel use |
 
-Filter history saved as `fundainsight/local_history/filter_history.json` (known bug: path is hard-coded in `core/configuration/configurator.py` regardless of calling CLI — see Known Issues in `CLAUDE.md`).
+Filter history saved as `fincli/local_history/filter_history.json` (the directory name is hard-coded inside `core/configuration/configurator.py` — Config-driven replacement is tracked at `docs/refactoring/history-path-config-spec.md`).
 
 CSV written to: `workspace_output/stock_screener_{YYYY-MM-DD_HH-MM}.csv`.
 
@@ -93,104 +92,12 @@ CSV written to: `workspace_output/stock_screener_{YYYY-MM-DD_HH-MM}.csv`.
 | Cloudflare rate-limit (HTTP 429 or 503) | `fetch_page_sync` applies exponential backoff and retries. On exhaustion, logs error and raises. |
 | HTML parse failure (unexpected Finviz layout change) | BeautifulSoup returns empty list; `aggregate_rows` yields no rows; `build_data_frame` returns empty DataFrame; logged as warning. |
 | Network timeout (10-second limit) | Exception propagated; caller logs and skips the page. |
-| `--history` with missing `filter_history.json` | `build_config` falls back to interactive selection; no crash. |
+| `--history` with missing `filter_history.json` | `build_config` raises `FileNotFoundError`; the user re-runs without the flag for interactive selection. |
 
 ### Integration
 
-- **Feeds** `fundainsight/` — either directly via `fundainsight/app/fincli.py` adapter (re-runs the screener inline), or by pointing fundainsight at a previously-saved screener CSV via `--scrape-link`.
 - **Depends on** `core/` for config building, `config/` for the `Config` class, `logger/` for the Singleton logger.
-- No reverse dependencies — nothing imports from `fincli/` except `fundainsight/app/fincli.py`.
-
----
-
-## `fundainsight/`
-
-### Purpose
-
-Fundamental analysis pipeline. Accepts a DataFrame of candidate tickers (from the screener), enriches each ticker with Yahoo Finance balance-sheet data, market cap, and 30-day price history via `yahooquery`, computes price-to-asset ratios, applies country/sector/price filters, and writes two CSVs: one pre-filter (for inspection) and one post-filter (the final result).
-
-The Yahoo enrichment step is parallelized with `concurrent.futures.ThreadPoolExecutor`.
-
-### Key files
-
-| File | Role |
-|------|------|
-| `fundainsight/app/cli.py` | Click entry point. `--history`, `--set-filters`, `--scrape-link`, `--debug` flags. Invokes `get_opportunities`. |
-| `fundainsight/app/main.py` | `get_opportunities(config)` orchestrator — wires the screener run, the picker enrichment, and CSV output. |
-| `fundainsight/app/picker.py` | Core enrichment loop. `picker(df)` runs `get_financial_data` over all tickers via `ThreadPoolExecutor`, assembles `df_fundamentals`, calls `add_new_columns` for ratio computation, applies the `Filters` chain, writes pre-filter CSV. |
-| `fundainsight/app/fincli.py` | Adapter that re-runs the `fincli` screener inline and exposes its DataFrame — used when fundainsight is invoked without a pre-existing screener CSV. |
-| `fundainsight/calculators/equity_calc.py` | Financial calculations. `get_financial_data(ticker_name)` → dict with balance-sheet fields + market cap + average price. `adjust_assets(balance_sheet, asset_type, adjustment_factor, additional_subtracts)` → adjusted total (operates on a DataFrame slice, not a dict). `calculate_price_to_data(row, col)` → ratio. `ratio_between_two_values(a, b)` → `a / b`. |
-| `fundainsight/calculators/filters.py` | `Filters` class — fluent-interface DataFrame filter chain. `filter_countries([...])`, `filter_sector(sector)`, `filter_price(col, threshold)`, `get_data()`. |
-
-### Public surface
-
-CLI commands only.
-
-```
-python -m fundainsight                           # interactive
-python -m fundainsight --history                 # reuse last filters
-python -m fundainsight --set-filters '<json>'    # inject filters from JSON
-python -m fundainsight --scrape-link '<url>'     # use a pre-built Finviz URL
-python -m fundainsight --debug                   # verbose logging
-```
-
-Internal functions (for testing):
-
-```python
-# fundainsight/app/picker.py
-def picker(df: DataFrame | None) -> DataFrame | None
-
-# fundainsight/calculators/equity_calc.py
-def get_financial_data(ticker_name: str) -> dict | None
-    # Parameter is ticker_name, not ticker. Returns a dict on success; None on
-    # any yahooquery failure or missing field.
-def adjust_assets(balance_sheet, asset_type, adjustment_factor, additional_subtracts)
-    # Takes a DataFrame balance-sheet slice (not a dict).
-    # Returns the adjusted asset value (numeric) or None if the key is missing.
-def calculate_price_to_data(row: Series, col: str) -> float | None
-def ratio_between_two_values(a: float | None, b: float | None) -> float | None
-
-# fundainsight/calculators/filters.py
-class Filters:
-    def filter_countries(self, countries: list[str]) -> Filters
-    def filter_sector(self, sector: str) -> Filters
-    def filter_price(self, col: str, threshold: float) -> Filters
-    def get_data(self) -> DataFrame
-```
-
-### Data shapes
-
-The `df_fundamentals` DataFrame after enrichment has these columns (set by `columns_to_retain` in `picker.py`):
-
-| Column | Type | Notes |
-|--------|------|-------|
-| `Ticker` | `str` | Ticker symbol |
-| `Sector` | `str` | GICS sector |
-| `Country` | `str` | Country of domicile |
-| `Market Cap` | `float` | Yahoo Finance market cap |
-| `Average Price in Last 30 Days` | `float` | Mean closing price over last 30 trading days |
-| `price_by_assets` | `float` or `None` | Market cap divided by adjusted total assets |
-| `price_by_current_assets` | `float` or `None` | Market cap divided by adjusted total current assets |
-| `price/price_to_current_assets_ratio` | `float` or `None` | Average price divided by `price_by_current_assets` |
-| `price/price_to_assets_ratio` | `float` or `None` | Average price divided by `price_by_assets` |
-
-Pre-filter CSV: `workspace_output/funda_insight_result_unfiltered_{YYYY-MM-DD_HH-MM}.csv`.
-Post-filter CSV: `workspace_output/funda_insight_result_{YYYY-MM-DD_HH-MM}.csv`.
-
-### Error modes
-
-| Condition | Behavior |
-|-----------|----------|
-| `yahooquery` returns `None` for a field | `get_financial_data` returns `None`; `picker` drops the row silently before building `df_fundamentals`. |
-| Ticker not found in Yahoo Finance | `get_financial_data` returns `None`; row dropped. |
-| `adjust_assets` `not int` bug | `not int` is always `False` (the type object `int` is truthy), so the alternate branch always executes. Current behavior is incorrect but consistent — tracked as tech debt. Regression test + fix deferred to Phase 2. |
-| Empty post-filter DataFrame | `picker` returns an empty DataFrame; caller writes a zero-row CSV; no crash. |
-| ThreadPoolExecutor worker exception | Exception is caught per-future; the row is dropped and logged. |
-
-### Integration
-
-- **Depends on** `fincli/` (via `fundainsight/app/fincli.py` adapter), `core/`, `config/`, `logger/`.
-- **Hardcoded filters** — `picker.py` passes `["Brazil", "Chile", "India", "Bermuda", "China"]` and `"Energy"` as exclusion literals. These are tech debt — configurable replacements are a Phase 4+ item.
+- No reverse dependencies — nothing in this repo imports from `fincli/`.
 
 ---
 
@@ -198,15 +105,15 @@ Post-filter CSV: `workspace_output/funda_insight_result_{YYYY-MM-DD_HH-MM}.csv`.
 
 ### Purpose
 
-Pure-Python configuration framework. Provides Pydantic base classes, a generic `Configurable[S]` protocol, a `build_config` factory that wires config loading + history, and a JSON-to-tuples converter for the `--set-filters` CLI input. Has no external service dependencies.
+Pure-Python configuration framework. Provides Pydantic base classes, a generic `Configurable[S]` protocol, a `build_config` factory that wires config loading + history, and a JSON-to-tuples converter for parsing JSON filter input. Has no external service dependencies.
 
 ### Key files
 
 | File | Role |
 |------|------|
 | `core/configuration/config_base.py` | `SystemSettings(BaseModel)` — Pydantic base class with `use_history: bool`, `filters: list`, `scrape_link: str`, `debug: bool`. `Configurable[S]` generic protocol. |
-| `core/configuration/configurator.py` | `build_config(use_history, filters)` — constructs and returns a `Config` instance; loads `filter_history.json` when `use_history=True`, or parses a JSON filter string when `filters` is provided. **Known issue:** history path is hard-coded to `fundainsight/local_history/` regardless of calling CLI. |
-| `core/converters/json.py` | `json_to_tuples(json_str)` — parses the `--set-filters` JSON string into a list of `(query_key, value_code)` tuples for consumption by the Finviz URL builder. |
+| `core/configuration/configurator.py` | `build_config(use_history, filters)` — constructs and returns a `Config` instance; loads `fincli/local_history/filter_history.json` when `use_history=True`, or parses a JSON filter string when `filters` is provided. The directory name is hard-coded as the literal `"fincli"`; the deeper Config-driven fix is tracked at `docs/refactoring/history-path-config-spec.md`. |
+| `core/converters/json.py` | `json_to_tuples(json_str)` — parses a JSON filter string into a list of `(query_key, value_code)` tuples for consumption by the Finviz URL builder. |
 
 ### Public surface
 
@@ -239,13 +146,13 @@ def json_to_tuples(json_str: str) -> list[tuple[str, str]]
 | Condition | Behavior |
 |-----------|----------|
 | Invalid config field type | `pydantic.ValidationError` raised at startup; CLI exits with error message. |
-| `filter_history.json` missing | `build_config` falls back to empty filters; interactive selection proceeds normally. |
-| Malformed `--set-filters` JSON | `json_to_tuples` raises `json.JSONDecodeError`; caller logs and exits. |
-| Hard-coded history path mismatch | `fincli --history` silently reads/writes the wrong directory (`fundainsight/local_history/`). No crash, but history is shared across both CLIs unintentionally. Fix deferred to Phase 2. |
+| `filter_history.json` missing when `--history` is set | `build_config` raises `FileNotFoundError`; the user re-runs without the flag for interactive selection. |
+| Malformed filter JSON string | `json_to_tuples` raises `json.JSONDecodeError`; caller logs and exits. |
+| Hard-coded history path | `build_config` uses the literal `"fincli"` for the history directory. Acceptable today (single-mode CLI); a Config-driven replacement is tracked in `docs/refactoring/history-path-config-spec.md`. |
 
 ### Integration
 
-- **Consumed by** `fincli/app/cli.py` and `fundainsight/app/cli.py` at startup via `build_config`.
+- **Consumed by** `fincli/app/cli.py` at startup via `build_config`.
 - **Extended by** `config/config.py` which defines the concrete `Config` class.
 - **No external dependencies** — plain Pydantic, `json`, `os`. This is intentional to keep the framework portable.
 
@@ -255,7 +162,7 @@ def json_to_tuples(json_str: str) -> list[tuple[str, str]]
 
 ### Purpose
 
-Project-level Pydantic settings. Defines the concrete `Config` class that both CLIs instantiate. Extends `SystemSettings` with the `file_path(name)` helper that generates timestamped CSV output paths.
+Project-level Pydantic settings. Defines the concrete `Config` class that the screener instantiates. Extends `SystemSettings` with the `file_path(name)` helper that generates timestamped CSV output paths.
 
 ### Key files
 
@@ -276,7 +183,7 @@ Usage pattern:
 ```python
 from config import config
 path = config.Config.file_path("my_output")
-# -> "workspace_output/my_output_2026-05-02_14-30.csv"
+# -> "workspace_output/my_output_2026-05-04_14-30.csv"
 ```
 
 ### Data shapes
@@ -294,8 +201,8 @@ path = config.Config.file_path("my_output")
 ### Integration
 
 - **Instantiated by** `core/configuration/configurator.py` via `build_config`.
-- **Imported directly** by `fundainsight/app/picker.py` as `from config import config` for the `file_path` call.
-- **Does not** import from `fincli/` or `fundainsight/` — no circular dependency.
+- **Imported directly** by `fincli/app/main.py` as `from config import config` for the `file_path` call.
+- **Does not** import from `fincli/` — no circular dependency.
 
 ---
 
@@ -348,10 +255,10 @@ Handlers are not part of the public surface — they are initialized internally 
 
 ### Integration
 
-- **Imported by** every module in `fincli/`, `fundainsight/`, `core/`, and `config/`.
-- **Thread safety** — `TypingConsoleHandler` holds an internal lock to prevent interleaved output during `ThreadPoolExecutor` enrichment. The JSON file handlers are stateless (no shared mutable state between calls).
+- **Imported by** every module in `fincli/`, `core/`, and `config/`.
+- **Thread safety** — `TypingConsoleHandler` holds an internal lock to prevent interleaved output. The JSON file handlers are stateless (no shared mutable state between calls).
 - **No reverse dependencies** — `logger/` does not import from any other local package.
 
 ---
 
-*Last updated: 2026-05-02. Maintained alongside source changes — update this file whenever a module's public surface, key files, or error modes change.*
+*Last updated: 2026-05-04. Maintained alongside source changes — update this file whenever a module's public surface, key files, or error modes change.*

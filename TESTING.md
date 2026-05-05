@@ -10,8 +10,8 @@ This codebase currently has **zero test bodies**. The `tests/` folder structure 
 
 When tests do land, they should:
 
-1. **Validate behavior at module boundaries.** A test for `equity_calc.adjust_assets` checks that the right dollar amount comes out for a given balance-sheet input — not which intermediate variables get assigned in what order.
-2. **Use mocks only at the system boundary.** Mock `cfscrape.create_scraper()`, mock `yahooquery.Ticker(...)`, mock the filesystem when verifying CSV writes. Do not mock pandas, do not mock Pydantic, do not mock the Singleton logger.
+1. **Validate behavior at module boundaries.** A test for `convert_market_cap_to_numeric` checks that the right numeric value comes out for a given Finviz string input — not which intermediate variables get assigned in what order.
+2. **Use mocks only at the system boundary.** Mock `cfscrape.create_scraper()`, mock the filesystem when verifying CSV writes. Do not mock pandas, do not mock Pydantic, do not mock the Singleton logger.
 3. **Run fast.** Unit tests should complete in well under a second each; the full suite (when it exists) should sit comfortably in a CI step.
 
 ## Layout
@@ -23,25 +23,17 @@ tests/
     conftest.py
     test_market_cap_conversion.py      # convert_market_cap_to_numeric
     test_query_builder.py              # build_stock_screener_query
-    test_equity_calc.py                # adjust_assets, calculate_price_to_data, ratio_between_two_values
-    test_filters.py                    # Filters fluent chain
     test_json_to_tuples.py             # json_to_tuples
     test_config.py                     # Config + build_config
   domain/                              # module-level: per-module behavior
     conftest.py
     test_screening_pipeline.py         # fincli main: query -> fetch (mocked) -> parse -> DataFrame
-    test_picker_pipeline.py            # fundainsight picker: enrich (mocked) -> ratios -> filters
     test_configurator_history.py       # filter_history.json round-trip
-  e2e/                                 # CLI-level: invoke `python -m <mode>` with fixtures
+  e2e/                                 # CLI-level: invoke `python -m fincli` with fixtures
     conftest.py
     fixtures/
       finviz_sample.html               # recorded Finviz HTML
-      yahoo_balance_sheet.json         # recorded yahooquery balance sheet
-      yahoo_summary_detail.json
-      yahoo_key_stats.json
-      yahoo_history_1mo.csv
     test_fincli_invocation.py
-    test_fundainsight_invocation.py
 ```
 
 The three layers map to scope, not to "more important / less important":
@@ -63,7 +55,7 @@ pytest tests/e2e/
 
 # Pattern match by name
 pytest -k "market_cap"
-pytest -k "filter_countries and not e2e"
+pytest -k "build_query and not e2e"
 
 # Stop at first failure (handy when iterating)
 pytest -x
@@ -72,7 +64,7 @@ pytest -x
 pytest -v
 
 # Coverage (informational — not enforced in Phase 1)
-pytest --cov=fundainsight --cov=fincli --cov=core --cov=config --cov-report=term-missing
+pytest --cov=fincli --cov=core --cov=config --cov-report=term-missing
 ```
 
 The `-ra` default in `[tool.pytest.ini_options]` (see `pyproject.toml`) ensures a short summary of skipped, xfailed, and errored tests prints at the end of every run.
@@ -88,7 +80,7 @@ Each test layer has its own `conftest.py`. Shared cross-layer fixtures live in t
 
 @pytest.fixture
 def sample_screening_df():
-    """DataFrame mimicking fincli stock screening output."""
+    """DataFrame mimicking the output of build_data_frame."""
     return pd.DataFrame({
         "Symbol":      ["AAPL", "MSFT", "GOOGL"],
         "Ticker":      ["AAPL", "MSFT", "GOOGL"],
@@ -98,33 +90,14 @@ def sample_screening_df():
     })
 
 @pytest.fixture
-def sample_financial_data():
-    """Dict matching get_financial_data()'s return schema (CONTRACTS.md §3)."""
-    return {
-        "Symbol": "AAPL",
-        "Market Cap": 2_890_000_000_000,
-        "Shares Outstanding": 15_800_000_000,
-        "Total Assets": 352_583_000_000,
-        "Adjusted Total Assets": 300_000_000_000,
-        "Adjusted Total Current Assets": 100_000_000_000,
-        "Total Equity": 62_146_000_000,
-        "Average Price in Last 30 Days": 182.50,
-    }
-
-@pytest.fixture
 def finviz_sample_html():
     """Recorded Finviz HTML fixture for the screener parser."""
     return Path("tests/e2e/fixtures/finviz_sample.html").read_bytes()
-
-@pytest.fixture
-def yahoo_balance_sheet_df():
-    """Recorded yahooquery balance_sheet DataFrame."""
-    return pd.read_json("tests/e2e/fixtures/yahoo_balance_sheet.json")
 ```
 
 Fixture rules of thumb:
 
-- **JSON / HTML fixture files** live under `tests/e2e/fixtures/`. They are real recorded responses, redacted of any secrets (there are no secrets in Finviz / Yahoo public data, but the convention applies anyway).
+- **HTML fixture files** live under `tests/e2e/fixtures/`. They are real recorded responses, redacted of any secrets (there are no secrets in Finviz public data, but the convention applies anyway).
 - **One fixture, one fact.** A fixture that builds an entire 200-row DataFrame is doing too much; split into smaller, named fixtures composed via `@pytest.mark.parametrize`.
 
 ## Mocking Strategy
@@ -132,14 +105,12 @@ Fixture rules of thumb:
 ### What to mock
 
 - **`cfscrape.create_scraper()`** — never make real HTTP calls in unit/domain tests. Use the [`responses`](https://github.com/getsentry/responses) library or [`vcrpy`](https://vcrpy.readthedocs.io) (recorded interactions) at the I/O boundary. Both are well-suited; pick one in Phase 2 and use it consistently.
-- **`yahooquery.Ticker`** — patch at the import site (`fundainsight.calculators.equity_calc.yq.Ticker`) with `unittest.mock.patch`. Return a `MagicMock` configured to mirror the four shapes documented in `CONTRACTS.md` §3 (balance_sheet, summary_detail, key_stats, history).
 - **Filesystem writes for CSV** — use the `tmp_path` fixture (built into pytest) so each test gets an isolated temp directory.
 
 ### What NOT to mock
 
 - **pandas DataFrame operations.** pandas is fast and deterministic; mocking it produces tests that no longer test anything real.
 - **Pydantic validation.** Pydantic *is* the validation contract. If a test wants to verify "this config is invalid", it should construct an invalid `Config` and let Pydantic raise.
-- **Filter chain logic in `fundainsight/calculators/filters.py`.** The whole point of the chain is the chained behavior; mocking link-by-link defeats the test.
 - **The Singleton logger.** Let it write into the test's temp directory or a `caplog` fixture. Resetting the Singleton between tests is best handled via a fixture in `tests/conftest.py` if test pollution turns out to be an issue (likely once Phase 2 expands).
 
 ### Example
@@ -149,29 +120,16 @@ from unittest.mock import patch, MagicMock
 import pandas as pd
 import pytest
 
-@patch("fundainsight.calculators.equity_calc.yq.Ticker")
-def test_get_financial_data_happy_path(mock_ticker_class, sample_financial_data):
-    mock_ticker = MagicMock()
-    mock_ticker_class.return_value = mock_ticker
+@patch("fincli.utils.web_scraper.cfscrape.create_scraper")
+def test_fetch_urls_returns_one_blob_per_page(mock_create_scraper, finviz_sample_html):
+    mock_scraper = MagicMock()
+    mock_scraper.get.return_value.content = finviz_sample_html
+    mock_create_scraper.return_value = mock_scraper
 
-    mock_ticker.balance_sheet.return_value = pd.DataFrame({
-        "TotalAssets":          [None, 352_583_000_000],
-        "CurrentAssets":        [None, 143_566_000_000],
-        "OtherCurrentAssets":   [None, 14_695_000_000],
-        "Goodwill":             [None, 0],
-        "OtherNonCurrentAssets":[None, 52_583_000_000],
-        "Inventory":            [None, 6_511_000_000],
-        "StockholdersEquity":   [None, 62_146_000_000],
-    })
-    mock_ticker.summary_detail = {"AAPL": {"marketCap": 2_890_000_000_000}}
-    mock_ticker.key_stats      = {"AAPL": {"sharesOutstanding": 15_800_000_000}}
-    mock_ticker.history.return_value = pd.DataFrame({"close": [180.0, 185.0, 182.5]})
-
-    from fundainsight.calculators.equity_calc import get_financial_data
-    result = get_financial_data("AAPL")
-    assert result is not None
-    assert result["Symbol"] == "AAPL"
-    assert result["Market Cap"] == 2_890_000_000_000
+    from fincli.app.main import fetch_urls
+    pages = fetch_urls("https://finviz.com/screener.ashx?v=111&f=fa_pe_u20&ft=2", page_count=3)
+    assert len(pages) == 3
+    assert all(isinstance(p, bytes) for p in pages)
 ```
 
 ## Coverage
@@ -181,7 +139,7 @@ def test_get_financial_data_happy_path(mock_ticker_class, sample_financial_data)
 In Phase 1 (now):
 
 - `pytest-cov` is installed in dev dependencies so the tooling is ready.
-- `pytest --cov=fundainsight --cov=fincli ...` runs and produces a report — but the value is informational only. There is no threshold, and `.claude/hooks/on-stop.js` does not enforce one.
+- `pytest --cov=fincli ...` runs and produces a report — but the value is informational only. There is no threshold, and `.claude/hooks/on-stop.js` does not enforce one.
 
 In Phase 3 (after Phase 2 establishes a real test suite):
 
@@ -198,23 +156,23 @@ The reason Phase 3 is its own work item, not folded into Phase 2, is straightfor
 ```toml
 [tool.mypy]
 python_version = "3.12"
-files = ["fundainsight", "fincli", "core", "config", "logger"]
+files = ["fincli", "core", "config", "logger"]
 strict = true
 
 [[tool.mypy.overrides]]
-module = ["cfscrape", "cfscrape.*", "yahooquery", "yahooquery.*"]
+module = ["cfscrape", "cfscrape.*"]
 ignore_missing_imports = true
 ```
 
 `bs4` is typed via the `types-beautifulsoup4` dev dep, which is cleaner than an override.
 
-The codebase has very few type hints today, so `strict = true` produces hundreds of errors. **In Phase 1, mypy results surface through the `warnings` channel of `on-stop.js`, NOT the `issues` channel.** That means:
+The codebase has very few type hints today, so `strict = true` produces dozens of errors. **In Phase 1, mypy results surface through the `warnings` channel of `on-stop.js`, NOT the `issues` channel.** That means:
 
 - The user sees the running error count after every Stop event.
 - The user is not blocked from finishing a session by mypy errors.
 - The advisory pressure encourages adding type hints to whatever module is being touched, without forcing a giant up-front type-hint sprint.
 
-**Phase 4** of the harness rollout (`docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md`, §8.3) flips mypy from advisory `warnings` to a hard `issues` gate once `mypy fundainsight fincli core config logger` reports zero errors. The trigger condition is concrete: zero errors. Until then, the gap is visible but does not block work.
+**Phase 4** of the harness rollout (`docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md`, §8.3) flips mypy from advisory `warnings` to a hard `issues` gate once `mypy fincli core config logger` reports zero errors. The trigger condition is concrete: zero errors. Until then, the gap is visible but does not block work.
 
 This phased approach exists because:
 
@@ -237,7 +195,7 @@ The lint rule set is the conservative `["E", "F", "W", "I", "B", "UP", "N", "SIM
 
 ### First-run ruff baseline
 
-The Phase 1 harness lands against pre-existing source code that has not been linted before. The first `on-stop.js` run will surface a backlog of ~229 ruff findings and ~105 mypy errors across `fincli/`, `fundainsight/`, `core/`, `config/`, `logger/`. Both totals will appear in the Stop hook's `systemMessage` — ruff under `issues`, mypy under `warnings` (advisory until Phase 4). This is expected and is the calibration baseline for Phase 2 cleanup; it does not block work. Sweeping the backlog down is opportunistic — fix what you touch, defer the rest.
+The Phase 1 harness lands against pre-existing source code that has not been linted before. The first `on-stop.js` run will surface a backlog of ruff findings and mypy errors across `fincli/`, `core/`, `config/`, `logger/`. Both totals will appear in the Stop hook's `systemMessage` — ruff under `issues`, mypy under `warnings` (advisory until Phase 4). This is expected and is the calibration baseline for Phase 2 cleanup; it does not block work. Sweeping the backlog down is opportunistic — fix what you touch, defer the rest.
 
 ## Phased Roadmap
 
@@ -252,21 +210,17 @@ This section is the source of truth for *when* the deferred test work happens. A
 - Real `pytest` tests under `tests/unit/`, `tests/domain/`, `tests/e2e/`.
 - One test file per module listed in `tests/` layout above.
 - HTML fixture for the Finviz parser.
-- `yahooquery.Ticker` mock fixtures for the picker pipeline.
 - Add type hints incrementally to the modules being tested — this is the natural moment to drive the mypy advisory count down.
-- **Fix the `equity_calc.adjust_assets` `not int` bug** as part of writing its test (write the regression test that pins current behavior, then fix the bug, then update the test to pin corrected behavior).
 
 **Out of scope for Phase 2:**
 
-- `wisdom_fruit/` (experimental).
 - `logger/` (Singleton plumbing; low value, hard to test).
-- Live E2E tests against real Finviz / Yahoo (gated behind an env var when added).
+- Live E2E tests against real Finviz (gated behind an env var when added).
 
 **Definition of Done:**
 
 - `pytest tests/` passes locally and inside `on-stop.js`.
 - At least one test exists per module listed in the layout.
-- The `adjust_assets` bug is fixed and pinned by a regression test.
 - Tracking issue or follow-up spec at `docs/superpowers/specs/<future-date>-pytest-suite-bootstrap-spec.md`.
 
 ### Phase 3 — Enable coverage gate
@@ -288,7 +242,7 @@ This section is the source of truth for *when* the deferred test work happens. A
 
 ### Phase 4 — Promote mypy from warning to gate
 
-**Trigger:** when `mypy fundainsight fincli core config logger` returns zero errors.
+**Trigger:** when `mypy fincli core config logger` returns zero errors.
 
 **Scope:**
 
@@ -301,7 +255,7 @@ This section is the source of truth for *when* the deferred test work happens. A
 
 **Definition of Done:**
 
-- `mypy fundainsight fincli core config logger` returns zero errors.
+- `mypy fincli core config logger` returns zero errors.
 - `on-stop.js` and `post-edit.js` treat mypy as blocking.
 - A new session running `on-stop.js` against a deliberately-mistyped local edit fails the gate.
 - Tracking spec at `docs/superpowers/specs/<future-date>-mypy-promote-to-gate-spec.md`.
@@ -312,14 +266,13 @@ The phases are sequenced because Phase 4's trigger condition (zero mypy errors) 
 
 When Phase 2 starts, the following conventions are recommended (matching the broader "tests verify behavior, not implementation" stance above):
 
-- **Test name pattern**: `test_<unit_under_test>_<scenario>` — e.g., `test_convert_market_cap_billions_returns_float`, `test_filter_countries_excludes_all_listed`, `test_get_financial_data_returns_none_when_balance_sheet_missing`.
+- **Test name pattern**: `test_<unit_under_test>_<scenario>` — e.g., `test_convert_market_cap_billions_returns_float`, `test_build_query_handles_empty_filter_tuple`, `test_json_to_tuples_raises_on_malformed_input`.
 - **Class grouping**: optional. Use `class TestConvertMarketCap:` only when several tests share fixtures or setup, not as default.
 - **Assertions**: prefer plain `assert` over an assertion library. Use `pytest.approx` for floating-point comparisons. Default tolerance for ratio math: `rel=1e-6`.
 - **Parametrization**: `@pytest.mark.parametrize` for table-style cases. Each row is a `pytest.param(input, expected, id="<short label>")` so the test ID is human-readable.
 
 ## Known Gaps
 
-- **No tests today.** Phase 2 lands them. Don't write tests in Phase 1 unless you are also writing the test infrastructure (fixtures, conftest, recorded HTML/JSON) — half a test suite is worse than none.
-- **`equity_calc.adjust_assets` has a known bug** (`not int` is always `False`; the second branch always runs). Phase 2 captures this in a regression test, then fixes it.
-- **External services drift.** Finviz HTML and Yahoo Finance JSON shapes can change without notice. The mocking strategy isolates unit/domain tests from drift, but E2E tests against recorded fixtures will need refreshing periodically. When a fixture goes stale, replace it with a fresh recording.
+- **No tests today.** Phase 2 lands them. Don't write tests in Phase 1 unless you are also writing the test infrastructure (fixtures, conftest, recorded HTML) — half a test suite is worse than none.
+- **External services drift.** Finviz HTML can change without notice. The mocking strategy isolates unit/domain tests from drift, but E2E tests against recorded fixtures will need refreshing periodically. When a fixture goes stale, replace it with a fresh recording.
 - **Singleton logger pollution.** When tests start running in parallel, the Singleton may leak handlers between tests. The fix is a `tests/conftest.py` autouse fixture that resets the Singleton between tests; add this when it actually causes a flake, not preemptively.
