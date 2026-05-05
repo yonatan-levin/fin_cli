@@ -65,3 +65,9 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 addopts = "-ra"
+
+[tool.setuptools]
+py-modules = ["singleton"]
+
+[tool.setuptools.packages.find]
+include = ["fincli*", "core*", "config*", "logger*"]
