@@ -14,7 +14,7 @@ def build_config(
     if use_history:
         config.use_history = use_history
         
-        filepath = os.path.join(os.path.realpath('fundainsight'),"local_history", 'filter_history.json')
+        filepath = os.path.join(os.path.realpath('fincli'),"local_history", 'filter_history.json')
         with open(filepath, 'r') as f:
             filters = json.load(f)
             config.filters = tuple(filters.items())
