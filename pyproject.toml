@@ -37,11 +37,6 @@ extend-exclude = [
     "workspace_materials",
     "dist",
     "htmlcov",
-    "wisdom_fruit",
-    "shared",
-    "example",
-    "src",
-    "benchmarks",
     "__pycache__",
     ".venv",
 ]
