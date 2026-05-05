@@ -3,7 +3,7 @@ alwaysApply: true
 ---
 # Shared Workflow Documentation
 
-This file contains shared workflow patterns used across all roles and modes for the **algo_beta** project (Python CLI for stock screening + fundamental analysis).
+This file contains shared workflow patterns used across all roles and modes for the **fin_cli** project (Python CLI for Finviz stock screening).
 
 ---
 
@@ -19,7 +19,7 @@ This file contains shared workflow patterns used across all roles and modes for 
 - **sequential-thinking**: Break down complex tasks into smaller steps
 - **memory**: Store work context, thoughts, and conclusions
 - **perplexity-ask**: Research unknown problems, search web for answers
-- **context7**: Look up documentation for any code subject (yahooquery, pandas, Click, Pydantic, cfscrape)
+- **context7**: Look up documentation for any code subject (Click, pandas, Pydantic, cfscrape, BeautifulSoup4)
 - **mcp__zen__thinkdeep**: Deep thinking about architecture and complex problems
 - **mcp__zen__codereview**: Systematic code review.
 - **mcp__zen__debug**: Root cause analysis for bugs
@@ -39,14 +39,14 @@ Each role has a corresponding role file that defines its responsibilities and ho
 | Role | Responsibility | Role File |
 |------|----------------|-----------|
 | **ARCH** | Architecture decisions, module boundaries, refactor plans, requirements clarification, spec updates | `agents/roles/code-architect.md` |
-| **BACKEND** | Python implementation: domain logic in `fundainsight/calculators/`, orchestration in `fundainsight/app/picker.py`, screener pipeline in `fincli/app/main.py`, Click CLI commands, Pydantic configs, logger plumbing | `agents/roles/backend-architect.md` |
+| **BACKEND** | Python implementation: screener pipeline in `fincli/app/main.py`, HTML parsing in `fincli/stock_screening/`, Finviz URL builder in `fincli/utils/quary_builders.py`, Click CLI commands, Pydantic configs, logger plumbing | `agents/roles/backend-architect.md` |
 | **FRONTEND** | Click command groups, terminal output formatting (colorama), CSV-to-table presentation, TUI widgets, notebook helpers — *see footnote* | `agents/roles/frontend-developer.md` |
 | **UX_UI** | CLI ergonomics, `--help` text quality, error-message clarity, prompt design, color/symbol conventions — *see footnote* | `agents/roles/ui-designer.md` |
 | **VERIFIER** | Independent validation that implementation works — runs pytest, ruff, mypy, inspects CSV outputs, validates behavior | `agents/roles/verifier.md` |
 | **QA** | Behavior verification, test coverage, regression checking, CLI / data / config debugging | `agents/roles/qa-debugger.md` |
 | **REVIEWER** | Code review for readability, maintainability, security, performance — Python-specific patterns (PEP 8, type hints, Pydantic) | `agents/roles/code-reviewer.md` |
 
-> **Note:** algo_beta has **no current frontend surface**. Invoke FRONTEND/UX_UI only when explicitly extending the system with UI (TUI / dashboard / notebook). For all non-UI work, BACKEND covers the full implementation surface.
+> **Note:** fin_cli has **no current frontend surface**. Invoke FRONTEND/UX_UI only when explicitly extending the system with UI (TUI / dashboard / notebook). For all non-UI work, BACKEND covers the full implementation surface.
 
 ---
 
@@ -86,7 +86,7 @@ Each role has a corresponding role file that defines its responsibilities and ho
 - **Tests Pass**: All affected pytest suites pass
 - **Functionality Works**: Happy path, error cases, and edge cases work correctly
 - **Quality Standards**: ruff is clean, mypy issues are surfaced (advisory in Phase 1), code follows conventions
-- **CSV Output Schema**: When CSV-producing code is touched, run the picker on fixture data and inspect column names + dtypes
+- **CSV Output Schema**: When CSV-producing code is touched, run the screener pipeline on fixture data and inspect column names + dtypes
 - **No Regressions**: Existing functionality still works, no new issues introduced
 
 **VERIFIER test-suite list:**
@@ -94,7 +94,7 @@ Each role has a corresponding role file that defines its responsibilities and ho
 | Suite | Tooling | Status |
 |-------|---------|--------|
 | Unit tests | pytest | required when behavior changed |
-| Domain tests | pytest | required for `fundainsight/calculators/` changes |
+| Domain tests | pytest | required for `fincli/stock_screening/` and pipeline changes |
 | E2E tests | pytest with fixture data | required for full-pipeline changes |
 | Lint | ruff | gate |
 | Format | ruff format --check | gate |
@@ -135,7 +135,7 @@ HANDOFF_TO: <BACKEND | FRONTEND | REVIEWER | HUMAN>
 - **Readability**: Clear naming, proper structure, Google-style docstrings where appropriate
 - **Maintainability**: Low complexity, no duplication, good cohesion, type hints where load-bearing
 - **Security**: Input validation, no secrets exposed, no CSV injection (`=`/`+`/`-`/`@` prefixes), cfscrape User-Agent leak check, no hardcoded API keys
-- **Performance**: No obvious bottlenecks in critical paths (ThreadPoolExecutor sizing, pandas chained ops)
+- **Performance**: No obvious bottlenecks in critical paths (sequential page fetch latency, pandas chained ops)
 - **Tests**: Adequate coverage (target 90%, deferred to Phase 3), clear test names
 - **Documentation**: Updates to ARCHITECTURE.md, CONTRACTS.md, TESTING.md, CLAUDE.md if needed
 
@@ -166,7 +166,7 @@ HANDOFF_TO: <BACKEND | FRONTEND | QA | HUMAN>
 - **CLI Spec**: Does the Click command surface match `CONTRACTS.md`?
 - **Output Schema**: Does the CSV match the documented column set + dtypes?
 - **Tests**: Do tests pass? Any regression risk?
-- **Edge Cases**: Are error states handled (empty Finviz response, Yahoo Finance throttling, missing balance-sheet rows)?
+- **Edge Cases**: Are error states handled (empty Finviz response, Cloudflare 503/429, missing or malformed table cells)?
 
 **QA Output Format:**
 ```
@@ -178,7 +178,7 @@ HANDOFF_TO: <BACKEND | FRONTEND | QA | HUMAN>
 # Issues
 | Severity | Agent | Description |
 |----------|-------|-------------|
-| HIGH     | BACKEND | adjust_assets returns wrong total when current_assets is missing |
+| HIGH     | BACKEND | convert_market_cap_to_numeric returns "N/A" instead of float for trailing-suffix inputs |
 
 # Suggested Fixes
 - Specific fixes for each issue

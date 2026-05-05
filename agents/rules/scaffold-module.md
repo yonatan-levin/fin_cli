@@ -1,9 +1,8 @@
 ---
 name: scaffold-module
-description: Create a new Python module following algo_beta conventions. Generates the module skeleton (Click CLI + main pipeline + utils), Pydantic config wiring, logger import, and parallel test scaffolds.
+description: Create a new Python module following fin_cli conventions. Generates the module skeleton (Click CLI + main pipeline + utils), Pydantic config wiring, logger import, and parallel test scaffolds.
 globs:
   - "fincli/**"
-  - "fundainsight/**"
   - "core/**"
   - "config/**"
   - "logger/**"
@@ -12,7 +11,7 @@ globs:
 
 # Scaffold Module Skill
 
-When invoked with `@scaffold-module {module-name}`, create a complete module structure following the algo_beta Python/Click conventions documented in `CLAUDE.md`.
+When invoked with `@scaffold-module {module-name}`, create a complete module structure following the fin_cli Python/Click conventions documented in `CLAUDE.md`.
 
 ## Purpose
 
@@ -22,7 +21,7 @@ Quickly bootstrap new feature modules with consistent structure, reducing boiler
 
 Before scaffolding:
 1. Check `ARCHITECTURE.md` to verify the new module's boundary and intended placement.
-2. Review existing modules (`fincli/`, `fundainsight/`) for consistency.
+2. Review the existing `fincli/` module for consistency.
 3. Confirm with the user whether the module is a new top-level module or a sub-component of an existing one.
 
 ## Module Structure

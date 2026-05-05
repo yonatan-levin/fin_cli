@@ -1,5 +1,7 @@
 # Algo Beta Agent Harness Replication — Design Specification
 
+> **Note (2026-05-04):** Phase-2 scope in this spec referenced `fundainsight`. That module has since been removed. See `docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md`; future Phase-2 work targets `fincli`'s test suite only.
+
 **Version:** 0.1 DRAFT
 **Date:** 2026-05-02
 **Status:** DESIGN
