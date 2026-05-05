@@ -3,7 +3,6 @@ autogpt/keys.py
 autogpt/*.json
 workspace_output/*
 workspace_materials/
-fundainsight/local_history/*
 *.mpeg
 .env
 .vscode
@@ -20,13 +19,8 @@ fincli/__main__.build
 fincli/__main__.dist
 fincli/__main__.onefile-build
 fincli/__main__.exe
+fincli/local_history/*
 fincli/stock_screening/local_history/*
-fundainsight/__main__.build
-fundainsight/__main__.dist
-fundainsight/__main__.onefile-build
-fundainsight/__main__.exe
-fundainsight/stock_screening/local_history/*
-fundainsight/workspace_output/*
 
 
 

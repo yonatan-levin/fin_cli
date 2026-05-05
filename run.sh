@@ -1,5 +1,7 @@
-
 #!/bin/bash
+
+# Convenience launcher: install requirements if needed, then run fincli.
+# Passes any extra arguments through to `python -m fincli`.
 
 # Function to check for Python installation
 check_python() {
@@ -24,21 +26,4 @@ if [ $? -ne 0 ]; then
     $PYTHON_CMD -m pip install -r requirements.txt
 fi
 
-# Menu for module selection
-while true; do
-    echo
-    echo "Please choose a module to run:"
-    echo "1. fincli"
-    echo "2. fundainsight"
-    echo
-    read -p "Enter your choice (1 or 2): " choice
-
-    case $choice in
-        1 ) $PYTHON_CMD -m fincli "$@"; break;;
-        2 ) $PYTHON_CMD -m fundainsight "$@"; break;;
-        * ) echo "Invalid choice. Please choose 1 or 2."
-    esac
-done
-
-# Optional pause (commented out)
-# read -p "Press enter to continue..."
+$PYTHON_CMD -m fincli "$@"

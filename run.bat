@@ -1,6 +1,9 @@
 @echo off
 setlocal enabledelayedexpansion
 
+REM Convenience launcher: install requirements if needed, then run fincli.
+REM Passes any extra arguments through to `python -m fincli`.
+
 echo Checking for Python...
 
 :FindPythonCommand
@@ -23,26 +26,5 @@ if errorlevel 1 (
     %PYTHON_CMD% -m pip install -r requirements.txt
 )
 
-:Menu
-echo.
-echo Please choose a module to run:
-echo 1. fincli
-echo 2. fundainsight
-echo.
-set /p choice="Enter your choice (1 or 2): "
-
-if "%choice%"=="1" goto RunFincli
-if "%choice%"=="2" goto RunFundainsight
-echo Invalid choice. Please choose 1 or 2.
-goto Menu
-
-:RunFincli
 %PYTHON_CMD% -m fincli %*
-goto End
-
-:RunFundainsight
-%PYTHON_CMD% -m fundainsight %*
-goto End
-
-:End
 pause
