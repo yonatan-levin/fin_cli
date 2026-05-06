@@ -85,7 +85,7 @@ You may work on:
    - Enforce the order: load config → build URL → fetch pages → parse rows → assemble DataFrame → write CSV.
 
 3. **Parsing and transformation**
-   - Implement and maintain pure functions in `fincli/stock_screening/content.py` (table extractor) and `fincli/stock_screening/parsers.py` (row parser).
+   - Implement and maintain pure functions in `fincli/stock_screening/content/stock_table.py` (table extractor) and `fincli/stock_screening/parsers/stock_table.py` (row parser). Selector strings live in `fincli/stock_screening/locators/stock_table_locators.py`.
    - `fincli/app/main.py` owns `convert_market_cap_to_numeric`, `aggregate_rows`, `build_data_frame`. Keep these pure where possible (input rows or DataFrame in, output DataFrame out — no I/O).
    - Use pandas vectorization over row loops where it is clearer or faster.
 

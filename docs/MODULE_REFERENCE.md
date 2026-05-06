@@ -29,11 +29,12 @@ This module operates entirely synchronously — no threading.
 |------|------|
 | `fincli/app/cli.py` | Click entry point. Defines the `@click.group` with `--history`, `--debug` flags. Invokes `run_stock_screener`. |
 | `fincli/app/main.py` | Orchestrator. `run_stock_screener(history, debug)` → `fetch_urls(quarry, page_count)` → `aggregate_rows(pages)` → `build_data_frame(rows)` → `convert_market_cap_to_numeric(df)`. Writes the final CSV. |
-| `fincli/cli/cli_stock_screener.py` | Interactive filter-selection UI. Prompts the user through Fundamental / Descriptive / Technical filter categories and returns a list of `(query_key, value_code)` tuples. |
+| `fincli/cli/cli_stock_screener.py` | Interactive filter-selection UI. The `prompt_section` helper displays each filter group (Fundamental / Descriptive / Technical) one at a time using **per-section local 1-based numbering**; the user enters comma-separated numbers for that section, or presses Enter alone to skip it. Out-of-range / non-integer input reprompts cleanly. Returns a list of `(query_key, value_code)` tuples. |
 | `fincli/utils/web_scraper.py` | `fetch_page_sync(url)` — makes one HTTPS request via `cfscrape` with a randomized User-Agent and 10-second timeout. Implements exponential backoff on rate-limit responses. |
 | `fincli/utils/quary_builders.py` | `build_stock_screener_query(filters)` — takes the list of selected filter tuples and assembles the Finviz screener URL (`https://finviz.com/screener.ashx?v=111&f=<codes>&ft=2`). Handles pagination by appending `&r=<offset>`. |
-| `fincli/stock_screening/content.py` | Top-level HTML table extractor. Uses BeautifulSoup to locate the screener result table and extract all rows. |
-| `fincli/stock_screening/parsers.py` | Per-row HTML cell parser. Converts raw `<td>` cell text to typed Python values (strings, floats, ints). |
+| `fincli/stock_screening/content/stock_table.py` | Top-level HTML table extractor. Uses BeautifulSoup to locate the screener result table and extract all rows. |
+| `fincli/stock_screening/parsers/stock_table.py` | Per-row HTML cell parser. Converts raw `<td>` cell text to typed Python values (strings, floats, ints). |
+| `fincli/stock_screening/locators/stock_table_locators.py` | CSS / element locators for the Finviz screener table — used by both the content extractor and the per-row parser to keep selectors in one place. |
 | `fincli/resource/params/fundamental_params.py` | Filter parameter definitions for Finviz fundamental filters (P/E, ROE, profit margin, debt/equity, etc.). Format: `[query_key, {value_code: display_name}]`. |
 | `fincli/resource/params/descriptive_params.py` | Filter parameter definitions for Finviz descriptive filters (sector, country, market cap, exchange, etc.). Same format. |
 | `fincli/resource/params/technical_params.py` | Filter parameter definitions for Finviz technical filters (RSI, SMA, performance, short float, etc.). Same format. |

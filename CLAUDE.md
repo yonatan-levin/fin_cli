@@ -70,11 +70,12 @@ Full diagram + per-section detail in `ARCHITECTURE.md`.
 |---|---|
 | `fincli/app/cli.py` | Click entry point for the screener |
 | `fincli/app/main.py` | Screener pipeline orchestrator (`run_stock_screener`, `fetch_urls`, `aggregate_rows`, `build_data_frame`, `convert_market_cap_to_numeric`) |
-| `fincli/cli/cli_stock_screener.py` | Interactive filter-selection UI |
+| `fincli/cli/cli_stock_screener.py` | Interactive filter-selection UI. `prompt_section` displays each filter group (Fundamental / Descriptive / Technical) one at a time with per-section local 1-based numbering; blank input skips a section, out-of-range or non-integer input reprompts. |
 | `fincli/utils/web_scraper.py` | `cfscrape`-based HTTPS fetcher with randomized User-Agent and 10-second timeout |
 | `fincli/utils/quary_builders.py` | Finviz URL construction from filter tuples |
-| `fincli/stock_screening/content.py` | Top-level HTML table extractor (BeautifulSoup) |
-| `fincli/stock_screening/parsers.py` | Per-row HTML cell parser |
+| `fincli/stock_screening/content/stock_table.py` | Top-level HTML table extractor (BeautifulSoup) |
+| `fincli/stock_screening/parsers/stock_table.py` | Per-row HTML cell parser |
+| `fincli/stock_screening/locators/stock_table_locators.py` | CSS / element locators for the Finviz screener table |
 | `fincli/resource/params/fundamental_params.py` | `[query_key, {value_code: display_name}]` definitions for fundamental Finviz filters (P/E, ROE, margins, etc.) |
 | `fincli/resource/params/descriptive_params.py` | Descriptive filters (sector, country, market cap, etc.) |
 | `fincli/resource/params/technical_params.py` | Technical filters (RSI, SMA, performance, etc.) |
@@ -84,7 +85,7 @@ Full diagram + per-section detail in `ARCHITECTURE.md`.
 | `config/config.py` | Concrete `Config(SystemSettings)` with `file_path(name)` CSV-naming helper |
 | `logger/logger.py` | Singleton `Logger` (typing console, plain console, JSON file handlers) |
 | `singleton.py` | Standalone metaclass utility used by the logger |
-| `pyproject.toml` | Project metadata, dev deps, `[tool.ruff]`, `[tool.mypy]`, `[tool.pytest.ini_options]` |
+| `pyproject.toml` | Project metadata, dev deps, `[tool.ruff]`, `[tool.mypy]`, `[tool.pytest.ini_options]`, `[tool.setuptools]` (explicit flat-layout package discovery) |
 | `agents/rules/_shared-workflow.md` | Master workflow rules for AI subagents |
 | `agents/roles/*.md` | Per-role context files (8 roles) |
 | `docs/THESIS.md` | Project vision, current phase, roadmap, scope boundaries |
@@ -159,6 +160,7 @@ A full reference of all available skills, slash commands, and MCP tools (includi
 - The `tests/` folder has `__pycache__` content from previously-deleted test bodies. Phase 2 introduces real tests; do not remove the folder structure.
 - `core/configuration/configurator.py` resolves the `--history` path from `os.path.realpath('fincli')`. That literal is correct today, but the cleaner fix moves the directory into `Config`; see `docs/refactoring/history-path-config-spec.md`.
 - The package is installed as `fincli` (PEP 621 distribution name in `pyproject.toml`). It used to be `finscrape`; if pip is reusing a stale egg-info, `pip uninstall finscrape` then `pip install -e ".[dev]"` from a clean venv.
+- `pyproject.toml` declares `[tool.setuptools.packages.find]` with `include = ["fincli*", "core*", "config*", "logger*"]` plus `[tool.setuptools] py-modules = ["singleton"]`. Modern setuptools (>= 67) refuses to auto-discover when a flat-layout repo has more than one top-level package; this directive is what makes `pip install -e .` succeed. Don't remove it without restructuring the repo to a `src/` layout.
 
 ## Known Issues / Tech Debt
 

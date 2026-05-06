@@ -39,7 +39,7 @@ This document is the source of truth for Fin CLI's system architecture.
 
 | Module | Purpose | Key Files |
 |---|---|---|
-| `fincli/` | Stock screener — builds a Finviz query URL, fetches all paginated pages, parses the HTML stock table, writes CSV. | `fincli/app/cli.py`, `fincli/app/main.py`, `fincli/cli/cli_stock_screener.py`, `fincli/utils/web_scraper.py`, `fincli/utils/quary_builders.py`, `fincli/stock_screening/`, `fincli/resource/params/` |
+| `fincli/` | Stock screener — builds a Finviz query URL, fetches all paginated pages, parses the HTML stock table, writes CSV. | `fincli/app/cli.py`, `fincli/app/main.py`, `fincli/cli/cli_stock_screener.py` (section-by-section filter UI via `prompt_section`), `fincli/utils/web_scraper.py`, `fincli/utils/quary_builders.py`, `fincli/stock_screening/{content,parsers,locators}/stock_table*.py`, `fincli/resource/params/` |
 | `core/` | Pure Python configuration framework — Pydantic base classes (`SystemSettings`), JSON-to-tuple conversion, Configurator builder. Has no external service dependencies. | `core/configuration/config_base.py`, `core/configuration/configurator.py`, `core/converters/json.py` |
 | `config/` | Concrete `Config` instance for the application — extends `SystemSettings`, exposes `use_history`, `filters`, `scrape_link`, and `file_path(name)` for timestamped CSV destinations. | `config/config.py` |
 | `logger/` | Singleton logger with three named handlers: a typing-effect console handler, plain console handler, and a JSON file handler. Imported as `from logger import logger`. | `logger/logger.py`, `logger/handlers/`, `logger/formatters/` |
@@ -61,7 +61,10 @@ Supporting (not part of the active runtime path):
        |   loads filter_history.json when --history is set
        v
 [3] Interactive filter selection    fincli/cli/cli_stock_screener.py
-       |   user picks Fundamental / Descriptive / Technical filter values
+       |   each section (Fundamental / Descriptive / Technical) is shown
+       |   in turn with per-section 1-based local numbering; user types
+       |   comma-separated numbers for that section (or presses Enter to
+       |   skip); out-of-range / non-integer input reprompts cleanly.
        v
 [4] Query URL construction          fincli/utils/quary_builders.py
        |   -> https://finviz.com/screener.ashx?v=111&f=<codes>&ft=2&r=<offset>
@@ -69,7 +72,7 @@ Supporting (not part of the active runtime path):
 [5] HTTP fetch (Cloudflare bypass)  fincli/utils/web_scraper.py
        |   cfscrape.create_scraper() with randomized User-Agent, 10s timeout
        v
-[6] HTML table parsing              fincli/stock_screening/content.py
+[6] HTML table parsing              fincli/stock_screening/content/stock_table.py
        |   BeautifulSoup over table.styled-table-new; reads page count,
        |   then iterates r=1, r=21, r=41, ... until exhausted
        v
@@ -141,7 +144,7 @@ fin_cli/
       cli.py                   # Click entry point
       main.py                  # Pipeline orchestrator
     cli/
-      cli_stock_screener.py    # Interactive filter UI
+      cli_stock_screener.py    # Section-by-section interactive filter UI
     resource/
       params/
         fundamental_params.py
@@ -149,9 +152,12 @@ fin_cli/
         technical_params.py
         const.py
     stock_screening/
-      content.py               # HTML table extractor
-      parsers.py               # row -> dict parser
-      locators.py              # CSS / element locators
+      content/
+        stock_table.py         # HTML table extractor
+      parsers/
+        stock_table.py         # row -> dict parser
+      locators/
+        stock_table_locators.py  # CSS / element locators
     utils/
       web_scraper.py           # cfscrape wrapper
       quary_builders.py        # Finviz URL construction

@@ -31,7 +31,7 @@ Usage: python -m fincli [OPTIONS]
 
 | State | What happens |
 |---|---|
-| No subcommand, no `--history` | Interactive filter-selection menu (Fundamental / Descriptive / Technical), then full screener pipeline, then CSV write. |
+| No subcommand, no `--history` | Section-by-section interactive filter selection. Each filter group (Fundamental / Descriptive / Technical) is displayed in turn with **per-section local 1-based numbering**; the user enters comma-separated numbers for that section, or presses Enter alone to skip it. **Bounds-checked input**: out-of-range or non-integer values are rejected with a clear message and the same section reprompts (no `IndexError`). After all three sections, the screener pipeline runs and the CSV is written. |
 | `--history` | Skip the interactive menu; reuse the last filter set. |
 | `--debug` | Logger level lowered to `DEBUG` for the duration of the run. |
 
