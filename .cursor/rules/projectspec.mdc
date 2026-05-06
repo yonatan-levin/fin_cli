@@ -1,0 +1,17 @@
+---
+description: This is yfinance docs link
+globs: 
+alwaysApply: false
+---
+Yfincace sources list
+https://ranaroussi.github.io/yfinance/index.html
+https://ranaroussi.github.io/yfinance/advanced/index.html
+https://ranaroussi.github.io/yfinance/advanced/logging.html
+https://ranaroussi.github.io/yfinance/advanced/config.html
+https://ranaroussi.github.io/yfinance/advanced/caching.html
+https://ranaroussi.github.io/yfinance/advanced/multi_level_columns.html
+
+https://ranaroussi.github.io/yfinance/reference/index.html
+https://ranaroussi.github.io/yfinance/reference/api/yfinance.Ticker.html
+https://ranaroussi.github.io/yfinance/reference/api/yfinance.Tickers.html
+https://ranaroussi.github.io/yfinance/reference/yfinance.stock.html
