@@ -33,19 +33,24 @@ If you previously installed this project under its old distribution name `finscr
 ### Run
 
 ```bash
-# Interactive filter selection
+# Interactive filter selection (preferred; bare shell command)
+fincli
+
+# Equivalent fallback when the venv's Scripts/ dir is not on PATH
 python -m fincli
 
 # Reuse the last filter selection (reads fincli/local_history/filter_history.json)
-python -m fincli --history
+fincli --history
 
 # Verbose logging
-python -m fincli --debug
+fincli --debug
 
 # Convenience launchers (install requirements then run python -m fincli)
 ./run.sh        # Linux / macOS
 run.bat         # Windows
 ```
+
+> If you installed the project before the `[project.scripts]` entry point was added, re-run `pip install -e ".[dev]"` once so the bare `fincli` command lands on PATH. The launchers (`./run.sh`, `run.bat`) keep working unchanged because they invoke `python -m fincli` internally.
 
 ### Output
 

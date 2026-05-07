@@ -35,7 +35,7 @@ Quality bar: personal use, but results must be trustworthy. A row that silently 
 
 The screener (`python -m fincli`) is functional and has been used in production for real investment research. The harness rollout (Phase 1) is scaffolding tooling, documentation, and agent-workflow infrastructure to make the codebase safe for AI-assisted development.
 
-The single-mode reduction (`docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md`) removed the previously-bundled `fundainsight/` fundamental-analysis package and several abandoned scaffolds, retargeting the project to a single CLI: the Finviz screener. Two follow-up specs (`docs/refactoring/cli-entry-point-spec.md`, `docs/refactoring/history-path-config-spec.md`) capture deferred work.
+The single-mode reduction (`docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md`) removed the previously-bundled `fundainsight/` fundamental-analysis package and several abandoned scaffolds, retargeting the project to a single CLI: the Finviz screener. One follow-up spec (`docs/refactoring/history-path-config-spec.md`) captures the remaining intentionally deferred refactor work. The companion entry-point follow-up shipped on 2026-05-06 — see `docs/refactoring/archive/cli-entry-point-spec.md` and `docs/FEEDBACK-LOG.md`.
 
 Test bodies do not yet exist. The folder structure (`tests/unit/`, `tests/domain/`, `tests/e2e/`) is in place.
 
@@ -83,7 +83,6 @@ Tracked in `docs/superpowers/specs/2026-05-02-agent-harness-replication-design.m
 
 ### Beyond Phase 4
 
-- **Add a `[project.scripts]` entry point** so `pip install -e .` exposes a bare `fincli` shell command instead of requiring `python -m fincli`. Design tracked at `docs/refactoring/cli-entry-point-spec.md`.
 - **TUI / dashboard / notebook frontend.** The current UX is a series of CLI prompts. A richer interface — a `textual` TUI, a Jupyter notebook wrapper, or a lightweight web dashboard — would reduce friction for exploratory screening sessions.
 - **Async I/O for screener fetch.** The pipeline is synchronous to cooperate with Finviz's anti-bot pacing. If profiling shows the page-by-page latency dominates a typical run and Cloudflare tolerates parallel requests, an `httpx`/`aiohttp` rewrite of `fetch_page_sync` is a possibility.
 

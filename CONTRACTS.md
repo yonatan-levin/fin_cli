@@ -14,10 +14,10 @@ Fin CLI has **no REST API, no HTTP listener, no broker integration, no database*
 
 ## 1. CLI Command Surface
 
-**Entry point:** `python -m fincli` (resolves to `fincli/app/cli.py:run_main`).
+**Entry points:** `fincli` (preferred, registered via `[project.scripts]` in `pyproject.toml`) and `python -m fincli` (canonical fallback, useful when the venv's `Scripts/` dir is not on PATH). Both resolve to `fincli/app/cli.py:run_main`.
 
 ```
-Usage: python -m fincli [OPTIONS]
+Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 
   Welcome to the Stock Screener CLI!
 ```
@@ -55,7 +55,7 @@ Usage: python -m fincli [OPTIONS]
 | `run.sh` | Linux / macOS Bash launcher; checks the requirements then invokes `python -m fincli "$@"`. |
 | `run.bat` | Windows batch equivalent. |
 
-These are not contractually distinct from the `python -m fincli` invocation.
+These are not contractually distinct from the `python -m fincli` invocation. The launchers intentionally retain `python -m fincli` (rather than the bare `fincli` shell command) for portability — the module-execution form works whether or not the editable install's `Scripts/` directory is on `PATH`.
 
 ---
 

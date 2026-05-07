@@ -1,3 +1,7 @@
+> **Shipped:** 2026-05-06. The console-script entry point landed in this commit. The "Open decisions" section below is preserved as-is for historical context but is no longer pending — see the commit message and `docs/FEEDBACK-LOG.md` for the resolutions.
+
+---
+
 # CLI Entry Point — Refactor Spec (Stub)
 
 **Status:** STUB — design deferred until the user is ready to action this work.

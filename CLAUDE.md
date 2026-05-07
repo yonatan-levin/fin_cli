@@ -166,7 +166,6 @@ A full reference of all available skills, slash commands, and MCP tools (includi
 
 - **No tests today.** Folder structure exists; bodies arrive in Phase 2.
 - **Hard-coded history path in `core/configuration/configurator.py`** — the literal swap from `'fundainsight'` to `'fincli'` is in place, but the path is still derived from a hard-coded module-name string rather than a `Config` field. The deeper Config-driven fix is tracked at `docs/refactoring/history-path-config-spec.md`.
-- **No `[project.scripts]` entry point.** Today users invoke `python -m fincli`; exposing a bare `fincli` shell command via `pyproject.toml` is tracked at `docs/refactoring/cli-entry-point-spec.md`.
 - **`mypy strict = true` produces a non-zero day-one error count** because the codebase has almost no type hints. This is intentional — see Phase 4 below. Do not weaken `strict` to silence the count; instead add hints to the file you are editing.
 
 ## Phase Status

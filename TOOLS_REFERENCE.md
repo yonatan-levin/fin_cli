@@ -10,6 +10,7 @@ A single-page reference for every command, skill, MCP tool, and Claude Code hook
 |---|---|
 | `pip install -e ".[dev]"` | Editable install with the `dev` extra (ruff, mypy, pytest, pytest-cov, types-beautifulsoup4, pip-audit). |
 | `pip install -r requirements.txt` | Install runtime deps only (no dev tooling). |
+| `fincli` | Run the screener (preferred). Equivalent to `python -m fincli`; requires `pip install -e ".[dev]"` to register the entry point on PATH. |
 | `python -m fincli` | Run the screener (interactive). |
 | `python -m fincli --history` | Run the screener with the last filter selection. |
 | `python -m fincli --debug` | Run the screener with `DEBUG`-level logging. |

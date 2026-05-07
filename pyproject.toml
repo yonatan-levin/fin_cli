@@ -28,6 +28,9 @@ dev = [
     "pip-audit",
 ]
 
+[project.scripts]
+fincli = "fincli.app.cli:run_main"
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
