@@ -151,9 +151,12 @@ class Config(SystemSettings):
     use_history: bool = False
     filters: tuple    = ()           # tuple of (filter_key, value_code) pairs
     scrape_link: str  = ""
+    history_dir: Path = Path("fincli/local_history")  # filter-cache directory; CWD-relative
 
     def file_path(self, name: str) -> str: ...
 ```
+
+`history_dir` is the directory containing `filter_history.json`; the default is CWD-relative (matches today's behaviour when invoked from the repo root) and is overrideable via Pydantic init (`Config(history_dir=Path("..."))`). See §4.3 for the JSON schema and `docs/reviewer/history-dir-cwd-portability.md` for the latent CWD-portability limitation.
 
 ### 4.2 Builder
 

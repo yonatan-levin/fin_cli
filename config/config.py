@@ -1,6 +1,8 @@
 """Config file for the stock screener app."""
 import datetime
 import os
+from pathlib import Path
+from typing import Any
 from core.configuration.config_base import Configurable, SystemSettings
 
 class Config(SystemSettings):
@@ -12,6 +14,7 @@ class Config(SystemSettings):
     use_history: bool = False
     filters: tuple = ()
     scrape_link: str = ""
+    history_dir: Path = Path("fincli/local_history")
     @staticmethod
     def file_path(file_name: str) -> str:
         """Return the path to the file."""
@@ -27,7 +30,7 @@ class ConfigBuilder(Configurable[Config]):
     @classmethod
     def build_config_from_env(cls) -> Config:
         """Build the configuration."""
-        config_dict = {
+        config_dict: dict[str, Any] = {
             "use_history": os.getenv("USE_HISTORY", default=cls.default_settings.use_history),
         }
 

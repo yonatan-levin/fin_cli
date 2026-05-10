@@ -158,14 +158,12 @@ A full reference of all available skills, slash commands, and MCP tools (includi
 - `bs4` is typed via the `types-beautifulsoup4` dev dependency; mypy needs no override for it.
 - `singleton.py` lives at the repo root, not under `core/`. The logger imports it as a top-level module.
 - The `tests/` folder has `__pycache__` content from previously-deleted test bodies. Phase 2 introduces real tests; do not remove the folder structure.
-- `core/configuration/configurator.py` resolves the `--history` path from `os.path.realpath('fincli')`. That literal is correct today, but the cleaner fix moves the directory into `Config`; see `docs/refactoring/history-path-config-spec.md`.
 - The package is installed as `fincli` (PEP 621 distribution name in `pyproject.toml`). It used to be `finscrape`; if pip is reusing a stale egg-info, `pip uninstall finscrape` then `pip install -e ".[dev]"` from a clean venv.
 - `pyproject.toml` declares `[tool.setuptools.packages.find]` with `include = ["fincli*", "core*", "config*", "logger*"]` plus `[tool.setuptools] py-modules = ["singleton"]`. Modern setuptools (>= 67) refuses to auto-discover when a flat-layout repo has more than one top-level package; this directive is what makes `pip install -e .` succeed. Don't remove it without restructuring the repo to a `src/` layout.
 
 ## Known Issues / Tech Debt
 
 - **No tests today.** Folder structure exists; bodies arrive in Phase 2.
-- **Hard-coded history path in `core/configuration/configurator.py`** — the literal swap from `'fundainsight'` to `'fincli'` is in place, but the path is still derived from a hard-coded module-name string rather than a `Config` field. The deeper Config-driven fix is tracked at `docs/refactoring/history-path-config-spec.md`.
 - **`mypy strict = true` produces a non-zero day-one error count** because the codebase has almost no type hints. This is intentional — see Phase 4 below. Do not weaken `strict` to silence the count; instead add hints to the file you are editing.
 
 ## Phase Status

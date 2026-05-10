@@ -1,3 +1,7 @@
+> **Shipped:** 2026-05-09. The history-path-config refactor landed in this commit. The "Open decisions" section below is preserved as-is for historical context but is no longer pending — see the commit message and `docs/FEEDBACK-LOG.md` for the resolutions.
+
+---
+
 # History Path via Config — Refactor Spec (Stub)
 
 **Status:** STUB — design deferred until the user is ready to action this work.
