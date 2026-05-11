@@ -162,7 +162,6 @@ fin_cli/
       web_scraper.py           # cfscrape wrapper
       quary_builders.py        # Finviz URL construction
       user_agent_rotator.py
-    local_history/             # filter_history.json (gitignored)
 
   core/                        # Pure Python configuration framework
     configuration/
@@ -236,7 +235,7 @@ core/configuration/config_base.py
 
 core/configuration/configurator.py
     build_config(use_history: bool = False, filters: str = "") -> Config
-        - if use_history: read fincli/local_history/filter_history.json
+        - if use_history: read <Config.history_dir>/filter_history.json
         - if filters:     parse JSON string -> tuple of (key, value) pairs
         - else:           empty Config (interactive selection will populate later)
 

@@ -11,7 +11,7 @@ READING `AGENTS.md` IS MANDATORY.
 - **Language / runtime**: Python 3.12+
 - **Packaging**: `pyproject.toml` (PEP 621); editable install via `pip install -e ".[dev]"`. Distribution name is `fincli`.
 - **Distribution**: source-only; no PyPI release at this time
-- **Stack**: Click (CLI), pandas (data), cfscrape (Cloudflare bypass), BeautifulSoup4 (HTML parsing), Pydantic (config validation), colorama (ANSI colors)
+- **Stack**: Click (CLI), pandas (data), cfscrape (Cloudflare bypass), BeautifulSoup4 (HTML parsing), Pydantic (config validation), colorama (ANSI colors), platformdirs (user-data-directory resolution)
 
 ## Build & Run
 

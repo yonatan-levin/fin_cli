@@ -3,3 +3,4 @@ urllib3<2
 pandas
 cfscrape
 click
+platformdirs

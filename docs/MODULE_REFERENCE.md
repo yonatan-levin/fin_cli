@@ -82,7 +82,7 @@ Output `DataFrame` columns (from Finviz screener table — exact column set depe
 | ... | ... | Other Finviz columns depending on screener view |
 | `Ticker` (Excel) | `str` | `=HYPERLINK(...)` formula wrapping the symbol — preserved for Excel use |
 
-Filter history saved as `fincli/local_history/filter_history.json`. The directory comes from `Config.history_dir` (default `Path("fincli/local_history")`); `core/configuration/configurator.py:build_config` reads `config.history_dir / 'filter_history.json'` when `--history` is set.
+Filter history saved as `<Config.history_dir>/filter_history.json`. The directory comes from `Config.history_dir` (default: platformdirs `user_data_dir("fincli", appauthor=False) / "local_history"`; overrideable via `HISTORY_DIR` env var read in `build_config`). See `CONTRACTS.md` §4.1 for the full contract.
 
 CSV written to: `workspace_output/stock_screener_{YYYY-MM-DD_HH-MM}.csv`.
 
@@ -113,7 +113,7 @@ Pure-Python configuration framework. Provides Pydantic base classes, a generic `
 | File | Role |
 |------|------|
 | `core/configuration/config_base.py` | `SystemSettings(BaseModel)` — Pydantic base class with `use_history: bool`, `filters: list`, `scrape_link: str`, `debug: bool`. `Configurable[S]` generic protocol. |
-| `core/configuration/configurator.py` | `build_config(use_history, filters)` — constructs and returns a `Config` instance; when `use_history=True`, reads `config.history_dir / 'filter_history.json'` (default `fincli/local_history/filter_history.json`); otherwise parses the JSON filter string when `filters` is provided. The history directory is exposed as the `Config.history_dir: Path` field, overridable via Pydantic init. |
+| `core/configuration/configurator.py` | `build_config(use_history, filters)` — constructs and returns a `Config` instance; when `use_history=True`, reads `config.history_dir / 'filter_history.json'` (default and override per CONTRACTS §4.1); otherwise parses the JSON filter string when `filters` is provided. |
 | `core/converters/json.py` | `json_to_tuples(json_str)` — parses a JSON filter string into a list of `(query_key, value_code)` tuples for consumption by the Finviz URL builder. |
 
 ### Public surface
@@ -149,7 +149,6 @@ def json_to_tuples(json_str: str) -> list[tuple[str, str]]
 | Invalid config field type | `pydantic.ValidationError` raised at startup; CLI exits with error message. |
 | `filter_history.json` missing when `--history` is set | `build_config` raises `FileNotFoundError`; the user re-runs without the flag for interactive selection. |
 | Malformed filter JSON string | `json_to_tuples` raises `json.JSONDecodeError`; caller logs and exits. |
-| `--history` invoked from a non-repo-root CWD | The default `Config.history_dir = Path("fincli/local_history")` is CWD-relative; running from a directory without a `fincli/` subtree raises `FileNotFoundError`. Latent UX limitation tracked in `docs/reviewer/history-dir-cwd-portability.md`. |
 
 ### Integration
 

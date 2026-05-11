@@ -39,7 +39,7 @@ fincli
 # Equivalent fallback when the venv's Scripts/ dir is not on PATH
 python -m fincli
 
-# Reuse the last filter selection (reads fincli/local_history/filter_history.json)
+# Reuse the last filter selection (reads <Config.history_dir>/filter_history.json; see CONTRACTS.md §4 for the path resolution)
 fincli --history
 
 # Verbose logging
@@ -74,7 +74,7 @@ The pipeline is synchronous: pages from Finviz are fetched one at a time, in coo
 
 Config lives in `config/config.py` as a Pydantic `Config(SystemSettings)` model. The interesting fields:
 
-- `use_history: bool` — load the last filter selection from `fincli/local_history/filter_history.json`.
+- `use_history: bool` — load the last filter selection from `<Config.history_dir>/filter_history.json` (see CONTRACTS.md §4.1 for the default + override).
 - `filters: tuple` — parsed filter tuples; populated by the interactive UI or by `--history`.
 - `scrape_link: str` — direct Finviz URL override.
 - `file_path(name)` — produces a timestamped CSV path under `workspace_output/`.

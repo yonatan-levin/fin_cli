@@ -3,6 +3,10 @@ import datetime
 import os
 from pathlib import Path
 from typing import Any
+
+from platformdirs import user_data_dir
+from pydantic import Field
+
 from core.configuration.config_base import Configurable, SystemSettings
 
 class Config(SystemSettings):
@@ -14,7 +18,7 @@ class Config(SystemSettings):
     use_history: bool = False
     filters: tuple = ()
     scrape_link: str = ""
-    history_dir: Path = Path("fincli/local_history")
+    history_dir: Path = Field(default_factory=lambda: Path(user_data_dir("fincli", appauthor=False)) / "local_history")
     @staticmethod
     def file_path(file_name: str) -> str:
         """Return the path to the file."""

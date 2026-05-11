@@ -16,6 +16,7 @@ dependencies = [
     "pydantic",
     "colorama",
     "beautifulsoup4",
+    "platformdirs",
 ]
 
 [project.optional-dependencies]

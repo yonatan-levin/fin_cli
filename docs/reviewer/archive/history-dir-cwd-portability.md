@@ -1,3 +1,7 @@
+> **Shipped:** 2026-05-10. The CWD-portability follow-up shipped in this commit via the `platformdirs`-resolved default + `HISTORY_DIR` env-var override (directions #2 + #3 from the "Possible directions" list below). The other proposed directions (#1, #4, #5) were rejected as documented in `docs/FEEDBACK-LOG.md`.
+
+---
+
 # fincli --history: portable cache directory
 
 **Date opened:** 2026-05-09

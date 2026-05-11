@@ -24,7 +24,7 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 
 | Option | Alias | Type | Default | Description |
 |---|---|---|---|---|
-| `--history` | `--hist` | flag | `False` | Reload the most recent filter selection from `fincli/local_history/filter_history.json` instead of prompting interactively. |
+| `--history` | `--hist` | flag | `False` | Reload the most recent filter selection from `<Config.history_dir>/filter_history.json` (see §4.1 for the default + override) instead of prompting interactively. |
 | `--debug` | — | flag | `False` | Set the logger level to `DEBUG`. |
 
 **Behavior**
@@ -45,7 +45,7 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 **Output side effects**
 
 - `workspace_output/stock_screener_YYYY-MM-DD_HH-MM.csv`
-- `fincli/local_history/filter_history.json` is overwritten with the current filter selection on a successful run.
+- `<Config.history_dir>/filter_history.json` is overwritten with the current filter selection on a successful run. (See §4.1 for the default value and `HISTORY_DIR` env-var override.)
 - `logs/activity.log` (DEBUG+) and `logs/error.log` (ERROR+) appended.
 
 ### 1.1 Convenience launchers
@@ -151,26 +151,28 @@ class Config(SystemSettings):
     use_history: bool = False
     filters: tuple    = ()           # tuple of (filter_key, value_code) pairs
     scrape_link: str  = ""
-    history_dir: Path = Path("fincli/local_history")  # filter-cache directory; CWD-relative
+    history_dir: Path = Field(default_factory=lambda: Path(user_data_dir("fincli", appauthor=False)) / "local_history")
 
     def file_path(self, name: str) -> str: ...
 ```
 
-`history_dir` is the directory containing `filter_history.json`; the default is CWD-relative (matches today's behaviour when invoked from the repo root) and is overrideable via Pydantic init (`Config(history_dir=Path("..."))`). See §4.3 for the JSON schema and `docs/reviewer/history-dir-cwd-portability.md` for the latent CWD-portability limitation.
+`history_dir` is the directory containing `filter_history.json`. The default resolves via `platformdirs.user_data_dir("fincli")` to an absolute path under the user's data directory — `%LOCALAPPDATA%\fincli\local_history\` on Windows, `~/Library/Application Support/fincli/local_history/` on macOS, `~/.local/share/fincli/local_history/` on Linux — so `fincli --history` works from any CWD. The default is overrideable via the `HISTORY_DIR` env var (read by `core.configuration.configurator.build_config`) or Pydantic init (`Config(history_dir=Path("..."))`). This is a behavioral default change from the prior CWD-relative `Path("fincli/local_history")` shipped 2026-05-09; existing `fincli/local_history/filter_history.json` caches will not auto-migrate — see §4.3 and the archived reviewer note `docs/reviewer/archive/history-dir-cwd-portability.md`.
 
 ### 4.2 Builder
 
 `core/configuration/configurator.py:build_config(use_history: bool = False, filters: str = "") -> Config`
 
-- `use_history=True` reads `fincli/local_history/filter_history.json` and populates `filters`.
+- `use_history=True` reads `<Config.history_dir>/filter_history.json` (path resolved per §4.1) and populates `filters`.
 - `filters=<json>` invokes `core/converters/json.py:json_to_tuples` to parse the JSON into the `filters` tuple shape.
 - If both are empty, returns a `Config` with default values; the interactive UI populates `filters` later.
 
 ### 4.3 Filter history JSON
 
 ```
-fincli/local_history/filter_history.json
+<Config.history_dir>/filter_history.json
 ```
+
+The directory comes from `Config.history_dir` (default and override per §4.1).
 
 Schema:
 
