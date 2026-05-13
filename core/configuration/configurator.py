@@ -8,7 +8,8 @@ from ..converters.json import json_to_tuples
 
 def build_config(
     use_history: bool = False,
-    filters: str = ""
+    filters: str = "",
+    scrape_link: str = "",
 ) -> Config:
     """Create the configuration."""
     config = Config()
@@ -16,6 +17,11 @@ def build_config(
     history_dir_env = os.getenv("HISTORY_DIR")
     if history_dir_env:
         config.history_dir = Path(history_dir_env)
+
+    # Propagate the direct-URL bypass into Config so downstream orchestration
+    # can short-circuit query construction. Empty string means "interactive flow".
+    if scrape_link:
+        config.scrape_link = scrape_link
 
     if use_history:
         config.use_history = use_history

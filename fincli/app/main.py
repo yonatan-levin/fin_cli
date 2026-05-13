@@ -46,13 +46,15 @@ def convert_market_cap_to_numeric(market_cap):
         return float(market_cap)
 
 
-def run_stock_screener(history: bool = False, debug: bool = False):
+def run_stock_screener(history: bool = False, debug: bool = False, scrape_link: str = ""):
     logger.set_level(logging.DEBUG if debug else logging.INFO)
 
-    config = configurator.build_config(use_history=history)
+    config = configurator.build_config(use_history=history, scrape_link=scrape_link)
     logger.debug(f"Config: {config}", "Config created successfully:")
 
-    quarry = select_filters_and_values(config)
+    # Direct-URL bypass: when a scrape link is supplied, skip the interactive filter
+    # picker + query builder entirely and use the URL verbatim as the screener query.
+    quarry = config.scrape_link or select_filters_and_values(config)
     logger.debug(f"Quarry: {quarry}", 'Quarry created successfully:')
 
     logger.info(

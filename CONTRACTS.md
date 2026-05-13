@@ -26,13 +26,16 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 |---|---|---|---|---|
 | `--history` | `--hist` | flag | `False` | Reload the most recent filter selection from `<Config.history_dir>/filter_history.json` (see §4.1 for the default + override) instead of prompting interactively. |
 | `--debug` | — | flag | `False` | Set the logger level to `DEBUG`. |
+| `--scrape-link` | — | string | `""` | Direct Finviz screener URL; bypasses interactive filter selection. Empty string keeps the interactive flow. Mutually exclusive with `--history` — combining them exits non-zero with a Click `UsageError`. |
 
 **Behavior**
 
 | State | What happens |
 |---|---|
-| No subcommand, no `--history` | Section-by-section interactive filter selection. Each filter group (Fundamental / Descriptive / Technical) is displayed in turn with **per-section local 1-based numbering**; the user enters comma-separated numbers for that section, or presses Enter alone to skip it. **Bounds-checked input**: out-of-range or non-integer values are rejected with a clear message and the same section reprompts (no `IndexError`). After all three sections, the screener pipeline runs and the CSV is written. |
+| No subcommand, no `--history`, no `--scrape-link` | Section-by-section interactive filter selection. Each filter group (Fundamental / Descriptive / Technical) is displayed in turn with **per-section local 1-based numbering**; the user enters comma-separated numbers for that section, or presses Enter alone to skip it. **Bounds-checked input**: out-of-range or non-integer values are rejected with a clear message and the same section reprompts (no `IndexError`). After all three sections, the screener pipeline runs and the CSV is written. |
 | `--history` | Skip the interactive menu; reuse the last filter set. |
+| `--scrape-link=<url>` | Skip the interactive menu **and** the filter-to-URL query builder; fetch the supplied URL verbatim. No URL validation is performed — invalid URLs surface as downstream HTTP errors. |
+| `--history --scrape-link=<url>` | Rejected at parse time with a `UsageError` (alternative input modes, undefined when combined). |
 | `--debug` | Logger level lowered to `DEBUG` for the duration of the run. |
 
 **Exit codes**
@@ -248,7 +251,7 @@ These functions and classes are imported across modules. Keep their signatures s
 ### 6.1 `fincli/app/main.py`
 
 ```python
-def run_stock_screener(history: bool = False, debug: bool = False) -> None
+def run_stock_screener(history: bool = False, debug: bool = False, scrape_link: str = "") -> None
 def fetch_urls(quarry: str, page_count: int) -> list[bytes]
 def aggregate_rows(pages: list[bytes]) -> list[list]
 def build_data_frame(data_rows: list[list]) -> pandas.DataFrame
@@ -258,7 +261,7 @@ def convert_market_cap_to_numeric(market_cap: str) -> float | str
 ### 6.2 `core/configuration/configurator.py`
 
 ```python
-def build_config(use_history: bool = False, filters: str = "") -> Config
+def build_config(use_history: bool = False, filters: str = "", scrape_link: str = "") -> Config
 ```
 
 ### 6.3 `core/converters/json.py`

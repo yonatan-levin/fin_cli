@@ -113,7 +113,7 @@ Pure-Python configuration framework. Provides Pydantic base classes, a generic `
 | File | Role |
 |------|------|
 | `core/configuration/config_base.py` | `SystemSettings(BaseModel)` — Pydantic base class with `use_history: bool`, `filters: list`, `scrape_link: str`, `debug: bool`. `Configurable[S]` generic protocol. |
-| `core/configuration/configurator.py` | `build_config(use_history, filters)` — constructs and returns a `Config` instance; when `use_history=True`, reads `config.history_dir / 'filter_history.json'` (default and override per CONTRACTS §4.1); otherwise parses the JSON filter string when `filters` is provided. |
+| `core/configuration/configurator.py` | `build_config(use_history, filters, scrape_link)` — constructs and returns a `Config` instance; when `use_history=True`, reads `config.history_dir / 'filter_history.json'` (default and override per CONTRACTS §4.1); otherwise parses the JSON filter string when `filters` is provided. A non-empty `scrape_link` populates `config.scrape_link` for the direct-URL bypass path. |
 | `core/converters/json.py` | `json_to_tuples(json_str)` — parses a JSON filter string into a list of `(query_key, value_code)` tuples for consumption by the Finviz URL builder. |
 
 ### Public surface
