@@ -135,6 +135,26 @@ class Logger(metaclass=Singleton):
         self.logger.setLevel(level)
         self.typing_logger.setLevel(level)
 
+    def set_console_stream(self, stream: Any) -> None:
+        """Retarget the two console handlers (typing-effect + plain) to `stream`.
+
+        Pillar 2's ``--output -`` mode requires CSV bytes to be the **only**
+        thing on stdout. The two human-readable console handlers normally
+        write to stdout, so this method exists to reroute them to ``stderr``
+        (or any other text-mode stream) before the CSV write begins. File
+        handlers (``activity.log``, ``error.log``) are unaffected — only the
+        in-process console stream changes.
+
+        Args:
+            stream: A text-mode file-like object with a writable ``write``
+                method (e.g., ``sys.stderr``, an ``io.StringIO`` for tests).
+        """
+        # The handlers extend ``logging.StreamHandler`` and our custom
+        # ``emit`` methods route through ``self.stream``, so updating the
+        # attribute here is sufficient to retarget both handlers' output.
+        self.typing_console_handler.stream = stream
+        self.console_handler.stream = stream
+
     def double_check(self, additionalText: Optional[str] = None) -> None:
         if not additionalText:
             additionalText = (

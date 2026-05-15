@@ -12,6 +12,7 @@ def build_config(
     use_history: bool = False,
     filters: str = "",
     scrape_link: str = "",
+    output_path: str = "",
 ) -> Config:
     """Create the configuration.
 
@@ -24,6 +25,10 @@ def build_config(
             values raise ``click.UsageError`` (CLI exit 2).
         scrape_link: A direct Finviz URL that bypasses query construction.
             Filter validation is skipped when this is set (URL is opaque).
+        output_path: Caller-pinned CSV destination from ``--output PATH`` (or
+            the ``-`` sentinel for stdout streaming). Empty string means "no
+            pin"; ``Config.file_path`` then falls through to the
+            ``FINCLI_OUTPUT_DIR`` env override or the default. Spec §5.2.
 
     Returns:
         A populated ``Config`` instance.
@@ -34,10 +39,23 @@ def build_config(
     if history_dir_env:
         config.history_dir = Path(history_dir_env)
 
+    # `FINCLI_OUTPUT_DIR` is the env-var tier of the Pillar-2 precedence chain
+    # (spec §5.2). Mirrors the `HISTORY_DIR` block above. Loses to an explicit
+    # `--output PATH` because `Config.file_path` checks `output_path` first.
+    output_dir_env = os.getenv("FINCLI_OUTPUT_DIR")
+    if output_dir_env:
+        config.output_dir = Path(output_dir_env)
+
     # Propagate the direct-URL bypass into Config so downstream orchestration
     # can short-circuit query construction. Empty string means "interactive flow".
     if scrape_link:
         config.scrape_link = scrape_link
+
+    # Caller-pinned output destination (Pillar 2). Empty string means "fall
+    # through to env / default"; the `-` sentinel signals stdout streaming
+    # (resolved at the orchestrator boundary, not here).
+    if output_path:
+        config.output_path = output_path
 
     if use_history:
         config.use_history = use_history

@@ -1,5 +1,7 @@
 import logging
+import sys
 import pandas as pd
+from config.config import STDOUT_SENTINEL
 from core.configuration import configurator
 from fincli.stock_screening.content.stock_table import StockTableScreeningContent
 from fincli.cli.cli_stock_screener import select_filters_and_values
@@ -44,6 +46,7 @@ def run_stock_screener(
     debug: bool = False,
     scrape_link: str = "",
     filters: str = "",
+    output_path: str = "",
 ):
     logger.set_level(logging.DEBUG if debug else logging.INFO)
 
@@ -51,7 +54,14 @@ def run_stock_screener(
         use_history=history,
         scrape_link=scrape_link,
         filters=filters,
+        output_path=output_path,
     )
+    # When `--output -` is set, the CSV stream owns stdout. Reroute the two
+    # human-readable console handlers to stderr so progress / banner / typing
+    # chatter doesn't corrupt the CSV bytes piped to a downstream consumer.
+    # File handlers (activity.log, error.log) are unaffected. Spec §5.2 + §5.3.
+    if config.output_path == STDOUT_SENTINEL:
+        logger.set_console_stream(sys.stderr)
     logger.debug(f"Config: {config}", "Config created successfully:")
 
     # Direct-URL bypass: when a scrape link is supplied, skip the interactive filter
@@ -78,7 +88,17 @@ def run_stock_screener(
     final_df = build_data_frame(data_rows)
     logger.info(f"Data frame created successfully", "Data Handling --->")
     logger.info(f"Saving data frame to csv file", "Data Handling --->")
-    file_path = config.file_path("stock_screener")
-    final_df.to_csv(file_path, index=False)
-    logger.info(f"File saved to {file_path}", "Data Handling --->")
+    # Pillar-2 destination dispatch. The `-` sentinel means "stream CSV to
+    # stdout"; pandas accepts a file-like object, so handing it `sys.stdout`
+    # writes the CSV bytes directly (and nothing else, since the logger has
+    # already been rerouted to stderr above). Otherwise resolve the path
+    # through `config.file_path` so the precedence chain
+    # (--output PATH > FINCLI_OUTPUT_DIR > default) is honored at one site.
+    if config.output_path == STDOUT_SENTINEL:
+        final_df.to_csv(sys.stdout, index=False)
+        logger.info(f"CSV streamed to stdout", "Data Handling --->")
+    else:
+        file_path = config.file_path("stock_screener")
+        final_df.to_csv(file_path, index=False)
+        logger.info(f"File saved to {file_path}", "Data Handling --->")
 

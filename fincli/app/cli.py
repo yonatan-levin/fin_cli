@@ -115,6 +115,17 @@ def _normalize_filter_input(
         "Mutually exclusive with the other input-mode flags."
     ),
 )
+@click.option(
+    "--output",
+    "-o",
+    "output_path",
+    default="",
+    help=(
+        "Exact CSV destination. Parent dir must exist. No timestamp added; "
+        "overwrites if the file exists. Use '-' to stream CSV to stdout. "
+        "Orthogonal to all input-mode flags."
+    ),
+)
 @click.pass_context
 def run_main(
     ctx: click.Context,
@@ -124,6 +135,7 @@ def run_main(
     filter_pairs: tuple[str, ...] = (),
     filters_json: str = "",
     filters_file: str | None = None,
+    output_path: str = "",
 ) -> None:
     """
     Welcome to the Stock Screener CLI!
@@ -165,6 +177,7 @@ def run_main(
                 debug=debug,
                 scrape_link=scrape_link,
                 filters=filters_str,
+                output_path=output_path,
             )
         except ValueError as exc:
             raise click.UsageError(str(exc)) from exc

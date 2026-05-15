@@ -30,8 +30,9 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 | `--filter` | — | repeatable string | `()` | Single Finviz filter as `key=value`; repeatable. Example: `--filter fa_pe=u20 --filter sec=energy`. |
 | `--filters-json` | — | string | `""` | Inline flat-object JSON dict of filters, e.g. `--filters-json '{"fa_pe":"u20"}'`. Schema validated by `core.converters.json.json_to_tuples` (see §6.3). |
 | `--filters-file` | — | path | `None` | Path to a JSON file containing the same flat-object payload. Path is validated by Click (`exists=True, dir_okay=False, readable=True`). |
+| `--output` | `-o` | string | `""` | Exact CSV destination. Parent dir must exist. No timestamp added; overwrites if the file exists. Use `-` to stream CSV to stdout. Orthogonal to all input-mode flags. |
 
-**Mutual-exclusion set:** `--filter`, `--filters-json`, `--filters-file`, `--history`, `--scrape-link`. At most one input mode may be set; passing two or more raises `click.UsageError` (exit 2) with the canonical message `--filter / --filters-json / --filters-file / --history / --scrape-link are mutually exclusive; pick one input mode.` See `docs/features/pipeline-mode-spec.md` §6.2.
+**Mutual-exclusion set:** `--filter`, `--filters-json`, `--filters-file`, `--history`, `--scrape-link`. At most one input mode may be set; passing two or more raises `click.UsageError` (exit 2) with the canonical message `--filter / --filters-json / --filters-file / --history / --scrape-link are mutually exclusive; pick one input mode.` See `docs/features/pipeline-mode-spec.md` §6.2. Note: `--output` is **not** in this set — it composes with any input mode.
 
 **Behavior**
 
@@ -43,6 +44,9 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 | `--filter K=V [...]` / `--filters-json '{...}'` / `--filters-file PATH` | Skip the interactive menu; populate `Config.filters` from the supplied structured input. Keys and values are validated against the registered Finviz inventory (see `fincli/resource/params/validators.py`); unknowns raise `UsageError` (exit 2) before any HTTP fetch. The selection is persisted to `filter_history.json` for `--history` reuse. |
 | Two or more input-mode flags set | Rejected at parse time with a `UsageError` (alternative input modes, undefined when combined). |
 | `--debug` | Logger level lowered to `DEBUG` for the duration of the run. |
+| `--output PATH` | CSV is written to exactly `PATH`. Filename is **not** timestamped; overwrites silently if the file exists. Composes with any input-mode flag. Precedence: `--output PATH` > `--output -` > `FINCLI_OUTPUT_DIR` > default. |
+| `--output -` | CSV bytes are streamed to **stdout**. The two console handlers (typing-effect + plain) are rerouted to stderr at run start so stdout carries CSV bytes only — log progress, banner, errors all land on stderr. The default `Ticker` HYPERLINK formula stripping for stdout mode is **not yet implemented** (Pillar 6); `--output -` writes the same shape today as `--output PATH`. |
+| `FINCLI_OUTPUT_DIR=<dir>` env var | Replaces the parent directory of the default `workspace_output/stock_screener_{date}.csv` while preserving the timestamped basename. Loses to an explicit `--output PATH`. Read by `core.configuration.configurator.build_config`. |
 
 **Exit codes**
 
@@ -53,7 +57,7 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 
 **Output side effects**
 
-- `workspace_output/stock_screener_YYYY-MM-DD_HH-MM.csv`
+- CSV destination resolved via the Pillar-2 precedence chain: `--output PATH` > `--output -` (stdout stream) > `FINCLI_OUTPUT_DIR=<dir>` env var (parent-dir override) > default `workspace_output/stock_screener_YYYY-MM-DD_HH-MM.csv` under CWD.
 - `<Config.history_dir>/filter_history.json` is overwritten with the current filter selection on a successful run. (See §4.1 for the default value and `HISTORY_DIR` env-var override.)
 - `logs/activity.log` (DEBUG+) and `logs/error.log` (ERROR+) appended.
 
@@ -155,25 +159,37 @@ Defined in `config/config.py`, extends `core/configuration/config_base.py:System
 
 ```python
 class Config(SystemSettings):
-    name: str         = "Stock Screener CLI config"
-    description: str  = "Configuration for the Stock Screener CLI app."
-    use_history: bool = False
-    filters: tuple    = ()           # tuple of (filter_key, value_code) pairs
-    scrape_link: str  = ""
-    history_dir: Path = Field(default_factory=lambda: Path(user_data_dir("fincli", appauthor=False)) / "local_history")
+    name: str             = "Stock Screener CLI config"
+    description: str      = "Configuration for the Stock Screener CLI app."
+    use_history: bool     = False
+    filters: tuple        = ()           # tuple of (filter_key, value_code) pairs
+    scrape_link: str      = ""
+    history_dir: Path     = Field(default_factory=lambda: Path(user_data_dir("fincli", appauthor=False)) / "local_history")
+    output_path: str      = ""           # `--output PATH` / `--output -` (sentinel)
+    output_dir: Path | None = None       # `FINCLI_OUTPUT_DIR` env override
 
     def file_path(self, name: str) -> str: ...
 ```
 
 `history_dir` is the directory containing `filter_history.json`. The default resolves via `platformdirs.user_data_dir("fincli")` to an absolute path under the user's data directory — `%LOCALAPPDATA%\fincli\local_history\` on Windows, `~/Library/Application Support/fincli/local_history/` on macOS, `~/.local/share/fincli/local_history/` on Linux — so `fincli --history` works from any CWD. The default is overrideable via the `HISTORY_DIR` env var (read by `core.configuration.configurator.build_config`) or Pydantic init (`Config(history_dir=Path("..."))`). This is a behavioral default change from the prior CWD-relative `Path("fincli/local_history")` shipped 2026-05-09; existing `fincli/local_history/filter_history.json` caches will not auto-migrate — see §4.3 and the archived reviewer note `docs/reviewer/archive/history-dir-cwd-portability.md`.
 
+`output_path` is the caller-pinned CSV destination from `--output PATH` (or the `-` sentinel for stdout streaming). Empty string means "no caller pin"; precedence then falls through to `output_dir`, then to the CWD-relative default. The module-level constant `config.config.STDOUT_SENTINEL` (value `"-"`) names the stdout-streaming sentinel so the literal `"-"` is greppable across `Config.file_path` and `run_stock_screener`'s dispatch site.
+
+`output_dir` is the parent-directory override sourced from the `FINCLI_OUTPUT_DIR` env var (read by `core.configuration.configurator.build_config`). When set, `Config.file_path` keeps the timestamped basename and writes under `<output_dir>/`. Loses to `output_path` per the precedence chain.
+
+`Config.file_path(name)` is an instance method (not a `@staticmethod`) so all three precedence tiers — explicit path, env-override directory, default — are resolved at one site. The stdout sentinel intentionally **does not** affect `file_path`'s output: the dispatch (file vs stdout) lives at the orchestrator boundary in `run_stock_screener`, so callers that hit `file_path` cannot accidentally produce a file literally named `-`. Spec: `docs/features/pipeline-mode-spec.md` §5.2.
+
 ### 4.2 Builder
 
-`core/configuration/configurator.py:build_config(use_history: bool = False, filters: str = "") -> Config`
+`core/configuration/configurator.py:build_config(use_history: bool = False, filters: str = "", scrape_link: str = "", output_path: str = "") -> Config`
 
 - `use_history=True` reads `<Config.history_dir>/filter_history.json` (path resolved per §4.1) and populates `filters`.
 - `filters=<json>` invokes `core/converters/json.py:json_to_tuples` to parse the JSON into the `filters` tuple shape.
-- If both are empty, returns a `Config` with default values; the interactive UI populates `filters` later.
+- `scrape_link=<url>` populates `Config.scrape_link` to bypass query construction.
+- `output_path=<path>` populates `Config.output_path` (Pillar 2 destination pin); empty string falls through to env / default.
+- The `FINCLI_OUTPUT_DIR` env var, when set, populates `Config.output_dir` as the parent-directory override (loses to `output_path`).
+- The `HISTORY_DIR` env var, when set, populates `Config.history_dir`.
+- If all are empty, returns a `Config` with default values; the interactive UI populates `filters` later.
 
 ### 4.3 Filter history JSON
 
@@ -218,8 +234,8 @@ Returns the process-wide Singleton instance. The class is metaclass-based (`sing
 
 | Handler | Output | Level |
 |---|---|---|
-| Typing-effect console handler | `stdout` with simulated typing animation | INFO+ |
-| Plain console handler | `stdout` with no animation | DEBUG+ |
+| Typing-effect console handler | `stdout` with simulated typing animation (retargetable via `Logger.set_console_stream`) | INFO+ |
+| Plain console handler | `stdout` with no animation (retargetable via `Logger.set_console_stream`) | DEBUG+ |
 | File handler — activity log | `logs/activity.log` | DEBUG+ |
 | File handler — error log | `logs/error.log` | ERROR+ |
 | JSON file handler | `logs/<dynamic>.json` (per-call when used) | DEBUG+ |
