@@ -151,12 +151,22 @@ def run_main(
     from .main import run_stock_screener
 
     if ctx.invoked_subcommand is None:
-        run_stock_screener(
-            history=history,
-            debug=debug,
-            scrape_link=scrape_link,
-            filters=filters_str,
-        )
+        # Translate schema-rejection errors from `core.converters.json.json_to_tuples`
+        # (raised inside `build_config`) into `click.UsageError` so malformed
+        # `--filters-json` / `--filters-file` payloads exit 2 with a clean
+        # message instead of exit 1 with a Python traceback. Kept in the CLI
+        # layer to preserve `core/`'s Click-free purity (see ARCHITECTURE.md
+        # Module Map). Contract: docs/features/pipeline-mode-spec.md §7.2
+        # (exit-2 for schema-rejection).
+        try:
+            run_stock_screener(
+                history=history,
+                debug=debug,
+                scrape_link=scrape_link,
+                filters=filters_str,
+            )
+        except ValueError as exc:
+            raise click.UsageError(str(exc)) from exc
 
 
 if __name__ == "__main__":

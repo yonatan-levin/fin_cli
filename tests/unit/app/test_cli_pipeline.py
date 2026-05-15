@@ -142,22 +142,24 @@ _MUTEX_MSG_FRAGMENT = "mutually exclusive"
 
 
 def test_filter_and_history_mutually_exclusive() -> None:
-    """`--filter` + `--history` → exit 2 with mutex message."""
+    """`--filter` + `--history` → exit 2 with mutex message and no traceback."""
     runner = CliRunner()
     result = runner.invoke(run_main, ["--filter", "fa_pe=u20", "--history"])
-    assert result.exit_code != 0
+    assert result.exit_code == 2
     assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
 
 
 def test_filter_and_scrape_link_mutually_exclusive() -> None:
-    """`--filter` + `--scrape-link` → exit 2."""
+    """`--filter` + `--scrape-link` → exit 2 with no traceback."""
     runner = CliRunner()
     result = runner.invoke(
         run_main,
         ["--filter", "fa_pe=u20", "--scrape-link", "https://finviz.com/x"],
     )
-    assert result.exit_code != 0
+    assert result.exit_code == 2
     assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
 
 
 def test_filters_json_and_filters_file_mutually_exclusive(tmp_path: Path) -> None:
@@ -170,8 +172,9 @@ def test_filters_json_and_filters_file_mutually_exclusive(tmp_path: Path) -> Non
         run_main,
         ["--filters-json", '{"fa_pe":"u20"}', "--filters-file", str(file_path)],
     )
-    assert result.exit_code != 0
+    assert result.exit_code == 2
     assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
 
 
 def test_filter_and_filters_json_mutually_exclusive() -> None:
@@ -181,8 +184,9 @@ def test_filter_and_filters_json_mutually_exclusive() -> None:
         run_main,
         ["--filter", "fa_pe=u20", "--filters-json", '{"sec":"energy"}'],
     )
-    assert result.exit_code != 0
+    assert result.exit_code == 2
     assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
 
 
 def test_history_and_filters_file_mutually_exclusive(tmp_path: Path) -> None:
@@ -192,16 +196,18 @@ def test_history_and_filters_file_mutually_exclusive(tmp_path: Path) -> None:
 
     runner = CliRunner()
     result = runner.invoke(run_main, ["--history", "--filters-file", str(file_path)])
-    assert result.exit_code != 0
+    assert result.exit_code == 2
     assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
 
 
 def test_history_and_scrape_link_still_mutex() -> None:
     """Pre-existing pairing must continue to fail (back-compat)."""
     runner = CliRunner()
     result = runner.invoke(run_main, ["--history", "--scrape-link", "https://finviz.com/x"])
-    assert result.exit_code != 0
+    assert result.exit_code == 2
     assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -213,15 +219,17 @@ def test_filter_without_equals_rejected() -> None:
     """A `--filter` token missing `=` exits 2 and names the offender."""
     runner = CliRunner()
     result = runner.invoke(run_main, ["--filter", "no_equals_here"])
-    assert result.exit_code != 0
+    assert result.exit_code == 2
     assert "no_equals_here" in result.output
+    assert "Traceback" not in result.output
 
 
 def test_filter_empty_key_rejected() -> None:
-    """`--filter =value` is rejected."""
+    """`--filter =value` is rejected with exit 2 and no traceback."""
     runner = CliRunner()
     result = runner.invoke(run_main, ["--filter", "=u20"])
-    assert result.exit_code != 0
+    assert result.exit_code == 2
+    assert "Traceback" not in result.output
 
 
 def test_filter_empty_value_rejected() -> None:
@@ -230,7 +238,8 @@ def test_filter_empty_value_rejected() -> None:
     user mistake — reject so silent no-op runs cannot happen)."""
     runner = CliRunner()
     result = runner.invoke(run_main, ["--filter", "fa_pe="])
-    assert result.exit_code != 0
+    assert result.exit_code == 2
+    assert "Traceback" not in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -240,9 +249,9 @@ def test_filter_empty_value_rejected() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_unknown_filter_key_exits_nonzero() -> None:
-    """Unknown filter key → exit non-zero (Click's default UsageError exit 2)
-    and stderr/output names the unknown key.
+def test_unknown_filter_key_exits_2_with_clean_message() -> None:
+    """Unknown filter key → exit 2 (Click's UsageError) with the offending key
+    named and no Python traceback in the output.
 
     Patches `build_config` to invoke the real validator (without depending
     on the orchestrator pipeline). Cleaner than mocking out `run_stock_screener`
@@ -256,33 +265,97 @@ def test_unknown_filter_key_exits_nonzero() -> None:
         fetch_mock.return_value = b"<html></html>"
         result = runner.invoke(run_main, ["--filter", "bogus_key=u20"])
 
-    assert result.exit_code != 0
+    assert result.exit_code == 2
     assert "bogus_key" in result.output
+    assert "Traceback" not in result.output
     # Validator must reject before any HTTP fetch happens.
     assert fetch_mock.call_count == 0
 
 
-def test_unknown_value_for_known_key_exits_nonzero() -> None:
-    """Unknown value for known key → exit non-zero, message names both."""
+def test_unknown_value_for_known_key_exits_2_with_clean_message() -> None:
+    """Unknown value for known key → exit 2, message names both, no traceback."""
     runner = CliRunner()
     with patch("fincli.app.main.fetch_page_sync") as fetch_mock:
         fetch_mock.return_value = b"<html></html>"
         result = runner.invoke(run_main, ["--filter", "fa_pe=bogus_value"])
 
-    assert result.exit_code != 0
+    assert result.exit_code == 2
     assert "bogus_value" in result.output
     assert "fa_pe" in result.output
+    assert "Traceback" not in result.output
     assert fetch_mock.call_count == 0
 
 
-def test_filters_json_list_shape_exits_nonzero() -> None:
-    """Legacy `[["k","v"]]` shape → exit non-zero (schema lockdown)."""
+def test_filters_json_list_shape_exits_2_with_clean_message() -> None:
+    """Legacy `[["k","v"]]` shape → exit 2 (schema lockdown).
+
+    Pins spec §7.2 line 358: schema-rejection is exit 2 with a clean
+    UsageError message, never exit 1 with a Python traceback. The
+    `ValueError` raised by `json_to_tuples` is translated to
+    `click.UsageError` at the CLI boundary.
+    """
     runner = CliRunner()
     with patch("fincli.app.main.fetch_page_sync") as fetch_mock:
         fetch_mock.return_value = b"<html></html>"
         result = runner.invoke(run_main, ["--filters-json", '[["fa_pe","u20"]]'])
 
-    assert result.exit_code != 0
+    assert result.exit_code == 2
+    assert "Traceback" not in result.output
+    # The configurator's error message names the bad shape ("list").
+    assert "list" in result.output
+    assert fetch_mock.call_count == 0
+
+
+def test_filters_json_non_string_value_exits_2_with_clean_message() -> None:
+    """`{"fa_pe":42}` (non-string value) → exit 2, clean message, no traceback.
+
+    Covers the second leg of the `json_to_tuples` ValueError contract: flat
+    object but with a non-string value. Spec §5.1 step 3 schema lockdown.
+    """
+    runner = CliRunner()
+    with patch("fincli.app.main.fetch_page_sync") as fetch_mock:
+        fetch_mock.return_value = b"<html></html>"
+        result = runner.invoke(run_main, ["--filters-json", '{"fa_pe":42}'])
+
+    assert result.exit_code == 2
+    assert "Traceback" not in result.output
+    # Message names the offending key and the bad type.
+    assert "fa_pe" in result.output
+    assert fetch_mock.call_count == 0
+
+
+def test_filters_json_malformed_exits_2_with_clean_message() -> None:
+    """`--filters-json 'not json at all'` → exit 2, clean message, no traceback.
+
+    `json.JSONDecodeError` is a `ValueError` subclass, so the CLI boundary
+    wrap covers it too. Spec §7.2 exit-2 contract.
+    """
+    runner = CliRunner()
+    with patch("fincli.app.main.fetch_page_sync") as fetch_mock:
+        fetch_mock.return_value = b"<html></html>"
+        result = runner.invoke(run_main, ["--filters-json", "not json at all"])
+
+    assert result.exit_code == 2
+    assert "Traceback" not in result.output
+    assert fetch_mock.call_count == 0
+
+
+def test_filters_file_malformed_content_exits_2_with_clean_message(tmp_path: Path) -> None:
+    """`--filters-file <path>` with malformed JSON content → exit 2, clean message.
+
+    The file-read path converges into the same `json_to_tuples` call inside
+    `build_config`, so the CLI boundary wrap applies here too.
+    """
+    bad_file = tmp_path / "malformed.json"
+    bad_file.write_text("not json at all", encoding="utf-8")
+
+    runner = CliRunner()
+    with patch("fincli.app.main.fetch_page_sync") as fetch_mock:
+        fetch_mock.return_value = b"<html></html>"
+        result = runner.invoke(run_main, ["--filters-file", str(bad_file)])
+
+    assert result.exit_code == 2
+    assert "Traceback" not in result.output
     assert fetch_mock.call_count == 0
 
 
