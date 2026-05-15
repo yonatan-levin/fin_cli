@@ -26,16 +26,22 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 |---|---|---|---|---|
 | `--history` | `--hist` | flag | `False` | Reload the most recent filter selection from `<Config.history_dir>/filter_history.json` (see §4.1 for the default + override) instead of prompting interactively. |
 | `--debug` | — | flag | `False` | Set the logger level to `DEBUG`. |
-| `--scrape-link` | — | string | `""` | Direct Finviz screener URL; bypasses interactive filter selection. Empty string keeps the interactive flow. Mutually exclusive with `--history` — combining them exits non-zero with a Click `UsageError`. |
+| `--scrape-link` | — | string | `""` | Direct Finviz screener URL; bypasses interactive filter selection. Empty string keeps the interactive flow. |
+| `--filter` | — | repeatable string | `()` | Single Finviz filter as `key=value`; repeatable. Example: `--filter fa_pe=u20 --filter sec=energy`. |
+| `--filters-json` | — | string | `""` | Inline flat-object JSON dict of filters, e.g. `--filters-json '{"fa_pe":"u20"}'`. Schema validated by `core.converters.json.json_to_tuples` (see §6.3). |
+| `--filters-file` | — | path | `None` | Path to a JSON file containing the same flat-object payload. Path is validated by Click (`exists=True, dir_okay=False, readable=True`). |
+
+**Mutual-exclusion set:** `--filter`, `--filters-json`, `--filters-file`, `--history`, `--scrape-link`. At most one input mode may be set; passing two or more raises `click.UsageError` (exit 2) with the canonical message `--filter / --filters-json / --filters-file / --history / --scrape-link are mutually exclusive; pick one input mode.` See `docs/features/pipeline-mode-spec.md` §6.2.
 
 **Behavior**
 
 | State | What happens |
 |---|---|
-| No subcommand, no `--history`, no `--scrape-link` | Section-by-section interactive filter selection. Each filter group (Fundamental / Descriptive / Technical) is displayed in turn with **per-section local 1-based numbering**; the user enters comma-separated numbers for that section, or presses Enter alone to skip it. **Bounds-checked input**: out-of-range or non-integer values are rejected with a clear message and the same section reprompts (no `IndexError`). After all three sections, the screener pipeline runs and the CSV is written. |
+| No subcommand, no input-mode flag | Section-by-section interactive filter selection. Each filter group (Fundamental / Descriptive / Technical) is displayed in turn with **per-section local 1-based numbering**; the user enters comma-separated numbers for that section, or presses Enter alone to skip it. **Bounds-checked input**: out-of-range or non-integer values are rejected with a clear message and the same section reprompts (no `IndexError`). After all three sections, the screener pipeline runs and the CSV is written. The selected filters are persisted to `<Config.history_dir>/filter_history.json` for `--history` reuse. |
 | `--history` | Skip the interactive menu; reuse the last filter set. |
-| `--scrape-link=<url>` | Skip the interactive menu **and** the filter-to-URL query builder; fetch the supplied URL verbatim. No URL validation is performed — invalid URLs surface as downstream HTTP errors. |
-| `--history --scrape-link=<url>` | Rejected at parse time with a `UsageError` (alternative input modes, undefined when combined). |
+| `--scrape-link=<url>` | Skip the interactive menu **and** the filter-to-URL query builder; fetch the supplied URL verbatim. No URL validation is performed — invalid URLs surface as downstream HTTP errors. `filter_history.json` is **not** overwritten on this path (no filter set to record). |
+| `--filter K=V [...]` / `--filters-json '{...}'` / `--filters-file PATH` | Skip the interactive menu; populate `Config.filters` from the supplied structured input. Keys and values are validated against the registered Finviz inventory (see `fincli/resource/params/validators.py`); unknowns raise `UsageError` (exit 2) before any HTTP fetch. The selection is persisted to `filter_history.json` for `--history` reuse. |
+| Two or more input-mode flags set | Rejected at parse time with a `UsageError` (alternative input modes, undefined when combined). |
 | `--debug` | Logger level lowered to `DEBUG` for the duration of the run. |
 
 **Exit codes**
@@ -187,7 +193,7 @@ Schema:
 }
 ```
 
-Keys are Finviz filter `query_key`s (see §2.1). Values are `value_code`s. The file is overwritten on each successful run that produced a non-empty filter set.
+Keys are Finviz filter `query_key`s (see §2.1). Values are `value_code`s. The file is overwritten on each successful run that produced a non-empty filter set, regardless of input mode (interactive picker, `--filter`, `--filters-json`, or `--filters-file`). The `--scrape-link` and `--history` paths do **not** overwrite the file (`--scrape-link` has no filter set to record; `--history` is the read path).
 
 ---
 
@@ -251,11 +257,18 @@ These functions and classes are imported across modules. Keep their signatures s
 ### 6.1 `fincli/app/main.py`
 
 ```python
-def run_stock_screener(history: bool = False, debug: bool = False, scrape_link: str = "") -> None
+def run_stock_screener(
+    history: bool = False,
+    debug: bool = False,
+    scrape_link: str = "",
+    filters: str = "",
+) -> None
 def fetch_urls(quarry: str, page_count: int) -> list[bytes]
 def aggregate_rows(pages: list[bytes]) -> list[list]
 def build_data_frame(data_rows: list[list]) -> pandas.DataFrame
 ```
+
+`filters` is a JSON string in the canonical flat-object shape (see §6.3). The CLI normalizes the three structured-input flag forms (`--filter`, `--filters-json`, `--filters-file`) into this single string before calling. Empty string means "interactive flow" or "use whichever other input mode is set" (`--history` / `--scrape-link`).
 
 ### 6.2 `core/configuration/configurator.py`
 
@@ -268,6 +281,8 @@ def build_config(use_history: bool = False, filters: str = "", scrape_link: str 
 ```python
 def json_to_tuples(filters_json: str) -> tuple[tuple[str, str], ...]
 ```
+
+**Schema (locked down 2026-05-15, commit landing Pillar 1):** the JSON literal must decode to a **flat object** whose values are all strings. The empty object `{}` is allowed (returns `()` — the no-filters case). Any other shape — top-level array, scalar, or null; nested objects, arrays, numbers, booleans, or null as values — raises `ValueError` (which the CLI translates to `click.UsageError`, exit 2). This is the same shape `filter_history.json` (§4.3) uses; one schema across the system. Single quotes in the input are normalized to double quotes for shell-friendly usage. See `docs/features/pipeline-mode-spec.md` §5.1 step 3 (OQ1 resolution).
 
 ### 6.4 `fincli/utils/web_scraper.py`
 
@@ -292,6 +307,19 @@ def convert_market_cap_to_numeric(value: str | None) -> float | pandas.NA
 ```
 
 Carved out of `fincli/app/main.py` (commit `50f46ca`, 2026-05-15) so the parser is directly testable. See §3.1 for the full input/output contract and `docs/features/pipeline-mode-spec.md` §5.5 for the design rationale.
+
+### 6.7 `fincli/resource/params/validators.py`
+
+```python
+def validate_filter_pairs(pairs: tuple[tuple[str, str], ...]) -> None
+def list_valid_filters() -> dict[str, list[str]]
+```
+
+`validate_filter_pairs` is the single chokepoint that closes the silent-drop hazard at `fincli/utils/quary_builders.py:18-22` for structured input: it raises `click.UsageError` when any pair has an unknown query_key or an unknown value_code-for-known-key. The error message names the offending token and lists up to 10 valid alternatives. Called from `core.configuration.configurator.build_config` immediately after `json_to_tuples`. The `--scrape-link` and `--history` input modes deliberately skip this validator (URL is opaque; history was previously valid by construction). The interactive picker UI is also skipped — its bounds-checked input already guarantees valid pairs.
+
+`list_valid_filters` returns the same `{query_key: [value_code, ...]}` inventory the validator walks. Used to power the inline error-message suggestions, and reserved for a future `--help-filters` CLI flag (deferred per spec §9).
+
+Carved out (commit landing Pillar 1, 2026-05-15) per `docs/features/pipeline-mode-spec.md` §5.1 step 5.
 
 ---
 

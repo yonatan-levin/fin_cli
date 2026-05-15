@@ -39,10 +39,19 @@ def build_data_frame(data_rows):
     return df
 
 
-def run_stock_screener(history: bool = False, debug: bool = False, scrape_link: str = ""):
+def run_stock_screener(
+    history: bool = False,
+    debug: bool = False,
+    scrape_link: str = "",
+    filters: str = "",
+):
     logger.set_level(logging.DEBUG if debug else logging.INFO)
 
-    config = configurator.build_config(use_history=history, scrape_link=scrape_link)
+    config = configurator.build_config(
+        use_history=history,
+        scrape_link=scrape_link,
+        filters=filters,
+    )
     logger.debug(f"Config: {config}", "Config created successfully:")
 
     # Direct-URL bypass: when a scrape link is supplied, skip the interactive filter

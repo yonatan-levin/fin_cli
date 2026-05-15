@@ -1,23 +1,75 @@
+"""Interactive filter-selection UI plus early-return path for structured input.
+
+Two changes in `docs/features/pipeline-mode-spec.md` Pillar 1 land here:
+
+  1. **Early-return.** When `Config.filters` is preloaded by the configurator
+     (from --filter / --filters-json / --filters-file), skip the interactive
+     picker entirely and build the query directly. Without this, structured
+     input parses but the picker still prompts.
+  2. **Writeback fix.** `filter_history.json` is now overwritten on every
+     successful run that produced a non-empty filter set, regardless of input
+     mode. The pre-existing code gated the write inside `if config.use_history:`
+     which meant it never executed (the read branch already returned). OQ7
+     resolution; quiet bug fix Pillar 1 depends on so `--history` stays in
+     sync with the new input modes.
+
+`--scrape-link` deliberately skips the writeback (no filter set to record);
+that path bypasses this function entirely from `run_stock_screener`.
+"""
+
+from __future__ import annotations
+
 import json
-import os
+from pathlib import Path
+
 import click
+
 from config.config import Config
-from ..resource.params.fundamental_params import Fundamental_Params as fp
+
 from ..resource.params.descriptive_params import Descriptive_Params as dp
+from ..resource.params.fundamental_params import Fundamental_Params as fp
 from ..resource.params.technical_params import Technical_Params as tp
 from ..utils.quary_builders import build_stock_screener_query
 
+# Filename written to `Config.history_dir` on every successful run that
+# produced filters. Kept as a module constant so the read and write paths
+# share one source of truth.
+_HISTORY_FILENAME = "filter_history.json"
+
+
+def _write_history(config: Config, selected_values: dict[str, str]) -> None:
+    """Persist `selected_values` to `<history_dir>/filter_history.json`.
+
+    Centralized so every code path that produces filters writes through the
+    same chokepoint. Skips silently when `selected_values` is empty (no
+    filter set to record) and creates `history_dir` if it doesn't exist.
+    """
+    if not selected_values:
+        return
+    history_dir = Path(config.history_dir)
+    history_dir.mkdir(parents=True, exist_ok=True)
+    history_path = history_dir / _HISTORY_FILENAME
+    with open(history_path, "w", encoding="utf-8") as outfile:
+        json.dump(selected_values, outfile)
+
 
 def select_filters_and_values(config: Config):
+    # Early-return path for structured input (--filter / --filters-json /
+    # --filters-file). The configurator has already populated and validated
+    # `config.filters`; build the query and persist the selection so a
+    # subsequent `--history` recovers it. Spec §5.1 step 4 + step 6.
+    if config.filters and not config.use_history and not config.scrape_link:
+        # The early-return branch persists the same dict shape that the
+        # interactive branch uses, so `--history` reads it back identically.
+        _write_history(config, dict(config.filters))
+        return build_stock_screener_query(config.filters)
 
     # Add checks for use_history
     if config.use_history:
-        filepath = os.path.join(
-            os.path.realpath("fincli"), "stock_screening", "local_history", "filter_history.json"
-        )
+        filepath = Path(config.history_dir) / _HISTORY_FILENAME
         click.echo(f"Fetching user history from filter_history.json {filepath}")
 
-        with open(filepath, "r") as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             selected_values_and_filters = json.load(f)
 
         query = build_stock_screener_query(selected_values_and_filters.items())
@@ -36,10 +88,11 @@ def select_filters_and_values(config: Config):
     # Select filter values
     selected_values = select_values(selected_filters_indices, queryOptions)
 
-    # Save selected values
-    if config.use_history:
-        with open(filepath, "w") as outfile:
-            json.dump(selected_values, outfile)
+    # Persist on every interactive run that produced a non-empty selection,
+    # regardless of `use_history`. (The pre-Pillar-1 code gated this on
+    # `use_history`, which meant it never ran — see module docstring + spec
+    # §5.1 step 6.)
+    _write_history(config, selected_values)
 
     # Generate the query
     query = build_stock_screener_query(selected_values.items())
