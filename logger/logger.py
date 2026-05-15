@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import IO, TYPE_CHECKING, Any, Optional
 
 from colorama import Fore
 
@@ -135,7 +135,7 @@ class Logger(metaclass=Singleton):
         self.logger.setLevel(level)
         self.typing_logger.setLevel(level)
 
-    def set_console_stream(self, stream: Any) -> None:
+    def set_console_stream(self, stream: IO[str]) -> None:
         """Retarget the two console handlers (typing-effect + plain) to `stream`.
 
         Pillar 2's ``--output -`` mode requires CSV bytes to be the **only**

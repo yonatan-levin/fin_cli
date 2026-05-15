@@ -227,6 +227,7 @@ Returns the process-wide Singleton instance. The class is metaclass-based (`sing
 - `logger.info(msg: str) -> None`
 - `logger.warning(msg: str) -> None`
 - `logger.error(msg: str) -> None`
+- `logger.set_console_stream(stream: IO[str]) -> None` — retargets the two console handlers (typing-effect + plain) to the given text-mode stream. Intended for the `--output -` stdout-streaming path (Pillar 2): callers pass `sys.stderr` so progress + banner + typing chatter does not corrupt the CSV bytes piped on stdout. Default users (no `--output -`) never call this; the construction-time default is `sys.stdout`.
 
 `msg` is a single string. Use f-strings to interpolate; do not pass positional `%` args.
 
@@ -278,6 +279,7 @@ def run_stock_screener(
     debug: bool = False,
     scrape_link: str = "",
     filters: str = "",
+    output_path: str = "",
 ) -> None
 def fetch_urls(quarry: str, page_count: int) -> list[bytes]
 def aggregate_rows(pages: list[bytes]) -> list[list]
@@ -286,10 +288,17 @@ def build_data_frame(data_rows: list[list]) -> pandas.DataFrame
 
 `filters` is a JSON string in the canonical flat-object shape (see §6.3). The CLI normalizes the three structured-input flag forms (`--filter`, `--filters-json`, `--filters-file`) into this single string before calling. Empty string means "interactive flow" or "use whichever other input mode is set" (`--history` / `--scrape-link`).
 
+`output_path` overrides the default destination per the §1 / §4.1 precedence chain. Empty string falls through to `FINCLI_OUTPUT_DIR` env var (if set) or the CWD-relative `workspace_output/...` default. The literal `"-"` (`config.config.STDOUT_SENTINEL`) routes the CSV to `sys.stdout` and triggers the logger console-handler reroute to stderr (see §5.2).
+
 ### 6.2 `core/configuration/configurator.py`
 
 ```python
-def build_config(use_history: bool = False, filters: str = "", scrape_link: str = "") -> Config
+def build_config(
+    use_history: bool = False,
+    filters: str = "",
+    scrape_link: str = "",
+    output_path: str = "",
+) -> Config
 ```
 
 ### 6.3 `core/converters/json.py`
