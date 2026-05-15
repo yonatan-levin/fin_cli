@@ -284,6 +284,8 @@ def json_to_tuples(filters_json: str) -> tuple[tuple[str, str], ...]
 
 **Schema (locked down 2026-05-15, commit landing Pillar 1):** the JSON literal must decode to a **flat object** whose values are all strings. The empty object `{}` is allowed (returns `()` — the no-filters case). Any other shape — top-level array, scalar, or null; nested objects, arrays, numbers, booleans, or null as values — raises `ValueError` (which the CLI translates to `click.UsageError`, exit 2). This is the same shape `filter_history.json` (§4.3) uses; one schema across the system. Single quotes in the input are normalized to double quotes for shell-friendly usage. See `docs/features/pipeline-mode-spec.md` §5.1 step 3 (OQ1 resolution).
 
+**Compatibility note:** Previously the converter also accepted `[["k","v"]]` lists; that path now raises. Per §7, this is framed as a **conformance fix** (the legacy list-shape path silently fed unvalidated key-value pairs into `quary_builders.build_stock_screener_query`, which then silently dropped unknowns — exactly the silent-corruption failure mode `THESIS.md` Design Principle #2 prohibits) rather than a SemVer-style break. Mirrors the §3.1 / market-cap precedent: tightening an implementation toward the documented contract is a fix, not a redefinition. To be recorded in `docs/FEEDBACK-LOG.md` by Task 6 of the pipeline-mode rollout.
+
 ### 6.4 `fincli/utils/web_scraper.py`
 
 ```python

@@ -100,8 +100,8 @@ def validate_filter_pairs(pairs: tuple[tuple[str, str], ...]) -> None:
         if key not in inventory:
             suggestions = ", ".join(valid_keys[:_MAX_SUGGESTIONS])
             raise click.UsageError(
-                f"Unknown filter key {key!r}. Valid keys include: "
-                f"{suggestions} (full list via validators.list_valid_filters())"
+                f"Unknown filter key {key!r}. Valid keys include: {suggestions}. "
+                f"See fincli/resource/params/ for the full filter inventory."
             )
 
         valid_values = inventory[key]
@@ -109,6 +109,6 @@ def validate_filter_pairs(pairs: tuple[tuple[str, str], ...]) -> None:
             value_suggestions = ", ".join(valid_values[:_MAX_SUGGESTIONS])
             raise click.UsageError(
                 f"Unknown value {value!r} for filter key {key!r}. "
-                f"Valid values include: {value_suggestions} "
-                f"(full list via validators.list_valid_filters())"
+                f"Valid values include: {value_suggestions}. "
+                f"See fincli/resource/params/ for the full filter inventory."
             )

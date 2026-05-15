@@ -126,5 +126,8 @@ def test_scrape_link_does_not_trigger_early_return(tmp_path: Path) -> None:
     """
     pytest.skip(
         "Interactive path cannot be unit-tested without a picker mock seam; "
-        "guard documented in spec §5.1 step 4."
+        "guard documented in spec §5.1 step 4. Structural guarantee: "
+        "fincli/app/main.py:59 `config.scrape_link or select_filters_and_values(config)` "
+        "short-circuits via Python `or` semantics, so this function is never invoked "
+        "when config.scrape_link is truthy."
     )

@@ -51,8 +51,9 @@ def _normalize_filter_input(
             in the registry as the "Any" sentinel, but accepting them at
             the CLI hides typos like ``--filter fa_pe=`` so we reject.
     """
-    # Exactly one of the three is non-default at this point — the caller
-    # (the input-mode counter in `run_main`) guarantees mutual exclusion.
+    # At most one of the three is non-default at this point — the input-mode
+    # counter in `run_main` guarantees mutual exclusion; the zero-input case
+    # falls through to the trailing `return ""` (interactive-mode marker).
     if filter_pairs:
         normalized: dict[str, str] = {}
         for token in filter_pairs:
