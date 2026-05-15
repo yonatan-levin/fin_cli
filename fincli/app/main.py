@@ -5,6 +5,7 @@ from fincli.stock_screening.content.stock_table import StockTableScreeningConten
 from fincli.cli.cli_stock_screener import select_filters_and_values
 from logger.logger import logger
 from fincli.stock_screening.locators.stock_table_locators import StockTableLocators
+from fincli.utils.market_cap import convert_market_cap_to_numeric
 from fincli.utils.web_scraper import fetch_page_sync
 
 
@@ -24,26 +25,18 @@ def aggregate_rows(pages):
 def build_data_frame(data_rows):
     df = pd.concat([pd.DataFrame(row) for row in data_rows])
     df.columns = StockTableLocators.PD_TABLE_COLUMNS
-    df["Market Cap"] = df["Market Cap"].apply(lambda x: convert_market_cap_to_numeric(x))
+    # Coerce the Market Cap column into a nullable Float64 array so unparseable
+    # cells render as empty CSV cells rather than the literal strings "nan",
+    # "<NA>", or 0.0. Contract: docs/features/pipeline-mode-spec.md §5.5 +
+    # CONTRACTS.md §3.1.
+    df["Market Cap"] = pd.array(
+        [convert_market_cap_to_numeric(v) for v in df["Market Cap"]],
+        dtype="Float64",
+    )
     df['Symbol'] = df['Ticker']
     df['Ticker'] = '=HYPERLINK("' + df['Link'] + '", "' + df['Ticker'] + '")'
     df.drop(columns=['Link'], axis=1, inplace=True)
     return df
-
-def convert_market_cap_to_numeric(market_cap):
-    market_cap.replace("'","")
-    if market_cap.__contains__('B'):
-        return float(market_cap.replace("B","")) * 1000000000
-    elif market_cap.__contains__('M'):
-        return float(market_cap.replace("M","")) * 1000000
-    elif market_cap.__contains__('T'):
-        return float(market_cap.replace("T","")) * 1000000000000
-    elif market_cap.__contains__('_'):
-        return market_cap.replace("_","N/A")
-    elif market_cap.__contains__('-'):
-        return market_cap.replace("-","N/A")
-    else:
-        return float(market_cap)
 
 
 def run_stock_screener(history: bool = False, debug: bool = False, scrape_link: str = ""):

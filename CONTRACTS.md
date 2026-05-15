@@ -126,7 +126,7 @@ Produced by `fincli/app/main.py:build_data_frame`.
 | `Sector` | str | Industry sector | `"Technology"` |
 | `Industry` | str | Specific industry | `"Consumer Electronics"` |
 | `Country` | str | Country of incorporation | `"USA"` |
-| `Market Cap` | float | Numeric market cap (e.g., `"1.2B"` -> `1200000000.0`); `"N/A"` for missing | `2890000000000.0` |
+| `Market Cap` | nullable `Float64` (empty cell for missing/unparseable) | Numeric market cap (e.g., `"1.2B"` -> `1200000000.0`). **N/A semantics:** Finviz tokens `"-"`, `"_"`, `""`, `"N/A"` (any case) and any unparseable cell coerce to `pandas.NA` and serialize as an empty CSV cell — never the literal string `"nan"`, `"<NA>"`, or `0.0`. Contract enforced by `fincli.utils.market_cap.convert_market_cap_to_numeric` per `docs/features/pipeline-mode-spec.md` §5.5. | `2890000000000.0` |
 | `P/E` | str | Price-to-earnings ratio (kept as string; can be `"-"`) | `"28.52"` |
 | `Price` | str | Current stock price (string) | `"182.63"` |
 | `Change` | str | Daily price change with `%` | `"-1.23%"` |
