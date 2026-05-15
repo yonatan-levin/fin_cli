@@ -19,6 +19,8 @@ from pathlib import Path
 
 import click
 
+from config.config import STDOUT_SENTINEL
+
 # Canonical mutual-exclusion message kept as a module constant so it is
 # trivially assertable from tests and so the wording stays consistent across
 # every input-mode combination. Matches the verbatim text in spec §6.2.
@@ -160,7 +162,13 @@ def run_main(
     # combined with no --history / --scrape-link drops to interactive mode).
     filters_str = _normalize_filter_input(filter_pairs, filters_json, filters_file)
 
-    click.echo("Welcome to the Stock Screener CLI!")
+    # Suppress the human-friendly banner when CSV bytes own stdout (`--output -`).
+    # Even routing it to stderr would be noise for the pipe consumer; the banner
+    # has zero informational value to a downstream tool. Spec §7.3 bullet 5
+    # ("emits no other bytes on stdout"). Pillar 5's `--quiet` will extend this
+    # to the all-modes suppression channel.
+    if output_path != STDOUT_SENTINEL:
+        click.echo("Welcome to the Stock Screener CLI!")
     from .main import run_stock_screener
 
     if ctx.invoked_subcommand is None:

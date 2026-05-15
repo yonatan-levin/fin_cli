@@ -45,7 +45,7 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 | Two or more input-mode flags set | Rejected at parse time with a `UsageError` (alternative input modes, undefined when combined). |
 | `--debug` | Logger level lowered to `DEBUG` for the duration of the run. |
 | `--output PATH` | CSV is written to exactly `PATH`. Filename is **not** timestamped; overwrites silently if the file exists. Composes with any input-mode flag. Precedence: `--output PATH` > `--output -` > `FINCLI_OUTPUT_DIR` > default. |
-| `--output -` | CSV bytes are streamed to **stdout**. The two console handlers (typing-effect + plain) are rerouted to stderr at run start so stdout carries CSV bytes only — log progress, banner, errors all land on stderr. The default `Ticker` HYPERLINK formula stripping for stdout mode is **not yet implemented** (Pillar 6); `--output -` writes the same shape today as `--output PATH`. |
+| `--output -` | CSV bytes are streamed to **stdout**. **Stdout contains only CSV bytes**: the two console handlers (typing-effect + plain) are rerouted to stderr at run start, the welcome banner is suppressed, and the previously stdout-bound `Base Url:` echo from the query builder is removed (the URL is still logged at INFO via the rerouted logger). Log progress, banner location, errors all land on stderr. The default `Ticker` HYPERLINK formula stripping for stdout mode is **not yet implemented** (Pillar 6); `--output -` writes the same shape today as `--output PATH`. |
 | `FINCLI_OUTPUT_DIR=<dir>` env var | Replaces the parent directory of the default `workspace_output/stock_screener_{date}.csv` while preserving the timestamped basename. Loses to an explicit `--output PATH`. Read by `core.configuration.configurator.build_config`. |
 
 **Exit codes**
