@@ -255,7 +255,6 @@ def run_stock_screener(history: bool = False, debug: bool = False, scrape_link: 
 def fetch_urls(quarry: str, page_count: int) -> list[bytes]
 def aggregate_rows(pages: list[bytes]) -> list[list]
 def build_data_frame(data_rows: list[list]) -> pandas.DataFrame
-def convert_market_cap_to_numeric(market_cap: str) -> float | str
 ```
 
 ### 6.2 `core/configuration/configurator.py`
@@ -285,6 +284,14 @@ def build_stock_screener_query(
     ft: int = 2,
 ) -> str
 ```
+
+### 6.6 `fincli/utils/market_cap.py`
+
+```python
+def convert_market_cap_to_numeric(value: str | None) -> float | pandas.NA
+```
+
+Carved out of `fincli/app/main.py` (commit `50f46ca`, 2026-05-15) so the parser is directly testable. See §3.1 for the full input/output contract and `docs/features/pipeline-mode-spec.md` §5.5 for the design rationale.
 
 ---
 
