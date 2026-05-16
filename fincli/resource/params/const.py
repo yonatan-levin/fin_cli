@@ -1,1 +1,1 @@
-BASE_URL = 'https://finviz.com/'
+BASE_URL = "https://finviz.com/"

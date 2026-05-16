@@ -12,12 +12,7 @@ class AlgoFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         if hasattr(record, "color"):
-            record.title_color = (
-                getattr(record, "color")
-                + getattr(record, "title", "")
-                + " "
-                + Style.RESET_ALL
-            )
+            record.title_color = record.color + getattr(record, "title", "") + " " + Style.RESET_ALL
         else:
             record.title_color = getattr(record, "title", "")
 
@@ -25,7 +20,7 @@ class AlgoFormatter(logging.Formatter):
         record.title = getattr(record, "title", "")
 
         if hasattr(record, "msg"):
-            record.message_no_color = remove_color_codes(getattr(record, "msg"))
+            record.message_no_color = remove_color_codes(record.msg)
         else:
             record.message_no_color = ""
         return super().format(record)

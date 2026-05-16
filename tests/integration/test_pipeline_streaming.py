@@ -27,12 +27,11 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+from _fixtures_loader import finviz_happy_html
 from click.testing import CliRunner
 
 from fincli.app.cli import run_main
 from fincli.app.main import OUTPUT_PATH_LINE_PREFIX
-
-from _fixtures_loader import finviz_happy_html
 
 # Canned one-row screener HTML lives under ``tests/integration/fixtures/``;
 # the loader is the single source of truth so all three integration test

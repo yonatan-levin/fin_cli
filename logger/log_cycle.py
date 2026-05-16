@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any
 
 from .logger import logger
 
@@ -45,9 +45,7 @@ class LogCycleHandler:
 
         return nested_folder_path
 
-    def create_nested_directory(
-        self, ai_name: str, created_at: str, cycle_count: int
-    ) -> Path:
+    def create_nested_directory(self, ai_name: str, created_at: str, cycle_count: int) -> Path:
         outer_folder_path = self.create_outer_directory(ai_name, created_at)
         nested_folder_path = self.create_inner_directory(outer_folder_path, cycle_count)
 
@@ -58,7 +56,7 @@ class LogCycleHandler:
         ai_name: str,
         created_at: str,
         cycle_count: int,
-        data: Union[Dict[str, Any], Any],
+        data: dict[str, Any] | Any,
         file_name: str,
     ) -> None:
         """
