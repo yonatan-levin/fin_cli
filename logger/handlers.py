@@ -16,12 +16,26 @@ class ConsoleHandler(logging.StreamHandler):
     ``Logger.set_console_stream(...)`` can reroute the handler to stderr
     when ``--output -`` mode needs the stdout stream kept clean for CSV
     bytes (spec §5.2 + §5.3).
+
+    Pillar 3 ``--quiet`` (`docs/features/pipeline-mode-spec.md` §5.3.1) adds
+    a ``quiet`` attribute (toggled by ``Logger.set_quiet``). When ``quiet``
+    is ``True`` the handler short-circuits records at INFO/DEBUG level,
+    keeping WARNING+ on the console. ``--debug --quiet`` therefore still
+    writes debug records to the file handlers while keeping the console
+    silent of informational chatter.
     """
 
     def __init__(self, stream: IO[str] | None = None) -> None:
         super().__init__(stream if stream is not None else sys.stdout)
+        # Pillar 3 ``--quiet`` gate. Default off so the unmodified runtime
+        # behavior matches today's stdout-friendly logging.
+        self.quiet: bool = False
 
     def emit(self, record: logging.LogRecord) -> None:
+        # ``--quiet`` suppresses informational chatter only. WARNING+ still
+        # surfaces so failure modes remain visible even under ``--quiet``.
+        if self.quiet and record.levelno < logging.WARNING:
+            return
         msg = self.format(record)
         try:
             print(msg, file=self.stream)
@@ -35,12 +49,18 @@ class TypingConsoleHandler(logging.StreamHandler):
     Honors the ``stream`` attribute inherited from ``logging.StreamHandler``
     so ``Logger.set_console_stream(...)`` can reroute the typing-effect
     chatter to stderr in stdout-streaming mode (spec §5.2 + §5.3).
+
+    Pillar 3 ``--quiet`` adds the same INFO/DEBUG short-circuit as
+    ``ConsoleHandler`` (see its docstring for the rationale).
     """
 
     def __init__(self, stream: IO[str] | None = None) -> None:
         super().__init__(stream if stream is not None else sys.stdout)
+        self.quiet: bool = False
 
     def emit(self, record: logging.LogRecord) -> None:
+        if self.quiet and record.levelno < logging.WARNING:
+            return
         min_typing_speed = 0.05
         max_typing_speed = 0.01
 

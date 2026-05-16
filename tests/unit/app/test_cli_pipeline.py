@@ -395,3 +395,125 @@ def test_scrape_link_alone_still_works(mock_runner: MagicMock) -> None:
     kwargs = mock_runner.call_args.kwargs
     assert kwargs.get("scrape_link") == url
     assert kwargs.get("filters", "") == ""
+
+
+# ---------------------------------------------------------------------------
+# Pillar 3 — `--quiet` / `--json-summary` CLI surface tests. End-to-end
+# behavioral assertions live in `tests/integration/test_pipeline_streaming.py`
+# and `tests/integration/test_pipeline_summary.py`; this block pins parser
+# shape only (option presence, alias, orthogonality, kwarg threading).
+# ---------------------------------------------------------------------------
+
+
+def test_quiet_option_in_help() -> None:
+    """`--quiet` appears in `--help` output."""
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--help"])
+    assert result.exit_code == 0
+    assert "--quiet" in result.output
+
+
+def test_quiet_short_alias_in_help() -> None:
+    """`-q` short alias appears in `--help` output."""
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--help"])
+    assert result.exit_code == 0
+    assert "-q" in result.output
+
+
+def test_json_summary_option_in_help() -> None:
+    """`--json-summary` appears in `--help` output."""
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--help"])
+    assert result.exit_code == 0
+    assert "--json-summary" in result.output
+
+
+def test_quiet_long_form_threads_true(mock_runner: MagicMock) -> None:
+    """`--quiet` forwards `quiet=True` to `run_stock_screener`."""
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--quiet"])
+    assert result.exit_code == 0, result.output
+
+    kwargs = mock_runner.call_args.kwargs
+    assert kwargs.get("quiet") is True
+
+
+def test_quiet_short_form_threads_true(mock_runner: MagicMock) -> None:
+    """`-q` short form forwards `quiet=True`."""
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["-q"])
+    assert result.exit_code == 0, result.output
+
+    kwargs = mock_runner.call_args.kwargs
+    assert kwargs.get("quiet") is True
+
+
+def test_json_summary_threads_true(mock_runner: MagicMock) -> None:
+    """`--json-summary` forwards `json_summary=True`."""
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--json-summary"])
+    assert result.exit_code == 0, result.output
+
+    kwargs = mock_runner.call_args.kwargs
+    assert kwargs.get("json_summary") is True
+
+
+def test_no_pillar3_flags_thread_false(mock_runner: MagicMock) -> None:
+    """Back-compat: omitting both flags forwards `quiet=False, json_summary=False`."""
+    runner = CliRunner()
+    result = runner.invoke(run_main, [])
+    assert result.exit_code == 0, result.output
+
+    kwargs = mock_runner.call_args.kwargs
+    assert kwargs.get("quiet") is False
+    assert kwargs.get("json_summary") is False
+
+
+def test_quiet_composes_with_filter_flag(mock_runner: MagicMock) -> None:
+    """`--filter ... --quiet` is a valid combination (orthogonal to input modes)."""
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--filter", "fa_pe=u20", "--quiet"])
+    assert result.exit_code == 0, result.output
+
+    kwargs = mock_runner.call_args.kwargs
+    assert kwargs.get("quiet") is True
+    assert kwargs.get("filters")  # non-empty JSON
+
+
+def test_json_summary_composes_with_output_flag(mock_runner: MagicMock) -> None:
+    """`--output PATH --json-summary` is a valid combination."""
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--output", "./out.csv", "--json-summary"])
+    assert result.exit_code == 0, result.output
+
+    kwargs = mock_runner.call_args.kwargs
+    assert kwargs.get("output_path") == "./out.csv"
+    assert kwargs.get("json_summary") is True
+
+
+def test_quiet_composes_with_json_summary(mock_runner: MagicMock) -> None:
+    """`--quiet --json-summary` is a valid combination (both orthogonal flags)."""
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--quiet", "--json-summary"])
+    assert result.exit_code == 0, result.output
+
+    kwargs = mock_runner.call_args.kwargs
+    assert kwargs.get("quiet") is True
+    assert kwargs.get("json_summary") is True
+
+
+def test_quiet_composes_with_debug(mock_runner: MagicMock) -> None:
+    """`--debug --quiet` is a valid combination — see spec §7.4 row 6.
+
+    The semantic contract (debug records still hit file handlers under
+    `--quiet`) is exercised by the integration tests; this assertion only
+    pins that the CLI parser accepts both flags together.
+    """
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--debug", "--quiet"])
+    assert result.exit_code == 0, result.output
+
+    kwargs = mock_runner.call_args.kwargs
+    assert kwargs.get("debug") is True
+    assert kwargs.get("quiet") is True

@@ -129,3 +129,175 @@ def test_set_console_stream_redirects_typing_handler_to_stderr() -> None:
         logger.set_console_stream(prior)
 
     assert "rerouted-typing" in captured.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Pillar 3 `--quiet` — `Logger.set_quiet` suppresses INFO/DEBUG on the
+# console handlers while letting WARNING/ERROR through. File handlers are
+# not exercised here (they have no quiet gate by design — debug records
+# under `--debug --quiet` still need to land in `activity.log`).
+# ---------------------------------------------------------------------------
+
+
+def _make_record_with_level(level: int, message: str) -> logging.LogRecord:
+    """Build a `LogRecord` at the given level with the AlgoFormatter extras.
+
+    Mirrors `_make_record` above but with a configurable level so the
+    quiet-gate tests can exercise WARNING/ERROR as well as INFO/DEBUG.
+    """
+    record = logging.LogRecord(
+        name="LOGGER",
+        level=level,
+        pathname=__file__,
+        lineno=1,
+        msg=message,
+        args=(),
+        exc_info=None,
+    )
+    record.title = ""
+    record.color = ""
+    return record
+
+
+def test_set_quiet_default_off_lets_info_through() -> None:
+    """Default `quiet=False` keeps today's behavior: INFO records emit."""
+    captured = io.StringIO()
+    prior_stream = logger.console_handler.stream
+    prior_quiet = logger.console_handler.quiet
+    logger.set_console_stream(captured)
+    try:
+        # Confirm the default off-state actually holds at construction time;
+        # if a previous test left the flag flipped on the singleton the test
+        # below would pass for the wrong reason.
+        logger.set_quiet(False)
+        logger.console_handler.emit(_make_record_with_level(logging.INFO, "info-default"))
+    finally:
+        logger.set_console_stream(prior_stream)
+        logger.console_handler.quiet = prior_quiet
+        logger.typing_console_handler.quiet = prior_quiet
+
+    assert "info-default" in captured.getvalue()
+
+
+def test_set_quiet_true_suppresses_info_on_plain_handler() -> None:
+    """`set_quiet(True)` short-circuits the plain handler at INFO level."""
+    captured = io.StringIO()
+    prior_stream = logger.console_handler.stream
+    prior_quiet = logger.console_handler.quiet
+    logger.set_console_stream(captured)
+    try:
+        logger.set_quiet(True)
+        logger.console_handler.emit(_make_record_with_level(logging.INFO, "info-quiet"))
+    finally:
+        logger.set_console_stream(prior_stream)
+        logger.set_quiet(prior_quiet)
+
+    # The record should be suppressed entirely — the captured buffer stays
+    # empty for an INFO emit under --quiet.
+    assert "info-quiet" not in captured.getvalue()
+    assert captured.getvalue() == ""
+
+
+def test_set_quiet_true_suppresses_debug_on_plain_handler() -> None:
+    """`set_quiet(True)` also suppresses DEBUG records.
+
+    This is the `--debug --quiet` interaction guard: under --quiet, debug
+    chatter on the console is unwanted even when --debug lowered the level.
+    The file handlers still receive the record (verified by inspecting
+    the orthogonal handler path; not asserted here to keep this unit test
+    focused on the console handler).
+    """
+    captured = io.StringIO()
+    prior_stream = logger.console_handler.stream
+    prior_quiet = logger.console_handler.quiet
+    logger.set_console_stream(captured)
+    try:
+        logger.set_quiet(True)
+        logger.console_handler.emit(_make_record_with_level(logging.DEBUG, "debug-quiet"))
+    finally:
+        logger.set_console_stream(prior_stream)
+        logger.set_quiet(prior_quiet)
+
+    assert captured.getvalue() == ""
+
+
+def test_set_quiet_true_still_emits_warning() -> None:
+    """`--quiet` does not silence WARNINGs — failures must stay visible.
+
+    Spec §5.3.1 row 1: "Errors and warnings still emitted." A pipeline that
+    misconfigures `--quiet` and then hits a real failure mode must still see
+    the warning on its stderr.
+    """
+    captured = io.StringIO()
+    prior_stream = logger.console_handler.stream
+    prior_quiet = logger.console_handler.quiet
+    logger.set_console_stream(captured)
+    try:
+        logger.set_quiet(True)
+        logger.console_handler.emit(_make_record_with_level(logging.WARNING, "warn-quiet"))
+    finally:
+        logger.set_console_stream(prior_stream)
+        logger.set_quiet(prior_quiet)
+
+    assert "warn-quiet" in captured.getvalue()
+
+
+def test_set_quiet_true_still_emits_error() -> None:
+    """`--quiet` does not silence ERRORs (companion to the WARNING test).
+
+    Spec §7.4 row 6: `--debug --quiet` keeps debug-level messages routed
+    normally; `--quiet` does not silence errors.
+    """
+    captured = io.StringIO()
+    prior_stream = logger.console_handler.stream
+    prior_quiet = logger.console_handler.quiet
+    logger.set_console_stream(captured)
+    try:
+        logger.set_quiet(True)
+        logger.console_handler.emit(_make_record_with_level(logging.ERROR, "err-quiet"))
+    finally:
+        logger.set_console_stream(prior_stream)
+        logger.set_quiet(prior_quiet)
+
+    assert "err-quiet" in captured.getvalue()
+
+
+def test_set_quiet_toggles_both_handlers() -> None:
+    """`set_quiet` flips the flag on **both** console handlers in one call.
+
+    Callers don't have to know about the dual-handler implementation. Pin
+    the contract so a future single-handler refactor or rename can't
+    silently miss one side.
+    """
+    prior_plain = logger.console_handler.quiet
+    prior_typing = logger.typing_console_handler.quiet
+    try:
+        logger.set_quiet(True)
+        assert logger.console_handler.quiet is True
+        assert logger.typing_console_handler.quiet is True
+        logger.set_quiet(False)
+        assert logger.console_handler.quiet is False
+        assert logger.typing_console_handler.quiet is False
+    finally:
+        logger.console_handler.quiet = prior_plain
+        logger.typing_console_handler.quiet = prior_typing
+
+
+def test_set_quiet_true_suppresses_info_on_typing_handler() -> None:
+    """`set_quiet(True)` short-circuits the typing-effect handler at INFO too.
+
+    The typing handler runs an animated print loop; pinning the gate here
+    guards against a refactor that only adds the check to the plain handler.
+    """
+    captured = io.StringIO()
+    prior_stream = logger.typing_console_handler.stream
+    prior_quiet = logger.typing_console_handler.quiet
+    logger.set_console_stream(captured)
+    try:
+        logger.set_quiet(True)
+        logger.typing_console_handler.emit(_make_record_with_level(logging.INFO, "typing-quiet"))
+    finally:
+        logger.set_console_stream(prior_stream)
+        logger.set_quiet(prior_quiet)
+
+    assert captured.getvalue() == ""

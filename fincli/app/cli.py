@@ -128,6 +128,25 @@ def _normalize_filter_input(
         "Orthogonal to all input-mode flags."
     ),
 )
+@click.option(
+    "--quiet",
+    "-q",
+    is_flag=True,
+    help=(
+        "Suppress human chatter (welcome banner + INFO/DEBUG console lines). "
+        "Warnings and errors still surface. Does not change --debug level; "
+        "debug records still land in logs/activity.log. Orthogonal to --output."
+    ),
+)
+@click.option(
+    "--json-summary",
+    "json_summary",
+    is_flag=True,
+    help=(
+        "Emit a single-line JSON summary of the run at end. Goes to stdout "
+        "by default; routed to stderr when --output - streams CSV on stdout."
+    ),
+)
 @click.pass_context
 def run_main(
     ctx: click.Context,
@@ -138,6 +157,8 @@ def run_main(
     filters_json: str = "",
     filters_file: str | None = None,
     output_path: str = "",
+    quiet: bool = False,
+    json_summary: bool = False,
 ) -> None:
     """
     Welcome to the Stock Screener CLI!
@@ -162,12 +183,15 @@ def run_main(
     # combined with no --history / --scrape-link drops to interactive mode).
     filters_str = _normalize_filter_input(filter_pairs, filters_json, filters_file)
 
-    # Suppress the human-friendly banner when CSV bytes own stdout (`--output -`).
-    # Even routing it to stderr would be noise for the pipe consumer; the banner
-    # has zero informational value to a downstream tool. Spec §7.3 bullet 5
-    # ("emits no other bytes on stdout"). Pillar 5's `--quiet` will extend this
-    # to the all-modes suppression channel.
-    if output_path != STDOUT_SENTINEL:
+    # Suppress the human-friendly banner when CSV bytes own stdout (`--output -`)
+    # or when the operator requested ``--quiet``. Even routing the banner to
+    # stderr under ``--output -`` would be noise for the pipe consumer; the
+    # banner has zero informational value to a downstream tool. ``--quiet``
+    # extends this suppression to file-output modes as well so pipeline
+    # integrators that want a clean stdout for the JSON summary can use it.
+    # Spec §7.3 bullet 5 (no other bytes on stdout) and §7.4 (--quiet
+    # suppresses the welcome banner and progress lines).
+    if not quiet and output_path != STDOUT_SENTINEL:
         click.echo("Welcome to the Stock Screener CLI!")
     from .main import run_stock_screener
 
@@ -186,6 +210,8 @@ def run_main(
                 scrape_link=scrape_link,
                 filters=filters_str,
                 output_path=output_path,
+                quiet=quiet,
+                json_summary=json_summary,
             )
         except ValueError as exc:
             raise click.UsageError(str(exc)) from exc

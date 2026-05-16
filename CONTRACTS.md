@@ -31,6 +31,8 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 | `--filters-json` | — | string | `""` | Inline flat-object JSON dict of filters, e.g. `--filters-json '{"fa_pe":"u20"}'`. Schema validated by `core.converters.json.json_to_tuples` (see §6.3). |
 | `--filters-file` | — | path | `None` | Path to a JSON file containing the same flat-object payload. Path is validated by Click (`exists=True, dir_okay=False, readable=True`). |
 | `--output` | `-o` | string | `""` | Exact CSV destination. Parent dir must exist. No timestamp added; overwrites if the file exists. Use `-` to stream CSV to stdout. Orthogonal to all input-mode flags. |
+| `--quiet` | `-q` | flag | `False` | Suppress human chatter (welcome banner + INFO/DEBUG console lines). Warnings and errors still surface. Does not change `--debug` level; debug records still land in `logs/activity.log`. Orthogonal to `--output`. |
+| `--json-summary` | — | flag | `False` | Emit a single-line JSON summary of the run at end. Goes to stdout by default; routed to stderr when `--output -` streams CSV on stdout. Always the last line on its stream. Schema in §5.5. |
 
 **Mutual-exclusion set:** `--filter`, `--filters-json`, `--filters-file`, `--history`, `--scrape-link`. At most one input mode may be set; passing two or more raises `click.UsageError` (exit 2) with the canonical message `--filter / --filters-json / --filters-file / --history / --scrape-link are mutually exclusive; pick one input mode.` See `docs/features/pipeline-mode-spec.md` §6.2. Note: `--output` is **not** in this set — it composes with any input mode.
 
@@ -46,6 +48,8 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 | `--debug` | Logger level lowered to `DEBUG` for the duration of the run. |
 | `--output PATH` | CSV is written to exactly `PATH`. Filename is **not** timestamped; overwrites silently if the file exists. Composes with any input-mode flag. Precedence: `--output PATH` > `--output -` > `FINCLI_OUTPUT_DIR` > default. |
 | `--output -` | CSV bytes are streamed to **stdout**. **Stdout contains only CSV bytes**: the two console handlers (typing-effect + plain) are rerouted to stderr at run start, the welcome banner is suppressed, and the previously stdout-bound `Base Url:` echo from the query builder is removed (the URL is still logged at INFO via the rerouted logger). Log progress, banner location, errors all land on stderr. The default `Ticker` HYPERLINK formula stripping for stdout mode is **not yet implemented** (Pillar 6); `--output -` writes the same shape today as `--output PATH`. |
+| `--quiet` | Suppresses INFO/DEBUG console emission on both console handlers (typing-effect + plain) and the `click.echo` welcome banner. WARNING and ERROR records still emit. File handlers (`logs/activity.log`, `logs/error.log`) are **unaffected** — debug records under `--debug --quiet` still land in `activity.log`. Output destination is unchanged (the `OUTPUT_PATH=` stderr line still emits — pipelines need it even under `--quiet`). |
+| `--json-summary` | Emit one single-line JSON object at end of run on the stream not occupied by CSV bytes: **stdout** by default, **stderr** when `--output -` is set. Always the last line on its stream. Schema in §5.5. Composes orthogonally with `--quiet` and `--debug`. |
 | `FINCLI_OUTPUT_DIR=<dir>` env var | Replaces the parent directory of the default `workspace_output/stock_screener_{date}.csv` while preserving the timestamped basename. Loses to an explicit `--output PATH`. Read by `core.configuration.configurator.build_config`. |
 
 **Exit codes**
@@ -58,6 +62,8 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 **Output side effects**
 
 - CSV destination resolved via the Pillar-2 precedence chain: `--output PATH` > `--output -` (stdout stream) > `FINCLI_OUTPUT_DIR=<dir>` env var (parent-dir override) > default `workspace_output/stock_screener_YYYY-MM-DD_HH-MM.csv` under CWD.
+- A `OUTPUT_PATH=<value>` discovery line is **always** written to **stderr** exactly once, immediately before the process exits. `<value>` is the absolute path the CSV was written to, or the literal `-` for stdout streaming. Independent of `--quiet` and `--json-summary` so pipeline integrators can recover the destination via `tail -n1 stderr | cut -d= -f2-` even when both other flags are absent. Spec `docs/features/pipeline-mode-spec.md` §5.3.3.
+- When `--json-summary` is set, a single-line JSON summary (schema in §5.5) is written immediately after the `OUTPUT_PATH=` line. The summary stream is **stdout** by default and **stderr** when `--output -` claims stdout for CSV bytes; on stderr it always comes after `OUTPUT_PATH=`. Spec §5.3.4.
 - `<Config.history_dir>/filter_history.json` is overwritten with the current filter selection on a successful run. (See §4.1 for the default value and `HISTORY_DIR` env-var override.)
 - `logs/activity.log` (DEBUG+) and `logs/error.log` (ERROR+) appended.
 
@@ -228,6 +234,7 @@ Returns the process-wide Singleton instance. The class is metaclass-based (`sing
 - `logger.warning(msg: str) -> None`
 - `logger.error(msg: str) -> None`
 - `logger.set_console_stream(stream: IO[str]) -> None` — retargets the two console handlers (typing-effect + plain) to the given text-mode stream. Intended for the `--output -` stdout-streaming path (Pillar 2): callers pass `sys.stderr` so progress + banner + typing chatter does not corrupt the CSV bytes piped on stdout. Default users (no `--output -`) never call this; the construction-time default is `sys.stdout`.
+- `logger.set_quiet(quiet: bool) -> None` — toggles a suppression flag on the two console handlers. When `True`, both handlers short-circuit records at INFO and DEBUG level inside `emit`; WARNING and ERROR still surface. Does **not** affect the logger level or the file handlers, so `--debug --quiet` still writes debug records to `logs/activity.log` while keeping the console quiet of informational chatter. Intended for the Pillar 3 `--quiet` flag; default users never call this and the construction-time default is `False`. Spec `docs/features/pipeline-mode-spec.md` §5.3.1.
 
 `msg` is a single string. Use f-strings to interpolate; do not pass positional `%` args.
 
@@ -265,6 +272,38 @@ Error log:
 
 The underlying stdlib `logging.Logger` handlers are thread-safe. The typing-animation console handler serializes its writes under the same lock. Concurrent `logger.info`, `logger.error`, etc. from any future fan-out worker pool would therefore be safe.
 
+### 5.5 JSON summary schema (`--json-summary`)
+
+Stable per-run output emitted by `fincli/app/main.py:run_stock_screener` when the CLI was invoked with `--json-summary`. One line, valid JSON, terminated by a single newline. Stream selection per the §1 behavior table (stdout by default; stderr under `--output -`, always after the `OUTPUT_PATH=` line on that stream).
+
+```json
+{
+  "schema_version": 1,
+  "exit_code": 0,
+  "output_path": "/abs/path/to/file.csv",
+  "row_count": 42,
+  "query_url": "https://finviz.com/screener.ashx?v=111&f=fa_pe_u20,sec_energy&ft=2",
+  "filters": {"fa_pe": "u20", "sec": "energy"},
+  "started_at": "2026-05-16T14:32:11.123456+00:00",
+  "finished_at": "2026-05-16T14:32:13.789012+00:00",
+  "duration_ms": 2665
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `schema_version` | int | Pinned to `1`. Bump on any breaking schema change (field removed or renamed; field semantics changed). Adding fields is non-breaking and does **not** bump the version. |
+| `exit_code` | int | The same exit code the process is about to return. Pinned to `0` until Pillar 4 (Task 6) introduces classified non-zero codes. |
+| `output_path` | str | Absolute path the CSV was written to, or the literal `"-"` for stdout streaming. |
+| `row_count` | int | Number of data rows written (excludes the CSV header). `0` for empty result. |
+| `query_url` | str | The exact Finviz URL fetched (post-filter-build, pre-pagination). On the `--scrape-link` path this is the supplied URL verbatim. |
+| `filters` | object \| null | The `{key: value}` filter dict resolved by Pillar 1 (or interactive mode); `null` for the `--scrape-link` path because no filter resolution happened. |
+| `started_at` | str | ISO-8601 timestamp in UTC captured at `run_stock_screener` entry. Always tz-aware (`+00:00` suffix). |
+| `finished_at` | str | ISO-8601 timestamp in UTC captured immediately before the summary is emitted. Always >= `started_at`. |
+| `duration_ms` | int | `(finished_at - started_at)` in whole milliseconds. Always >= 0. |
+
+The schema is contract-pinned by `tests/integration/test_pipeline_summary.py`. Source-of-truth constants live in `fincli/app/main.py`: `JSON_SUMMARY_SCHEMA_VERSION` (the `1` literal) and `OUTPUT_PATH_LINE_PREFIX` (the `OUTPUT_PATH=` token).
+
 ---
 
 ## 6. Internal Service Interfaces (importable surface)
@@ -280,6 +319,8 @@ def run_stock_screener(
     scrape_link: str = "",
     filters: str = "",
     output_path: str = "",
+    quiet: bool = False,
+    json_summary: bool = False,
 ) -> None
 def fetch_urls(quarry: str, page_count: int) -> list[bytes]
 def aggregate_rows(pages: list[bytes]) -> list[list]
@@ -289,6 +330,8 @@ def build_data_frame(data_rows: list[list]) -> pandas.DataFrame
 `filters` is a JSON string in the canonical flat-object shape (see §6.3). The CLI normalizes the three structured-input flag forms (`--filter`, `--filters-json`, `--filters-file`) into this single string before calling. Empty string means "interactive flow" or "use whichever other input mode is set" (`--history` / `--scrape-link`).
 
 `output_path` overrides the default destination per the §1 / §4.1 precedence chain. Empty string falls through to `FINCLI_OUTPUT_DIR` env var (if set) or the CWD-relative `workspace_output/...` default. The literal `"-"` (`config.config.STDOUT_SENTINEL`) routes the CSV to `sys.stdout` and triggers the logger console-handler reroute to stderr (see §5.2).
+
+`quiet` and `json_summary` are the Pillar 3 stream-discipline knobs. `quiet=True` invokes `logger.set_quiet(True)` and suppresses the CLI welcome banner (see §1 behavior table). `json_summary=True` emits a single-line JSON object matching the §5.5 schema on the stream not occupied by CSV bytes (stdout by default; stderr under `--output -`), always immediately after the `OUTPUT_PATH=` stderr discovery line. Both default to `False` for back-compat.
 
 ### 6.2 `core/configuration/configurator.py`
 
