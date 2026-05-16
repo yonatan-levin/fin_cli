@@ -1,6 +1,6 @@
 """Click-surface tests for Pillar 1 structured filter input.
 
-Pins the contract from `docs/features/pipeline-mode-spec.md` §5.1 + §6.2:
+Pins the contract from `docs/features/archive/pipeline-mode-spec.md` §5.1 + §6.2:
 
   - Three new options exist on `run_main`: `--filter`, `--filters-json`,
     `--filters-file`.

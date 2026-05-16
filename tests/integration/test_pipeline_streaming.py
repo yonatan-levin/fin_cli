@@ -1,4 +1,4 @@
-"""End-to-end stream discipline tests (Pillar 3 — `docs/features/pipeline-mode-spec.md`).
+"""End-to-end stream discipline tests (Pillar 3 — `docs/features/archive/pipeline-mode-spec.md`).
 
 These tests drive the full Click entry point (`run_main`) with `CliRunner`,
 mock out the network layer at `fincli.app.main.fetch_page_sync`, and assert
@@ -32,27 +32,12 @@ from click.testing import CliRunner
 from fincli.app.cli import run_main
 from fincli.app.main import OUTPUT_PATH_LINE_PREFIX
 
-# Minimal canned Finviz-screener HTML reused from `test_cli_output.py`. One
-# row, no pagination wrapper -> `page_count == 0` so `fetch_urls` invokes
-# the mocked `fetch_page_sync` once. Column order matches
-# `StockTableLocators.PD_TABLE_COLUMNS`.
-_CANNED_FINVIZ_HTML = b"""<html><body>
-<table class="styled-table-new"><tbody>
-<tr valign="top">
-  <td>1</td>
-  <td><a href="/quote.ashx?t=AAPL">AAPL</a></td>
-  <td>Apple Inc.</td>
-  <td>Technology</td>
-  <td>Consumer Electronics</td>
-  <td>USA</td>
-  <td>2.89T</td>
-  <td>28.52</td>
-  <td>182.63</td>
-  <td>-1.23%</td>
-  <td>52,436,789</td>
-</tr>
-</tbody></table>
-</body></html>"""
+from _fixtures_loader import finviz_happy_html
+
+# Canned one-row screener HTML lives under ``tests/integration/fixtures/``;
+# the loader is the single source of truth so all three integration test
+# files share the exact same payload (REVIEWER follow-up from Task 5).
+_CANNED_FINVIZ_HTML = finviz_happy_html()
 
 
 # ---------------------------------------------------------------------------

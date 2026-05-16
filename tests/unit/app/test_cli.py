@@ -1,7 +1,7 @@
 """Regression tests for the `fincli.app.cli:run_main` Click entry point.
 
 These tests pin today's CLI option-parsing surface so the upcoming pipeline-mode
-refactor (docs/features/pipeline-mode-spec.md, Tasks 3+) cannot silently drop
+refactor (docs/features/archive/pipeline-mode-spec.md, Tasks 3+) cannot silently drop
 or alter any existing flag. They are deliberately option-shape tests only; they
 do **not** execute the screener pipeline (that would hit Finviz over HTTP).
 

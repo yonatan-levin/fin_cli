@@ -1,6 +1,6 @@
 """Click-surface tests for Pillar 2 deterministic output destination.
 
-Pins the contract from `docs/features/pipeline-mode-spec.md` §5.2 + §7.3:
+Pins the contract from `docs/features/archive/pipeline-mode-spec.md` §5.2 + §7.3:
 
   - Two new options exist on `run_main`: `--output PATH` and its `-o` alias.
   - Both appear in `--help` output.

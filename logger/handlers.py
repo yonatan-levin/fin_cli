@@ -17,7 +17,7 @@ class ConsoleHandler(logging.StreamHandler):
     when ``--output -`` mode needs the stdout stream kept clean for CSV
     bytes (spec §5.2 + §5.3).
 
-    Pillar 3 ``--quiet`` (`docs/features/pipeline-mode-spec.md` §5.3.1) adds
+    Pillar 3 ``--quiet`` (`docs/features/archive/pipeline-mode-spec.md` §5.3.1) adds
     a ``quiet`` attribute (toggled by ``Logger.set_quiet``). When ``quiet``
     is ``True`` the handler short-circuits records at INFO/DEBUG level,
     keeping WARNING+ on the console. ``--debug --quiet`` therefore still

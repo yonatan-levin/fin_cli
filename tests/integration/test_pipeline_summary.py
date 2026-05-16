@@ -32,31 +32,18 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 
+from _fixtures_loader import finviz_happy_html
+
 from fincli.app.cli import run_main
 from fincli.app.main import (
     JSON_SUMMARY_SCHEMA_VERSION,
     OUTPUT_PATH_LINE_PREFIX,
 )
 
-# Reused canned HTML — one ticker row, no pagination wrapper. See
-# `tests/integration/test_pipeline_streaming.py` for the rationale.
-_CANNED_FINVIZ_HTML = b"""<html><body>
-<table class="styled-table-new"><tbody>
-<tr valign="top">
-  <td>1</td>
-  <td><a href="/quote.ashx?t=AAPL">AAPL</a></td>
-  <td>Apple Inc.</td>
-  <td>Technology</td>
-  <td>Consumer Electronics</td>
-  <td>USA</td>
-  <td>2.89T</td>
-  <td>28.52</td>
-  <td>182.63</td>
-  <td>-1.23%</td>
-  <td>52,436,789</td>
-</tr>
-</tbody></table>
-</body></html>"""
+# Canned one-row screener HTML lives under ``tests/integration/fixtures/``;
+# the loader is the single source of truth so all three integration test
+# files share the exact same payload (REVIEWER follow-up from Task 5).
+_CANNED_FINVIZ_HTML = finviz_happy_html()
 
 
 # Field set the §5.3.4 schema declares; pinned so a future field addition

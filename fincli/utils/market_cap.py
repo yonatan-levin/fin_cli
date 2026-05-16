@@ -2,7 +2,7 @@
 
 Carved out of `fincli.app.main` so the parser is directly testable without
 importing the orchestrator. Contract is pinned in
-`docs/features/pipeline-mode-spec.md` §5.5 and `CONTRACTS.md` §3.1.
+`docs/features/archive/pipeline-mode-spec.md` §5.5 and `CONTRACTS.md` §3.1.
 
 Replaces the legacy implementation that lived at `fincli/app/main.py:33-46`,
 which had three latent defects: (1) an unassigned `.replace("'", "")` no-op,
@@ -40,7 +40,7 @@ _NOISE_CHARS: tuple[str, ...] = ("$", ",", "'")
 def convert_market_cap_to_numeric(value: str | None) -> float | pd._libs.missing.NAType:
     """Convert a Finviz `Market Cap` cell into a `float` or `pandas.NA`.
 
-    See `docs/features/pipeline-mode-spec.md` §5.5 for the full input/output
+    See `docs/features/archive/pipeline-mode-spec.md` §5.5 for the full input/output
     table. Summary:
 
     Args:

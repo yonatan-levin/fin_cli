@@ -3,7 +3,7 @@
 Covers `validate_filter_pairs` (raises `click.UsageError` on unknown key or
 unknown value-for-known-key) and `list_valid_filters` (returns the canonical
 {query_key: [value_codes...]} mapping that powers the error messages and the
-future `--help-filters` CLI flag — see `docs/features/pipeline-mode-spec.md`
+future `--help-filters` CLI flag — see `docs/features/archive/pipeline-mode-spec.md`
 §5.1 step 5).
 
 The validator is the single chokepoint that closes the silent-drop hazard at

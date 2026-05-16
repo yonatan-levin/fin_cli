@@ -1,6 +1,6 @@
 """Tests pinning the `Logger.set_console_stream` reroute.
 
-Pillar 2 (`docs/features/pipeline-mode-spec.md` §5.2 + §5.3) requires that
+Pillar 2 (`docs/features/archive/pipeline-mode-spec.md` §5.2 + §5.3) requires that
 `fincli --output -` route human-readable chatter (the typing-effect console
 handler and the plain console handler) to **stderr** so the CSV stream on
 stdout is not corrupted by log lines.

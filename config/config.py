@@ -1,7 +1,7 @@
 """Config file for the stock screener app.
 
 The CSV-destination precedence implemented in `Config.file_path` is the single
-chokepoint for Pillar 2 (`docs/features/pipeline-mode-spec.md` §5.2):
+chokepoint for Pillar 2 (`docs/features/archive/pipeline-mode-spec.md` §5.2):
 
     --output PATH  >  --output -  >  FINCLI_OUTPUT_DIR  >  default
 

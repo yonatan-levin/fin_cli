@@ -1,6 +1,6 @@
 """Contract tests for `fincli.utils.market_cap.convert_market_cap_to_numeric`.
 
-Pinned to the input/output table in `docs/features/pipeline-mode-spec.md` §5.5
+Pinned to the input/output table in `docs/features/archive/pipeline-mode-spec.md` §5.5
 and the dtype assertions in `CONTRACTS.md` §3.1.
 
 Covers:

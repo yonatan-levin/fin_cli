@@ -1,6 +1,6 @@
 """Strict dict-only JSON-to-tuples converter for Finviz filter input.
 
-Schema lockdown landed in `docs/features/pipeline-mode-spec.md` §5.1 step 3
+Schema lockdown landed in `docs/features/archive/pipeline-mode-spec.md` §5.1 step 3
 (OQ1 resolution): the canonical filter shape across the system is a flat
 JSON object whose keys are Finviz query_keys and whose values are
 value_codes — both strings. The legacy converter accepted both list-of-pairs

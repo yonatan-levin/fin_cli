@@ -1,6 +1,6 @@
 """Tests pinning `Config.file_path()` semantics across all four precedence tiers.
 
-The pipeline-mode refactor (docs/features/pipeline-mode-spec.md, Pillar 2 in
+The pipeline-mode refactor (docs/features/archive/pipeline-mode-spec.md, Pillar 2 in
 Task 4) introduces `--output PATH` and `FINCLI_OUTPUT_DIR` env-var support.
 This file covers:
 

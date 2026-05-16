@@ -70,7 +70,7 @@ def build_config(
         # Single chokepoint for structured-input validation. Unknown keys or
         # values raise ``click.UsageError`` here, which the Click runner
         # surfaces to the user as exit 2 with a helpful message. See
-        # docs/features/pipeline-mode-spec.md §5.1 step 5.
+        # docs/features/archive/pipeline-mode-spec.md §5.1 step 5.
         validate_filter_pairs(config.filters)
 
     return config

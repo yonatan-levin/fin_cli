@@ -1,6 +1,6 @@
 """Interactive filter-selection UI plus early-return path for structured input.
 
-Two changes in `docs/features/pipeline-mode-spec.md` Pillar 1 land here:
+Two changes in `docs/features/archive/pipeline-mode-spec.md` Pillar 1 land here:
 
   1. **Early-return.** When `Config.filters` is preloaded by the configurator
      (from --filter / --filters-json / --filters-file), skip the interactive

@@ -1,6 +1,6 @@
 """Tests for `core.configuration.configurator.build_config` filter wiring.
 
-Pillar 1 (docs/features/pipeline-mode-spec.md §5.1) routes every structured
+Pillar 1 (docs/features/archive/pipeline-mode-spec.md §5.1) routes every structured
 input form through `build_config(filters=<json-string>)`. This file pins the
 contract:
 

@@ -1,6 +1,6 @@
 """Schema-lockdown tests for `core.converters.json.json_to_tuples`.
 
-The pipeline-mode spec (docs/features/pipeline-mode-spec.md §5.1 step 3, OQ1
+The pipeline-mode spec (docs/features/archive/pipeline-mode-spec.md §5.1 step 3, OQ1
 resolution) tightens the historic loose schema to a single canonical shape: a
 flat JSON object whose keys and values are both strings. Lists, scalars,
 nested objects, and non-string values are all rejected with `ValueError` so

@@ -5,7 +5,7 @@ Carved out as the single chokepoint that closes the silent-drop hazard at
 the param classes and silently skips any unknown key, so a typo in a
 non-interactive flag like `--filter sec=enrgy` produced an empty filter
 URL and no warning. With structured input (`--filter`, `--filters-json`,
-`--filters-file`) landing in `docs/features/pipeline-mode-spec.md` Pillar 1,
+`--filters-file`) landing in `docs/features/archive/pipeline-mode-spec.md` Pillar 1,
 every typo would otherwise become a wasted scrape; this module raises a
 ``click.UsageError`` so the CLI exits 2 with a clear message instead.
 

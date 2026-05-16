@@ -5,7 +5,7 @@ exclusive input modes (interactive picker, ``--history`` reload, direct URL
 via ``--scrape-link``, structured input via ``--filter`` / ``--filters-json``
 / ``--filters-file``). Adding the structured-input options closes the gap
 that prevented fincli from being driven non-interactively in a downstream
-pipeline — see ``docs/features/pipeline-mode-spec.md`` §5.1 (Pillar 1).
+pipeline — see ``docs/features/archive/pipeline-mode-spec.md`` §5.1 (Pillar 1).
 
 The CLI is the single normalization point: it collapses the three structured
 forms into one canonical JSON string before handing off to
@@ -201,7 +201,7 @@ def run_main(
         # `--filters-json` / `--filters-file` payloads exit 2 with a clean
         # message instead of exit 1 with a Python traceback. Kept in the CLI
         # layer to preserve `core/`'s Click-free purity (see ARCHITECTURE.md
-        # Module Map). Contract: docs/features/pipeline-mode-spec.md §7.2
+        # Module Map). Contract: docs/features/archive/pipeline-mode-spec.md §7.2
         # (exit-2 for schema-rejection).
         try:
             run_stock_screener(
