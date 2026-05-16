@@ -31,13 +31,15 @@ Quality bar: personal use, but results must be trustworthy. A row that silently 
 
 ## Current Phase
 
-**MVP CLI working. Agent harness in flight (Phase 1). Single-mode reduction landed (2026-05-04). Zero tests.**
+**MVP CLI working. Pipeline mode shipped (2026-05-16). Agent harness in flight (Phase 1). 200+ tests.**
 
-The screener (`python -m fincli`) is functional and has been used in production for real investment research. The harness rollout (Phase 1) is scaffolding tooling, documentation, and agent-workflow infrastructure to make the codebase safe for AI-assisted development.
+The screener (`fincli` / `python -m fincli`) is functional and has been used in production for real investment research. It is now also usable as a single-shot building block in a downstream automation pipeline (pipeline-mode-spec, archived at `docs/features/archive/pipeline-mode-spec.md`): structured filter input (`--filter`/`--filters-json`/`--filters-file`), deterministic output destination (`--output PATH`/`--output -`/`FINCLI_OUTPUT_DIR`), stream discipline (`--quiet`/`--json-summary` + the `OUTPUT_PATH=` discovery line), and differentiated exit codes (0/1/2/3/4) all landed in the umbrella feature commits running from `f775b7e` through the Task-6 close on 2026-05-16.
 
-The single-mode reduction (`docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md`) removed the previously-bundled `fundainsight/` fundamental-analysis package and several abandoned scaffolds, retargeting the project to a single CLI: the Finviz screener. One follow-up spec (`docs/refactoring/history-path-config-spec.md`) captures the remaining intentionally deferred refactor work. The companion entry-point follow-up shipped on 2026-05-06 — see `docs/refactoring/archive/cli-entry-point-spec.md` and `docs/FEEDBACK-LOG.md`.
+The harness rollout (Phase 1) continues: scaffolding tooling, documentation, and agent-workflow infrastructure to make the codebase safe for AI-assisted development.
 
-Test bodies do not yet exist. The folder structure (`tests/unit/`, `tests/domain/`, `tests/e2e/`) is in place.
+The single-mode reduction (`docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md`) removed the previously-bundled `fundainsight/` fundamental-analysis package and several abandoned scaffolds, retargeting the project to a single CLI: the Finviz screener. The companion entry-point follow-up shipped on 2026-05-06 — see `docs/refactoring/archive/cli-entry-point-spec.md` and `docs/FEEDBACK-LOG.md`.
+
+The Phase-2 test suite seed is now in place — unit tests under `tests/unit/{app,cli,configuration,converters,logger,resource,utils}/`, integration tests under `tests/integration/` (CliRunner-based, with mocked `fetch_page_sync` and canned HTML fixtures). Phase 3 (coverage gate at 90%) and Phase 4 (mypy promoted to a hard gate) remain deferred per their original trigger conditions.
 
 ---
 
@@ -143,5 +145,6 @@ It is **not**:
 
 | Date | Change |
 |------|--------|
+| 2026-05-16 | **Pipeline mode shipped.** Four pillars + two adjacent fixes landed (`docs/features/archive/pipeline-mode-spec.md`): structured filter input (`--filter`/`--filters-json`/`--filters-file` + strict validator + `filter_history.json` writeback fix), deterministic output destination (`--output PATH`/`--output -` + `FINCLI_OUTPUT_DIR`), stream discipline (`--quiet`/`--json-summary` + `OUTPUT_PATH=` discovery line + logger console-stream reroute), differentiated exit codes (0 SUCCESS / 1 INTERNAL / 2 USAGE / 3 UPSTREAM / 4 DATA). Adjacent fixes: `convert_market_cap_to_numeric` rewritten as a nullable `Float64` parser; `Symbol` declared the canonical machine-readable ticker column with a `--output -` carve-out skipping the Excel `=HYPERLINK(...)` wrap. fincli is now usable as a single-shot building block in downstream automation. |
 | 2026-05-04 | Single-mode reduction. Removed `fundainsight/` and abandoned scaffolds; retargeted Phase 2 scope to the screener pipeline only. Roadmap "Beyond Phase 4" updated to drop fundamental-analysis aspirations and add the CLI entry-point and Config-driven history follow-ups (`docs/refactoring/`). See `docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md`. |
 | 2026-05-02 | Initial file. Drafted from `CLAUDE.md`, `README.md`, `ARCHITECTURE.md`, and the agent-harness spec. |

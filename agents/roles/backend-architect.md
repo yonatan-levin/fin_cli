@@ -86,7 +86,7 @@ You may work on:
 
 3. **Parsing and transformation**
    - Implement and maintain pure functions in `fincli/stock_screening/content/stock_table.py` (table extractor) and `fincli/stock_screening/parsers/stock_table.py` (row parser). Selector strings live in `fincli/stock_screening/locators/stock_table_locators.py`.
-   - `fincli/app/main.py` owns `convert_market_cap_to_numeric`, `aggregate_rows`, `build_data_frame`. Keep these pure where possible (input rows or DataFrame in, output DataFrame out — no I/O).
+   - `fincli/app/main.py` owns `aggregate_rows`, `build_data_frame`, plus the trailing-emission chokepoint (`_emit_run_tail`, `_build_summary`). `convert_market_cap_to_numeric` moved to `fincli/utils/market_cap.py` in commit `50f46ca` so the parser is directly testable. Keep these pure where possible (input rows or DataFrame in, output DataFrame out — no I/O for the parsers; the orchestrator owns CSV writes).
    - Use pandas vectorization over row loops where it is clearer or faster.
 
 4. **Web scraping and data acquisition**

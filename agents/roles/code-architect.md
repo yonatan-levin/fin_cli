@@ -324,7 +324,9 @@ HANDOFF_TO: <UX_UI | BACKEND | FRONTEND | QA | REVIEWER | HUMAN>
 **Reference files (fin_cli):**
 - `core/configuration/configurator.py` — config builder
 - `config/config.py` — main `Config` Pydantic model
-- `fincli/app/main.py` — screening pipeline orchestration (`run_stock_screener`, `convert_market_cap_to_numeric`)
+- `fincli/app/main.py` — screening pipeline orchestration (`run_stock_screener`, `fetch_urls`, `aggregate_rows`, `build_data_frame`, `_emit_run_tail`, `_build_summary`)
+- `fincli/app/exit_codes.py` — Pillar-4 classifier constants + `classify(exc)`
+- `fincli/utils/market_cap.py` — `convert_market_cap_to_numeric` (carved out of `main.py` in commit `50f46ca` for direct testability)
 - `fincli/utils/web_scraper.py` — cfscrape Finviz fetcher
 - `fincli/stock_screening/` — BeautifulSoup row parser + table extractor
 - `logger/logger.py` — singleton logger

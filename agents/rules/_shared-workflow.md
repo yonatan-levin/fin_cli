@@ -178,7 +178,7 @@ HANDOFF_TO: <BACKEND | FRONTEND | QA | HUMAN>
 # Issues
 | Severity | Agent | Description |
 |----------|-------|-------------|
-| HIGH     | BACKEND | convert_market_cap_to_numeric returns "N/A" instead of float for trailing-suffix inputs |
+| HIGH     | BACKEND | (example) build_data_frame drops the Symbol column when --output - is set (regression vs CONTRACTS §3.1) |
 
 # Suggested Fixes
 - Specific fixes for each issue

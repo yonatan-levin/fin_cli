@@ -4,7 +4,12 @@ This document is the source of truth for Fin CLI's system architecture.
 
 ## System Overview
 
-**Fin CLI** is a single-mode Python command-line application that screens stocks from Finviz.com. It is built as one importable package (`fincli`) with a Click entry point under `app/`, plus a small set of shared cross-cutting packages (`core`, `config`, `logger`). There is no server, no database, no network listener — outputs land as timestamped CSVs in `workspace_output/`.
+**Fin CLI** is a single-mode Python command-line application that screens stocks from Finviz.com. It is built as one importable package (`fincli`) with a Click entry point under `app/`, plus a small set of shared cross-cutting packages (`core`, `config`, `logger`). There is no server, no database, no network listener — outputs land as timestamped CSVs in `workspace_output/` by default, or wherever pipeline-mode CLI flags (`--output PATH`, `--output -` for stdout streaming, or `FINCLI_OUTPUT_DIR=<dir>`) redirect them.
+
+The CLI has two distinct usage shapes that share the same orchestrator:
+
+1. **Interactive** — bare `fincli` prompts the user through the three-section filter picker, writes a timestamped CSV under `workspace_output/`. The historical shape; unchanged.
+2. **Pipeline** — `fincli --filter/--filters-json/--filters-file ... --output PATH-or-` is consumable by another program. Reads structured input, writes to an exact destination (or streams CSV on stdout), emits a `OUTPUT_PATH=<value>` discovery line on stderr, optionally emits a single-line JSON summary, and exits with one of five classified codes (0/1/2/3/4 — see CONTRACTS §1 exit-codes table).
 
 ```
                     +---------------------------+
@@ -55,10 +60,19 @@ Supporting (not part of the active runtime path):
 
 ```
 [1] Click CLI                       fincli/app/cli.py
-       |   --history / --debug
+       |   Input-mode flags (mutually exclusive):
+       |     --history / --scrape-link <url> / --filter k=v
+       |     / --filters-json '<json>' / --filters-file <path>
+       |   Output-destination flags (orthogonal):
+       |     --output PATH / --output - / FINCLI_OUTPUT_DIR env
+       |   Stream-discipline flags: --quiet, --json-summary, --debug
        v
 [2] Config build                    core/configuration/configurator.py
-       |   loads filter_history.json when --history is set
+       |   loads filter_history.json when --history is set;
+       |   normalizes structured input through json_to_tuples and
+       |   validates against the filter inventory (raises UsageError
+       |   on unknown key/value -> exit 2);
+       |   reads FINCLI_OUTPUT_DIR + HISTORY_DIR env vars.
        v
 [3] Interactive filter selection    fincli/cli/cli_stock_screener.py
        |   each section (Fundamental / Descriptive / Technical) is shown
@@ -78,11 +92,27 @@ Supporting (not part of the active runtime path):
        v
 [7] Row aggregation + DataFrame     fincli/app/main.py: aggregate_rows,
                                     build_data_frame
-       |   normalizes Market Cap "1.2B" -> 1_200_000_000,
-       |   wraps Ticker in =HYPERLINK() for Excel
+       |   normalizes Market Cap "1.2B" -> 1_200_000_000 (nullable Float64;
+       |     unparseable cells coerce to pandas.NA via
+       |     fincli.utils.market_cap.convert_market_cap_to_numeric);
+       |   wraps Ticker in =HYPERLINK() for Excel — EXCEPT under
+       |     --output - where the raw symbol is preserved so
+       |     pandas.read_csv consumers downstream are not poisoned;
+       |   Symbol column is the canonical machine-readable ticker.
        v
-[8] CSV write                        Config.file_path("stock_screener")
-       |   workspace_output/stock_screener_YYYY-MM-DD_HH-MM.csv
+[8] CSV write                       file destination OR sys.stdout
+       |   destination precedence (Pillar 2):
+       |     --output PATH > --output - > FINCLI_OUTPUT_DIR > default
+       |   zero-row results write a header-only CSV (Pillar 4 §5.4 —
+       |     "every successful run produces a discoverable output").
+       v
+[9] Trailing emission chokepoint    fincli/app/main.py: _emit_run_tail
+       |   OUTPUT_PATH=<value> line to stderr (always),
+       |   single-line JSON summary if --json-summary (stream depends on
+       |   --output: stdout by default, stderr under --output -).
+       v
+[10] Classified exit               fincli/app/exit_codes.classify
+       |   sys.exit(SUCCESS|INTERNAL|UPSTREAM|DATA) — Click owns USAGE.
        v
        (done)
 ```
@@ -118,6 +148,14 @@ Supporting (not part of the active runtime path):
 **Layering rule:** orchestration calls down into the filter UI and utility/I/O, never the reverse. Utility/I/O modules receive primitive inputs (a URL, raw HTML bytes) and have no awareness of how they will be assembled into a DataFrame. Cross-cutting modules are imported anywhere they are needed.
 
 There is no formal dependency-injection container. Wiring is done by direct import and function call in the orchestration layer. The Singleton logger is the only globally-visible runtime object.
+
+### Side effects
+
+Every successful run produces three observable side effects beyond the CSV write itself; pipeline integrators rely on this trio to discover the result without screen-scraping log lines:
+
+1. **`OUTPUT_PATH=<value>` discovery line** — written to **stderr** exactly once, immediately before exit, on every run (regardless of success/failure or any other flag). `<value>` is either the absolute path the CSV was written to, or the literal `-` sentinel for `--output -` streaming, or the empty string if an exception fired before the destination was resolved. Format pinned by CONTRACTS §1 + §7.
+2. **`--json-summary` line** (optional) — when `--json-summary` is set, a single-line JSON object matching the schema in CONTRACTS §5.5 is written immediately after the `OUTPUT_PATH=` line. Routes to **stdout** by default and to **stderr** when `--output -` claims stdout for CSV bytes.
+3. **Exit code** — one of five classified values (CONTRACTS §1 exit-codes table). `0` SUCCESS / `1` INTERNAL / `2` USAGE (Click) / `3` UPSTREAM / `4` DATA. The orchestrator's try/except wrapper around the pipeline runs every uncaught exception through `fincli.app.exit_codes.classify` before threading the code into both the JSON summary and `sys.exit`.
 
 ## External Integrations
 
@@ -234,9 +272,18 @@ core/configuration/config_base.py
     Configurable[S]        (generic interface for "I produce a config of type S")
 
 core/configuration/configurator.py
-    build_config(use_history: bool = False, filters: str = "") -> Config
+    build_config(
+        use_history: bool = False,
+        filters: str = "",
+        scrape_link: str = "",
+        output_path: str = "",
+    ) -> Config
         - if use_history: read <Config.history_dir>/filter_history.json
-        - if filters:     parse JSON string -> tuple of (key, value) pairs
+        - if filters:     parse JSON string -> tuple of (key, value) pairs,
+                          validate against the Finviz filter inventory
+        - if scrape_link: populate Config.scrape_link (direct-URL bypass)
+        - if output_path: populate Config.output_path (Pillar-2 destination pin)
+        - reads HISTORY_DIR + FINCLI_OUTPUT_DIR env vars from os.getenv
         - else:           empty Config (interactive selection will populate later)
 
 config/config.py
@@ -246,9 +293,15 @@ config/config.py
         use_history: bool = False
         filters:     tuple = ()
         scrape_link: str  = ""
+        history_dir: Path  = platformdirs.user_data_dir("fincli") / "local_history"
+        output_path: str   = ""            # --output PATH or - sentinel
+        output_dir:  Path | None = None    # FINCLI_OUTPUT_DIR env override
 
         def file_path(self, name: str) -> str:
-            # Returns:  workspace_output/{name}_{YYYY-MM-DD_HH-MM}.csv
+            # Pillar 2 precedence:
+            #   output_path > output_dir > workspace_output/ default
+            # Returns the resolved CSV path (timestamped for the default
+            # and env-override tiers; verbatim under output_path).
 ```
 
 The configuration object is constructed once per CLI invocation and threaded through `main.py` by direct argument passing. There is no global config singleton; the only global state is the logger.

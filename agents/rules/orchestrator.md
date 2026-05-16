@@ -61,7 +61,7 @@ You are the workflow orchestrator for the **fin_cli** project (Python CLI for Fi
 ### REFACTOR
 **When**: Structure / maintainability improvements preserving behavior
 **Flow**:
-1. Invoke `/arch` to define safety constraints (what must NOT change — public CLI surface, CSV column names, public functions in `fincli/app/main.py` such as `run_stock_screener` / `convert_market_cap_to_numeric`)
+1. Invoke `/arch` to define safety constraints (what must NOT change — public CLI surface incl. exit-code convention, CSV column names + order, public functions in `fincli/app/main.py` such as `run_stock_screener` / `build_data_frame` / `_emit_run_tail`, plus `fincli/utils/market_cap.py:convert_market_cap_to_numeric` and `fincli/app/exit_codes.py` constants)
 2. Invoke `/backend` for implementation
 3. Invoke `/verifier` to confirm no regressions introduced (run full pytest, diff CSV output against baseline)
 4. Run validation cycle: `/reviewer` (structure focus) → `/qa` (regression focus) → HUMAN

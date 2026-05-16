@@ -34,7 +34,7 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 | `--quiet` | `-q` | flag | `False` | Suppress human chatter (welcome banner + INFO/DEBUG console lines). Warnings and errors still surface. Does not change `--debug` level; debug records still land in `logs/activity.log`. Orthogonal to `--output`. |
 | `--json-summary` | — | flag | `False` | Emit a single-line JSON summary of the run at end. Goes to stdout by default; routed to stderr when `--output -` streams CSV on stdout. Always the last line on its stream. Schema in §5.5. |
 
-**Mutual-exclusion set:** `--filter`, `--filters-json`, `--filters-file`, `--history`, `--scrape-link`. At most one input mode may be set; passing two or more raises `click.UsageError` (exit 2) with the canonical message `--filter / --filters-json / --filters-file / --history / --scrape-link are mutually exclusive; pick one input mode.` See `docs/features/pipeline-mode-spec.md` §6.2. Note: `--output` is **not** in this set — it composes with any input mode.
+**Mutual-exclusion set:** `--filter`, `--filters-json`, `--filters-file`, `--history`, `--scrape-link`. At most one input mode may be set; passing two or more raises `click.UsageError` (exit 2) with the canonical message `--filter / --filters-json / --filters-file / --history / --scrape-link are mutually exclusive; pick one input mode.` See `docs/features/archive/pipeline-mode-spec.md` §6.2. Note: `--output` is **not** in this set — it composes with any input mode.
 
 **Behavior**
 
@@ -47,7 +47,7 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 | Two or more input-mode flags set | Rejected at parse time with a `UsageError` (alternative input modes, undefined when combined). |
 | `--debug` | Logger level lowered to `DEBUG` for the duration of the run. |
 | `--output PATH` | CSV is written to exactly `PATH`. Filename is **not** timestamped; overwrites silently if the file exists. Composes with any input-mode flag. Precedence: `--output PATH` > `--output -` > `FINCLI_OUTPUT_DIR` > default. |
-| `--output -` | CSV bytes are streamed to **stdout**. **Stdout contains only CSV bytes**: the two console handlers (typing-effect + plain) are rerouted to stderr at run start, the welcome banner is suppressed, and the previously stdout-bound `Base Url:` echo from the query builder is removed (the URL is still logged at INFO via the rerouted logger). Log progress, banner location, errors all land on stderr. The default `Ticker` HYPERLINK formula stripping for stdout mode is **not yet implemented** (Pillar 6); `--output -` writes the same shape today as `--output PATH`. |
+| `--output -` | CSV bytes are streamed to **stdout**. **Stdout contains only CSV bytes**: the two console handlers (typing-effect + plain) are rerouted to stderr at run start, the welcome banner is suppressed, and the previously stdout-bound `Base Url:` echo from the query builder is removed (the URL is still logged at INFO via the rerouted logger). Log progress, banner location, errors all land on stderr. The `Ticker` column is replaced with the raw symbol under `--output -` (the Excel `=HYPERLINK(...)` wrap is hostile to `pandas.read_csv` consumers downstream) — see §3.1 for the canonical-column note. |
 | `--quiet` | Suppresses INFO/DEBUG console emission on both console handlers (typing-effect + plain) and the `click.echo` welcome banner. WARNING and ERROR records still emit. File handlers (`logs/activity.log`, `logs/error.log`) are **unaffected** — debug records under `--debug --quiet` still land in `activity.log`. Output destination is unchanged (the `OUTPUT_PATH=` stderr line still emits — pipelines need it even under `--quiet`). |
 | `--json-summary` | Emit one single-line JSON object at end of run on the stream not occupied by CSV bytes: **stdout** by default, **stderr** when `--output -` is set. Always the last line on its stream. Schema in §5.5. Composes orthogonally with `--quiet` and `--debug`. |
 | `FINCLI_OUTPUT_DIR=<dir>` env var | Replaces the parent directory of the default `workspace_output/stock_screener_{date}.csv` while preserving the timestamped basename. Loses to an explicit `--output PATH`. Read by `core.configuration.configurator.build_config`. |
@@ -56,13 +56,18 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 
 | Code | Meaning |
 |---|---|
-| `0` | Run completed; CSV written. |
-| non-zero | Unhandled exception bubbled to the Click runner. The traceback is printed to stderr and written to `logs/error.log`. |
+| `0` | **SUCCESS** — Run completed; CSV written (or streamed). Includes zero-row results: a zero-row run still writes a header-only CSV so the "every successful run produces a discoverable output" contract holds. |
+| `1` | **INTERNAL** — Unexpected internal failure. Uncaught exception that escaped the orchestrator and did not match the upstream/data classifier families. Traceback is printed to stderr and written to `logs/error.log`. |
+| `2` | **USAGE** — CLI input validation error. Click's default for `UsageError` and `BadParameter`. Includes the mutual-exclusion error and the unknown-key / unknown-value errors raised by `validate_filter_pairs`. Click owns this code; the orchestrator never emits it directly. |
+| `3` | **UPSTREAM** — Upstream / network failure. `cfscrape` raised, HTTP error, DNS failure, request timeout. Classified by `requests.exceptions.RequestException` (cfscrape raises `requests` subclasses internally). |
+| `4` | **DATA** — Data-contract / parse failure. Screener `<table>` element missing, BeautifulSoup couldn't extract a row, columns mismatch. Classified by `IndexError` / `AttributeError` / `KeyError` from inside the BS4 parsing chain. |
+
+Classifier source-of-truth is `fincli/app/exit_codes.py`; downstream pipelines should import the constants (`SUCCESS`, `INTERNAL`, `USAGE`, `UPSTREAM`, `DATA`) rather than hardcoding integers. Spec `docs/features/archive/pipeline-mode-spec.md` §5.4.
 
 **Output side effects**
 
 - CSV destination resolved via the Pillar-2 precedence chain: `--output PATH` > `--output -` (stdout stream) > `FINCLI_OUTPUT_DIR=<dir>` env var (parent-dir override) > default `workspace_output/stock_screener_YYYY-MM-DD_HH-MM.csv` under CWD.
-- A `OUTPUT_PATH=<value>` discovery line is **always** written to **stderr** exactly once, immediately before the process exits. `<value>` is the absolute path the CSV was written to, or the literal `-` for stdout streaming. Independent of `--quiet` and `--json-summary` so pipeline integrators can recover the destination via `tail -n1 stderr | cut -d= -f2-` even when both other flags are absent. Spec `docs/features/pipeline-mode-spec.md` §5.3.3.
+- A `OUTPUT_PATH=<value>` discovery line is **always** written to **stderr** exactly once, immediately before the process exits. `<value>` is the absolute path the CSV was written to, or the literal `-` for stdout streaming. Independent of `--quiet` and `--json-summary` so pipeline integrators can recover the destination via `tail -n1 stderr | cut -d= -f2-` even when both other flags are absent. Spec `docs/features/archive/pipeline-mode-spec.md` §5.3.3.
 - When `--json-summary` is set, a single-line JSON summary (schema in §5.5) is written immediately after the `OUTPUT_PATH=` line. The summary stream is **stdout** by default and **stderr** when `--output -` claims stdout for CSV bytes; on stderr it always comes after `OUTPUT_PATH=`. Spec §5.3.4.
 - `<Config.history_dir>/filter_history.json` is overwritten with the current filter selection on a successful run. (See §4.1 for the default value and `HISTORY_DIR` env-var override.)
 - `logs/activity.log` (DEBUG+) and `logs/error.log` (ERROR+) appended.
@@ -137,17 +142,19 @@ Produced by `fincli/app/main.py:build_data_frame`.
 | Column | dtype | Description | Example |
 |---|---|---|---|
 | `No.` | str | Row number from the Finviz table | `"1"` |
-| `Ticker` | str | Excel `=HYPERLINK(...)` formula wrapping the symbol | `=HYPERLINK("https://finviz.com/quote.ashx?t=AAPL", "AAPL")` |
+| `Ticker` | str | Excel `=HYPERLINK(...)` formula wrapping the symbol on file destinations; raw symbol under `--output -` (see canonical-column note below). | `=HYPERLINK("https://finviz.com/quote.ashx?t=AAPL", "AAPL")` (file) / `AAPL` (stdout) |
 | `Company` | str | Company name | `"Apple Inc."` |
 | `Sector` | str | Industry sector | `"Technology"` |
 | `Industry` | str | Specific industry | `"Consumer Electronics"` |
 | `Country` | str | Country of incorporation | `"USA"` |
-| `Market Cap` | nullable `Float64` (empty cell for missing/unparseable) | Numeric market cap (e.g., `"1.2B"` -> `1200000000.0`). **N/A semantics:** Finviz tokens `"-"`, `"_"`, `""`, `"N/A"` (any case) and any unparseable cell coerce to `pandas.NA` and serialize as an empty CSV cell — never the literal string `"nan"`, `"<NA>"`, or `0.0`. Contract enforced by `fincli.utils.market_cap.convert_market_cap_to_numeric` per `docs/features/pipeline-mode-spec.md` §5.5. | `2890000000000.0` |
+| `Market Cap` | nullable `Float64` (empty cell for missing/unparseable) | Numeric market cap (e.g., `"1.2B"` -> `1200000000.0`). **N/A semantics:** Finviz tokens `"-"`, `"_"`, `""`, `"N/A"` (any case) and any unparseable cell coerce to `pandas.NA` and serialize as an empty CSV cell — never the literal string `"nan"`, `"<NA>"`, or `0.0`. Contract enforced by `fincli.utils.market_cap.convert_market_cap_to_numeric` per `docs/features/archive/pipeline-mode-spec.md` §5.5. | `2890000000000.0` |
 | `P/E` | str | Price-to-earnings ratio (kept as string; can be `"-"`) | `"28.52"` |
 | `Price` | str | Current stock price (string) | `"182.63"` |
 | `Change` | str | Daily price change with `%` | `"-1.23%"` |
 | `Volume` | str | Daily trading volume (comma-separated string) | `"52,436,789"` |
-| `Symbol` | str | Raw ticker symbol (added by the post-parse step) | `"AAPL"` |
+| `Symbol` | str | Raw ticker symbol (added by the post-parse step). **Canonical machine-readable column** for pipeline consumers — always the raw symbol regardless of `--output` mode. | `"AAPL"` |
+
+> **Canonical column note (spec §5.6):** `Symbol` is the canonical machine-readable ticker column. `Ticker` is the human/Excel-friendly column wrapped as `=HYPERLINK(...)`. Pipeline consumers should read `Symbol`. Exception: when invoked with `--output -` (stdout streaming), the `Ticker` column is **also** the raw symbol — the formula wrap is non-Excel-friendly in that context, and `pandas.read_csv` consumers downstream would otherwise be poisoned by the `=HYPERLINK(...)` literal. Column order is preserved across modes (regression-pinned by `tests/integration/test_pipeline_ticker_carveout.py`).
 
 **Sort order**: as returned by Finviz (its default sort for view `v=111`). The screener does not re-sort.
 
@@ -183,7 +190,7 @@ class Config(SystemSettings):
 
 `output_dir` is the parent-directory override sourced from the `FINCLI_OUTPUT_DIR` env var (read by `core.configuration.configurator.build_config`). When set, `Config.file_path` keeps the timestamped basename and writes under `<output_dir>/`. Loses to `output_path` per the precedence chain.
 
-`Config.file_path(name)` is an instance method (not a `@staticmethod`) so all three precedence tiers — explicit path, env-override directory, default — are resolved at one site. The stdout sentinel intentionally **does not** affect `file_path`'s output: the dispatch (file vs stdout) lives at the orchestrator boundary in `run_stock_screener`, so callers that hit `file_path` cannot accidentally produce a file literally named `-`. Spec: `docs/features/pipeline-mode-spec.md` §5.2.
+`Config.file_path(name)` is an instance method (not a `@staticmethod`) so all three precedence tiers — explicit path, env-override directory, default — are resolved at one site. The stdout sentinel intentionally **does not** affect `file_path`'s output: the dispatch (file vs stdout) lives at the orchestrator boundary in `run_stock_screener`, so callers that hit `file_path` cannot accidentally produce a file literally named `-`. Spec: `docs/features/archive/pipeline-mode-spec.md` §5.2.
 
 ### 4.2 Builder
 
@@ -234,7 +241,7 @@ Returns the process-wide Singleton instance. The class is metaclass-based (`sing
 - `logger.warning(msg: str) -> None`
 - `logger.error(msg: str) -> None`
 - `logger.set_console_stream(stream: IO[str]) -> None` — retargets the two console handlers (typing-effect + plain) to the given text-mode stream. Intended for the `--output -` stdout-streaming path (Pillar 2): callers pass `sys.stderr` so progress + banner + typing chatter does not corrupt the CSV bytes piped on stdout. Default users (no `--output -`) never call this; the construction-time default is `sys.stdout`.
-- `logger.set_quiet(quiet: bool) -> None` — toggles a suppression flag on the two console handlers. When `True`, both handlers short-circuit records at INFO and DEBUG level inside `emit`; WARNING and ERROR still surface. Does **not** affect the logger level or the file handlers, so `--debug --quiet` still writes debug records to `logs/activity.log` while keeping the console quiet of informational chatter. Intended for the Pillar 3 `--quiet` flag; default users never call this and the construction-time default is `False`. Spec `docs/features/pipeline-mode-spec.md` §5.3.1.
+- `logger.set_quiet(quiet: bool) -> None` — toggles a suppression flag on the two console handlers. When `True`, both handlers short-circuit records at INFO and DEBUG level inside `emit`; WARNING and ERROR still surface. Does **not** affect the logger level or the file handlers, so `--debug --quiet` still writes debug records to `logs/activity.log` while keeping the console quiet of informational chatter. Intended for the Pillar 3 `--quiet` flag; default users never call this and the construction-time default is `False`. Spec `docs/features/archive/pipeline-mode-spec.md` §5.3.1.
 
 `msg` is a single string. Use f-strings to interpolate; do not pass positional `%` args.
 
@@ -293,7 +300,7 @@ Stable per-run output emitted by `fincli/app/main.py:run_stock_screener` when th
 | Field | Type | Notes |
 |---|---|---|
 | `schema_version` | int | Pinned to `1`. Bump on any breaking schema change (field removed or renamed; field semantics changed). Adding fields is non-breaking and does **not** bump the version. |
-| `exit_code` | int | The same exit code the process is about to return. Pinned to `0` until Pillar 4 (Task 6) introduces classified non-zero codes. |
+| `exit_code` | int | The same exit code the process is about to return. One of the five values in the §1 exit-codes table (`0` SUCCESS / `1` INTERNAL / `2` USAGE / `3` UPSTREAM / `4` DATA). Note that `2` (USAGE) never appears in the summary in practice — Click raises before the orchestrator reaches the summary-emission chokepoint. |
 | `output_path` | str | Absolute path the CSV was written to, or the literal `"-"` for stdout streaming. |
 | `row_count` | int | Number of data rows written (excludes the CSV header). `0` for empty result. |
 | `query_url` | str | The exact Finviz URL fetched (post-filter-build, pre-pagination). On the `--scrape-link` path this is the supplied URL verbatim. |
@@ -350,7 +357,7 @@ def build_config(
 def json_to_tuples(filters_json: str) -> tuple[tuple[str, str], ...]
 ```
 
-**Schema (locked down 2026-05-15, commit landing Pillar 1):** the JSON literal must decode to a **flat object** whose values are all strings. The empty object `{}` is allowed (returns `()` — the no-filters case). Any other shape — top-level array, scalar, or null; nested objects, arrays, numbers, booleans, or null as values — raises `ValueError` (which the CLI translates to `click.UsageError`, exit 2). This is the same shape `filter_history.json` (§4.3) uses; one schema across the system. Single quotes in the input are normalized to double quotes for shell-friendly usage. See `docs/features/pipeline-mode-spec.md` §5.1 step 3 (OQ1 resolution).
+**Schema (locked down 2026-05-15, commit landing Pillar 1):** the JSON literal must decode to a **flat object** whose values are all strings. The empty object `{}` is allowed (returns `()` — the no-filters case). Any other shape — top-level array, scalar, or null; nested objects, arrays, numbers, booleans, or null as values — raises `ValueError` (which the CLI translates to `click.UsageError`, exit 2). This is the same shape `filter_history.json` (§4.3) uses; one schema across the system. Single quotes in the input are normalized to double quotes for shell-friendly usage. See `docs/features/archive/pipeline-mode-spec.md` §5.1 step 3 (OQ1 resolution).
 
 **Compatibility note:** Previously the converter also accepted `[["k","v"]]` lists; that path now raises. Per §7, this is framed as a **conformance fix** (the legacy list-shape path silently fed unvalidated key-value pairs into `quary_builders.build_stock_screener_query`, which then silently dropped unknowns — exactly the silent-corruption failure mode `THESIS.md` Design Principle #2 prohibits) rather than a SemVer-style break. Mirrors the §3.1 / market-cap precedent: tightening an implementation toward the documented contract is a fix, not a redefinition. To be recorded in `docs/FEEDBACK-LOG.md` by Task 6 of the pipeline-mode rollout.
 
@@ -376,7 +383,7 @@ def build_stock_screener_query(
 def convert_market_cap_to_numeric(value: str | None) -> float | pandas.NA
 ```
 
-Carved out of `fincli/app/main.py` (commit `50f46ca`, 2026-05-15) so the parser is directly testable. See §3.1 for the full input/output contract and `docs/features/pipeline-mode-spec.md` §5.5 for the design rationale.
+Carved out of `fincli/app/main.py` (commit `50f46ca`, 2026-05-15) so the parser is directly testable. See §3.1 for the full input/output contract and `docs/features/archive/pipeline-mode-spec.md` §5.5 for the design rationale.
 
 ### 6.7 `fincli/resource/params/validators.py`
 
@@ -389,7 +396,7 @@ def list_valid_filters() -> dict[str, list[str]]
 
 `list_valid_filters` returns the same `{query_key: [value_code, ...]}` inventory the validator walks. Used to power the inline error-message suggestions, and reserved for a future `--help-filters` CLI flag (deferred per spec §9).
 
-Carved out (commit landing Pillar 1, 2026-05-15) per `docs/features/pipeline-mode-spec.md` §5.1 step 5.
+Carved out (commit landing Pillar 1, 2026-05-15) per `docs/features/archive/pipeline-mode-spec.md` §5.1 step 5.
 
 ---
 
@@ -400,10 +407,12 @@ A change is **breaking** if it alters any of:
 - A CLI option name, alias, type, or default.
 - A CLI exit-code convention.
 - A Finviz filter `query_key`, `value_code`, or display name (because `filter_history.json` references these by name).
-- The shape of any CSV column listed in §3 (rename, drop, dtype change).
+- The shape of any CSV column listed in §3 (rename, drop, dtype change, column-order reorder).
 - The `Config` field set in §4.1 (adding new fields with safe defaults is fine; renaming or removing is not).
 - The `logger` Singleton method names in §5.1.
 - Any `def` signature in §6.
+- The `--json-summary` schema in §5.5 — removing or renaming a field, or changing the semantics of an existing field, bumps `schema_version`. Adding new fields is non-breaking.
+- The `OUTPUT_PATH=<value>` stderr discovery-line format (§1, "Output side effects"). The literal prefix is `OUTPUT_PATH=` and the value is either the absolute path or the `-` sentinel; pipeline integrators rely on `tail -n1 stderr | cut -d= -f2-` working unchanged.
 
 When a breaking change is unavoidable:
 

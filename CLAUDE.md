@@ -6,7 +6,7 @@ READING `AGENTS.md` IS MANDATORY.
 
 ## Project Overview
 
-**Fin CLI** is a Python command-line application for stock screening. It is a single-mode tool: an interactive Finviz.com stock screener. The user picks filter values from the standard Finviz vocabulary (P/E, sector, country, RSI, etc.); the tool builds the corresponding Finviz URL, fetches every paginated result page through `cfscrape` (Cloudflare-bypassing HTTPS client), parses the HTML stock table with BeautifulSoup, and writes the result to a timestamped CSV.
+**Fin CLI** is a Python command-line application for stock screening. It is a single-mode tool: a Finviz.com stock screener with two usage shapes that share the same orchestrator — the original interactive picker (Fundamental / Descriptive / Technical filter selection) and a pipeline mode (structured `--filter`/`--filters-json`/`--filters-file` input, deterministic `--output`/`--output -` destination, stream discipline via `--quiet`/`--json-summary`, and differentiated exit codes 0/1/2/3/4). Pipeline mode shipped on 2026-05-16 — see `docs/features/archive/pipeline-mode-spec.md`. The tool builds the corresponding Finviz URL, fetches every paginated result page through `cfscrape` (Cloudflare-bypassing HTTPS client), parses the HTML stock table with BeautifulSoup, and writes the result to a timestamped CSV (or streams it on stdout).
 
 - **Language / runtime**: Python 3.12+
 - **Packaging**: `pyproject.toml` (PEP 621); editable install via `pip install -e ".[dev]"`. Distribution name is `fincli`.
@@ -68,8 +68,11 @@ Full diagram + per-section detail in `ARCHITECTURE.md`.
 
 | File | Purpose |
 |---|---|
-| `fincli/app/cli.py` | Click entry point for the screener |
-| `fincli/app/main.py` | Screener pipeline orchestrator (`run_stock_screener`, `fetch_urls`, `aggregate_rows`, `build_data_frame`, `convert_market_cap_to_numeric`) |
+| `fincli/app/cli.py` | Click entry point for the screener (all 9 options + mutual-exclusion + input normalization + banner gate) |
+| `fincli/app/main.py` | Screener pipeline orchestrator (`run_stock_screener`, `fetch_urls`, `aggregate_rows`, `build_data_frame`, `_emit_run_tail`, `_build_summary`). Wraps the pipeline in a try/except classifier and calls `sys.exit(<code>)` via `fincli.app.exit_codes.classify`. |
+| `fincli/app/exit_codes.py` | Pillar-4 exit-code constants (`SUCCESS=0`/`INTERNAL=1`/`USAGE=2`/`UPSTREAM=3`/`DATA=4`) and the `classify(exc)` function. |
+| `fincli/utils/market_cap.py` | `convert_market_cap_to_numeric(value)` — coerces Finviz `Market Cap` cells to a nullable `Float64` value or `pandas.NA`. Carved out of `fincli/app/main.py` in commit `50f46ca` for direct testability. |
+| `fincli/resource/params/validators.py` | `validate_filter_pairs(pairs)` — strict-validates structured filter input against the Finviz inventory; raises `click.UsageError` (exit 2) on unknown key/value. |
 | `fincli/cli/cli_stock_screener.py` | Interactive filter-selection UI. `prompt_section` displays each filter group (Fundamental / Descriptive / Technical) one at a time with per-section local 1-based numbering; blank input skips a section, out-of-range or non-integer input reprompts. |
 | `fincli/utils/web_scraper.py` | `cfscrape`-based HTTPS fetcher with randomized User-Agent and 10-second timeout |
 | `fincli/utils/quary_builders.py` | Finviz URL construction from filter tuples |
@@ -93,6 +96,8 @@ Full diagram + per-section detail in `ARCHITECTURE.md`.
 | `docs/FEEDBACK-LOG.md` | Append-only log of cross-cutting decisions |
 | `docs/superpowers/specs/` | Chronological per-feature design specs |
 | `docs/refactoring/` | Cross-cutting refactor specs (`<topic>-spec.md`); shipped specs move to `archive/` |
+| `docs/features/` | Feature-restoration / feature-addition specs (`<topic>-spec.md`); shipped specs move to `archive/` |
+| `docs/pendingwork/` | Session handoff docs (`YYYY-MM-DD-session-handoff.md`); historical handoffs move to `archive/` |
 | `.claude/settings.json` | Hook wiring: `SessionStart` -> `load-rules.js`, `PostToolUse:Edit\|Write` -> `post-edit.js`, `Stop` -> `on-stop.js` |
 | `.claude/hooks/load-rules.js` | Auto-injects `_shared-workflow.md`, `preflight.md`, `orchestrator.md` at session start |
 | `.claude/hooks/post-edit.js` | Per-edit lint+format+mypy on the saved file; secret/OWASP scan; doc-update reminders |
@@ -163,8 +168,9 @@ A full reference of all available skills, slash commands, and MCP tools (includi
 
 ## Known Issues / Tech Debt
 
-- **No tests today.** Folder structure exists; bodies arrive in Phase 2.
-- **`mypy strict = true` produces a non-zero day-one error count** because the codebase has almost no type hints. This is intentional — see Phase 4 below. Do not weaken `strict` to silence the count; instead add hints to the file you are editing.
+- **Phase-2 test seed shipped (2026-05-16) — 200+ tests across `tests/unit/` and `tests/integration/`.** Coverage gate (Phase 3) still deferred until the suite stabilizes and the gate's value vs. friction has been measured against the real cadence.
+- **`mypy strict = true` produces a non-zero day-one error count** because the codebase still has many untyped modules. This is intentional — see Phase 4 below. Do not weaken `strict` to silence the count; instead add hints to the file you are editing. The pipeline-mode rollout drove typing-coverage up across `fincli/app/`, `fincli/utils/market_cap.py`, `fincli/resource/params/validators.py`, `core/converters/json.py`, and `logger/`; legacy modules (BS4 parsers, web scraper, query builder) still lag.
+- **`Logger.error(title, message="")` parameter order is flipped** relative to `debug` / `info` / `warn` (which are `(message, title="")`). Pre-existing footgun documented in `docs/MODULE_REFERENCE.md`. Use the documented order; do not "fix" it because every existing caller relies on the flipped shape.
 
 ## Phase Status
 

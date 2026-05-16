@@ -16,31 +16,63 @@ When tests do land, they should:
 
 ## Layout
 
+Actual layout as of the 2026-05-16 pipeline-mode shipping cycle:
+
 ```
 tests/
-  conftest.py                          # shared pytest fixtures (Phase 2)
   unit/                                # function-level: per-function in isolation
-    conftest.py
-    test_market_cap_conversion.py      # convert_market_cap_to_numeric
-    test_query_builder.py              # build_stock_screener_query
-    test_json_to_tuples.py             # json_to_tuples
-    test_config.py                     # Config + build_config
-  domain/                              # module-level: per-module behavior
-    conftest.py
-    test_screening_pipeline.py         # fincli main: query -> fetch (mocked) -> parse -> DataFrame
-    test_configurator_history.py       # filter_history.json round-trip
-  e2e/                                 # CLI-level: invoke `python -m fincli` with fixtures
-    conftest.py
+    app/
+      test_cli.py                      # back-compat regression seed (Task 1)
+      test_cli_output.py               # --output / -o option parsing
+      test_cli_pipeline.py             # structured input options (Pillar 1)
+      test_exit_codes.py               # classify() per exception family
+    cli/
+      test_cli_stock_screener.py       # interactive picker + writeback fix
+    configuration/
+      test_configurator_filters.py     # build_config(filters=...) wiring
+      test_output_path.py              # Config.file_path precedence + env var
+    converters/
+      test_json_to_tuples.py           # strict dict-only schema
+    logger/
+      test_stream_routing.py           # set_console_stream / set_quiet
+    resource/params/
+      test_validators.py               # unknown key/value rejection
+    utils/
+      test_market_cap.py               # convert_market_cap_to_numeric contract
+  integration/                         # CLI-level: invoke run_main with mocked fetch
+    _fixtures_loader.py                # shared loader for canned HTML
     fixtures/
-      finviz_sample.html               # recorded Finviz HTML
-    test_fincli_invocation.py
+      finviz_happy.html                # one valid row
+      finviz_empty.html                # table present, no rows
+      finviz_no_table.html             # missing table element
+      finviz_malformed_row.html        # row without link anchor (-> DATA exit 4)
+    test_pipeline_streaming.py         # --output - stream discipline
+    test_pipeline_summary.py           # --json-summary schema
+    test_pipeline_ticker_carveout.py   # Ticker/Symbol carve-out (spec §5.6)
+    test_pipeline_exit_codes.py        # end-to-end classifier (exit 3, 4, 1)
+    test_zero_row_success.py           # header-only CSV on zero-row result
 ```
 
-The three layers map to scope, not to "more important / less important":
+No `__init__.py` files anywhere under `tests/` (deliberate — keeps pytest's
+rootdir-based test collection working). The integration suite's shared
+helper module is `tests/integration/_fixtures_loader.py` (leading
+underscore so pytest does not collect it as a test module). Tests import
+it directly as `from _fixtures_loader import finviz_happy_html` —
+relies on pytest putting each test file's parent directory on
+`sys.path` when no package marker is present.
 
-- **Unit** — one function, no I/O, no DataFrame fan-out unless the function itself manipulates DataFrames.
-- **Domain** — one module's pipeline, with external services mocked at their I/O boundary. Real pandas, real Pydantic, real logger.
-- **E2E** — the CLI as a black box. `python -m fincli` runs against fixture files served by a stand-in HTTP layer; assertions are made against the produced CSV.
+The Phase-2-era three-layer plan (unit / domain / e2e) collapsed during
+the pipeline-mode rollout into the two-layer **unit + integration**
+shape above:
+
+- **Unit** — one function or one module's public surface in isolation. No
+  HTTP, no real CSV writes (use `tmp_path` when filesystem assertions
+  are required). Real pandas, real Pydantic, real Singleton logger.
+- **Integration** — drives the full Click entry point via Click's
+  `CliRunner`. ``fincli.utils.web_scraper.fetch_page_sync`` is mocked at
+  the orchestrator boundary so no real HTTP fires. CSV writes go to
+  `tmp_path`-provided directories; stdout streaming is captured via
+  `CliRunner`'s `Result.stdout` / `result.stderr` separation (Click 8.2+).
 
 ## Running Tests
 
@@ -104,8 +136,28 @@ Fixture rules of thumb:
 
 ### What to mock
 
-- **`cfscrape.create_scraper()`** — never make real HTTP calls in unit/domain tests. Use the [`responses`](https://github.com/getsentry/responses) library or [`vcrpy`](https://vcrpy.readthedocs.io) (recorded interactions) at the I/O boundary. Both are well-suited; pick one in Phase 2 and use it consistently.
+- **`fincli.utils.web_scraper.fetch_page_sync`** — the seam for the integration suite. Patch with `unittest.mock.patch("fincli.app.main.fetch_page_sync", ...)` (patch the import site, since the orchestrator imports `fetch_page_sync` at module-load time). Either `side_effect=` for raising-exception scenarios (UPSTREAM tests) or `return_value=<canned-html-bytes>` for happy/zero-row/parse-failure scenarios. `cfscrape.create_scraper()` is **never** invoked in tests as a consequence — the seam is one layer up.
 - **Filesystem writes for CSV** — use the `tmp_path` fixture (built into pytest) so each test gets an isolated temp directory.
+
+### Pipeline mode tests
+
+The pipeline-mode shipping cycle introduced the `tests/integration/` directory and a shared canned-HTML fixture set under `tests/integration/fixtures/`. The integration tests are CliRunner-driven end-to-end runs through the full Click entry point with `fetch_page_sync` mocked at the orchestrator boundary; assertions target `result.stdout` / `result.stderr` / `result.exit_code` / the contents of the file written under `tmp_path`.
+
+Four canned HTML fixtures exist (loaded via `tests/integration/_fixtures_loader.py`):
+
+| Fixture | Purpose |
+|---|---|
+| `finviz_happy.html` | One valid row with a working link anchor — drives the happy-path tests. |
+| `finviz_empty.html` | Table present, empty `<tbody>` — drives the zero-row success branch (header-only CSV, exit 0). |
+| `finviz_no_table.html` | Page without the screener table element — `all_table_content` returns empty list. |
+| `finviz_malformed_row.html` | Row with a non-anchor cell where the parser expects `<a href=...>` — drives the DATA classifier (exit 4 via `AttributeError`). |
+
+To add a new pipeline-mode integration test:
+
+1. Add the fixture file under `tests/integration/fixtures/` if a new HTML shape is needed.
+2. Add a loader function in `tests/integration/_fixtures_loader.py` matching the existing pattern.
+3. Write the test in a new or existing `test_pipeline_*.py` file under `tests/integration/`. Use `CliRunner().invoke(run_main, [...], catch_exceptions=False)`.
+4. Assert on `result.exit_code` (using constants from `fincli.app.exit_codes`, not hardcoded integers), `result.stdout`, `result.stderr`, and `tmp_path` contents.
 
 ### What NOT to mock
 

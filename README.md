@@ -52,6 +52,39 @@ run.bat         # Windows
 
 > If you installed the project before the `[project.scripts]` entry point was added, re-run `pip install -e ".[dev]"` once so the bare `fincli` command lands on PATH. The launchers (`./run.sh`, `run.bat`) keep working unchanged because they invoke `python -m fincli` internally.
 
+### Pipeline mode
+
+`fincli` is also a single-shot building block for downstream automation. Structured filter input, deterministic output destination, stream discipline, and differentiated exit codes (0/1/2/3/4) compose orthogonally; the interactive flow above is unchanged when none of these flags are set.
+
+```bash
+# Stream CSV to stdout, pipe to jq via the JSON summary on stderr
+fincli --filter fa_pe=u20 --filter sec=energy --output - | head
+
+# Write to an exact path (no timestamp; overwrites if file exists)
+fincli --filters-json '{"fa_pe":"u20"}' --output ./out.csv --quiet --json-summary
+
+# Read filters from a JSON file; emit JSON summary on stdout for jq
+fincli --filters-file ./filters.json --output ./out.csv --quiet --json-summary | jq '.row_count'
+
+# Override the default workspace_output/ parent via env var
+FINCLI_OUTPUT_DIR=/tmp/screener fincli --filter fa_pe=u20
+
+# Recover the destination from stderr without parsing the JSON summary
+fincli --filter fa_pe=u20 --output ./out.csv 2> /tmp/log
+tail -n1 /tmp/log | cut -d= -f2-     # -> /abs/path/to/out.csv
+```
+
+| Surface | Behavior |
+|---|---|
+| `--filter K=V` (repeatable), `--filters-json`, `--filters-file` | Non-interactive filter input. Mutually exclusive with `--history` / `--scrape-link`. Unknown key/value -> exit 2. |
+| `--output PATH` / `-o PATH` | Exact destination; parent dir must exist; no timestamp; overwrites. |
+| `--output -` | Stream CSV to stdout. Stdout contains only CSV bytes; banner/progress/errors go to stderr. `Ticker` column is the raw symbol (not `=HYPERLINK(...)`). |
+| `FINCLI_OUTPUT_DIR=<dir>` | Parent-dir override for the default timestamped filename. Loses to `--output PATH`. |
+| `--quiet` / `-q` | Suppress banner + INFO/DEBUG console lines. Warnings/errors still emit. |
+| `--json-summary` | Single-line JSON summary at end of run; schema in CONTRACTS §5.5. |
+
+Exit codes (full table in CONTRACTS §1): `0` SUCCESS, `1` INTERNAL, `2` USAGE, `3` UPSTREAM, `4` DATA. Zero-row results stay exit 0 and write a header-only CSV.
+
 ### Output
 
 Results land in `workspace_output/` as a timestamped CSV named by `Config.file_path`:
@@ -86,11 +119,12 @@ The full data-shape contract — every Click option, every CSV column, every Pyd
 ```bash
 pytest tests/
 pytest tests/unit/
+pytest tests/integration/
 pytest -k "<pattern>"
 pytest --cov=fincli --cov=core --cov=config
 ```
 
-> **Note:** the `tests/` folder structure exists, but test bodies are introduced in **Phase 2** of the agent-harness rollout. As of this commit there are no tests. The `pytest` command above runs cleanly because there is nothing to fail — adding behavior validation is queued and intentional.
+The Phase-2 test suite seed landed with the pipeline-mode rollout (2026-05-16): 200+ tests under `tests/unit/` (per-function: market_cap, json_to_tuples, validators, output_path, stream routing, CLI option parsing, exit-codes classifier) and `tests/integration/` (CliRunner-driven end-to-end with `fincli.utils.web_scraper.fetch_page_sync` mocked against canned HTML fixtures under `tests/integration/fixtures/`). Coverage is informational in Phase 1; the 90% gate enables in Phase 3 (see `TESTING.md`).
 
 Lint, format, type-check:
 
@@ -112,7 +146,7 @@ fin_cli/
   logger/              # Singleton logger (typing console + plain console + JSON file)
   tests/               # unit/ domain/ e2e/ — bodies arrive in Phase 2
   workspace_output/    # CSV results (gitignored)
-  docs/                # THESIS.md, MODULE_REFERENCE.md, FEEDBACK-LOG.md, specs
+  docs/                # THESIS.md, MODULE_REFERENCE.md, FEEDBACK-LOG.md, specs, features, pendingwork
   agents/              # AI-agent rules + role files
   .claude/             # Claude Code harness (settings + hooks)
   pyproject.toml
