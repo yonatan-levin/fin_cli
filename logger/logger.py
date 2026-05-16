@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Any, Optional
+from typing import IO, TYPE_CHECKING, Any
 
 from colorama import Fore
 
@@ -78,7 +78,7 @@ class Logger(metaclass=Singleton):
         self.json_logger.addHandler(error_handler)
         self.json_logger.setLevel(logging.DEBUG)
 
-        self._config: Optional[Config] = None
+        self._config: Config | None = None
         self.chat_plugins = []
 
     @property
@@ -123,9 +123,8 @@ class Logger(metaclass=Singleton):
         message: str = "",
         level: int = logging.INFO,
     ) -> None:
-        if message:
-            if isinstance(message, list):
-                message = " ".join(message)
+        if message and isinstance(message, list):
+            message = " ".join(message)
         self.logger.log(level, message, extra={"title": str(title), "color": str(title_color)})
 
     def set_level(self, level: logging._Level) -> None:
@@ -181,9 +180,9 @@ class Logger(metaclass=Singleton):
         self.typing_console_handler.quiet = quiet
         self.console_handler.quiet = quiet
 
-    def double_check(self, additionalText: Optional[str] = None) -> None:
-        if not additionalText:
-            additionalText = (
+    def double_check(self, additional_text: str | None = None) -> None:
+        if not additional_text:
+            additional_text = (
                 "Please ensure you've setup and configured everything"
                 " correctly. Read https://github.com/Torantulino/Auto-GPT#readme to "
                 "double check. You can also create a github issue or join the discord"

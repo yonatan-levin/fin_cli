@@ -25,14 +25,14 @@ The schema fields (per spec §5.3.4):
 
 from __future__ import annotations
 
+import contextlib
 import json
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
-from click.testing import CliRunner
-
 from _fixtures_loader import finviz_happy_html
+from click.testing import CliRunner
 
 from fincli.app.cli import run_main
 from fincli.app.main import (
@@ -137,10 +137,8 @@ def test_summary_with_file_output_exactly_one_json_line_on_stdout(tmp_path: Path
     for line in result.stdout.splitlines():
         stripped = line.strip()
         if stripped.startswith("{"):
-            try:
+            with contextlib.suppress(json.JSONDecodeError):
                 json_lines.append(json.loads(stripped))
-            except json.JSONDecodeError:
-                pass
     assert len(json_lines) == 1, (
         f"Expected exactly one JSON summary line on stdout; got {len(json_lines)}"
     )

@@ -18,7 +18,7 @@ class StockTableScreenerParser:
         """
         Returns the table rows with the class "table-light is-new".
         """
-        data_rows = self.html_content.find_all('tr', valign="top")
+        data_rows = self.html_content.find_all("tr", valign="top")
 
         return data_rows
 
@@ -29,7 +29,7 @@ class StockTableScreenerParser:
         """
         data = []
         for row in self.table_rows:
-            cells = row.find_all('td')
+            cells = row.find_all("td")
             row_data = [cell.get_text(strip=True) for cell in cells]
             row_data.insert(len(row_data), self.ticker_link(cells))
             data.append(row_data)
@@ -40,6 +40,6 @@ class StockTableScreenerParser:
         """
         Returns the ticker link.
         """
-        link = cells[1].find('a').get('href')
+        link = cells[1].find("a").get("href")
         link = BASE_URL + link  # type: ignore
         return link

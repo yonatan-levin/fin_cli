@@ -61,7 +61,7 @@ def build_config(
         config.use_history = use_history
 
         filepath = config.history_dir / "filter_history.json"
-        with open(filepath, "r") as f:
+        with open(filepath) as f:
             history_filters = json.load(f)
             config.filters = tuple(history_filters.items())
 

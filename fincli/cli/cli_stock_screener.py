@@ -69,13 +69,13 @@ def select_filters_and_values(config: Config):
         filepath = Path(config.history_dir) / _HISTORY_FILENAME
         click.echo(f"Fetching user history from filter_history.json {filepath}")
 
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             selected_values_and_filters = json.load(f)
 
         query = build_stock_screener_query(selected_values_and_filters.items())
         return query
 
-    options, queryOptions = extract_dict_options([fp, dp, tp])
+    options, query_options = extract_dict_options([fp, dp, tp])
     click.echo(
         "Available filters (each section is shown one at a time; press Enter to skip a section):"
     )
@@ -86,7 +86,7 @@ def select_filters_and_values(config: Config):
     selected_filters_indices += prompt_section(tp, options, "Technical Params", color="red")
 
     # Select filter values
-    selected_values = select_values(selected_filters_indices, queryOptions)
+    selected_values = select_values(selected_filters_indices, query_options)
 
     # Persist on every interactive run that produced a non-empty selection,
     # regardless of `use_history`. (The pre-Pillar-1 code gated this on
@@ -100,22 +100,20 @@ def select_filters_and_values(config: Config):
 
 
 def extract_dict_options(classes):
-    options, queryOptions = {}, {}
+    options, query_options = {}, {}
 
     for cls in classes:
         for attr_name, attr_value in vars(cls).items():
             if isinstance(attr_value, list) and not attr_name.startswith("__"):
-                queryOptions[attr_name] = attr_value[0]
+                query_options[attr_name] = attr_value[0]
                 options[attr_name] = attr_value[1]
-    return options, queryOptions
+    return options, query_options
 
 
 def prompt_section(options_group, options, title, color="blue"):
     click.echo(click.style(f"\nAvailable filters for {title}:"))
 
-    grouped_keys = [
-        filter_key for filter_key in options.keys() if filter_key in vars(options_group)
-    ]
+    grouped_keys = [filter_key for filter_key in options if filter_key in vars(options_group)]
 
     if not grouped_keys:
         return []
@@ -163,7 +161,7 @@ def prompt_section(options_group, options, title, color="blue"):
         return [{grouped_keys[n - 1]: options[grouped_keys[n - 1]]} for n in parsed]
 
 
-def select_values(selected_filters, queryOptions):
+def select_values(selected_filters, query_options):
     selected_values = {}
 
     for filter_dict in selected_filters:
@@ -184,5 +182,5 @@ def select_values(selected_filters, queryOptions):
                 )
                 - 1
             )
-            selected_values[queryOptions[filter_outer_key]] = items_list[value_idx][0]
+            selected_values[query_options[filter_outer_key]] = items_list[value_idx][0]
     return selected_values

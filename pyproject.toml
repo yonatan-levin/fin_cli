@@ -48,6 +48,17 @@ extend-exclude = [
 select = ["E", "F", "W", "I", "B", "UP", "N", "SIM"]
 ignore = []
 
+[tool.ruff.lint.per-file-ignores]
+# Finviz filter inventory: `Fundamental_Params`, `Descriptive_Params`, and
+# `Technical_Params` are public-API class names referenced by validators,
+# query builders, tests, and the CONTRACTS §2.1 documentation. The mixed
+# PascalCase + underscore style mirrors the Finviz vocabulary they wrap
+# (`fa_pe`, `sec`, `ta_rsi14`) and is documented in CONTRACTS §2. Renaming
+# would be a breaking change per CONTRACTS §7.
+"fincli/resource/params/fundamental_params.py" = ["N801"]
+"fincli/resource/params/descriptive_params.py" = ["N801"]
+"fincli/resource/params/technical_params.py" = ["N801"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"

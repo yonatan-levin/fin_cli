@@ -249,11 +249,7 @@ def _build_summary(
     # Build the ``filters`` payload. ``config.filters`` is a tuple of
     # ``(key, value)`` pairs after ``json_to_tuples``; for the
     # ``--scrape-link`` path no filter resolution happened, so emit ``null``.
-    filters_payload: dict[str, str] | None
-    if scrape_link:
-        filters_payload = None
-    else:
-        filters_payload = dict(config_filters)
+    filters_payload: dict[str, str] | None = None if scrape_link else dict(config_filters)
 
     return {
         "schema_version": JSON_SUMMARY_SCHEMA_VERSION,
