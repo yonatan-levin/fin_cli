@@ -1,0 +1,1025 @@
+==============================================================================
+ARCH conversation transcript — Fincli-Only Refactor
+Date:    2026-05-04
+Author:  ARCH (formalization of brainstorm decisions made by user + orchestrator)
+Phase:   /plan-and-create Phase 1 (architecture spec)
+==============================================================================
+
+------------------------------------------------------------------------------
+SECTION 1 — Inputs received
+------------------------------------------------------------------------------
+
+The orchestrating Claude Code instance + the human user (Yonatan) had already
+brainstormed this refactor and reached approval on every meaningful decision
+before dispatching ARCH. ARCH was asked to FORMALIZE the brainstorm into a
+Markdown design spec — not redesign, not scope-creep, not renegotiate.
+
+Approved decisions provided in the dispatch prompt:
+
+  Q1 — Scope of removal: Option A (smallest layer cut)
+    DELETE: fundainsight/, wisdom_fruit/, shared/, example/, src/, benchmarks/
+    KEEP:   fincli/, core/, config/, logger/, singleton.py, agents/, docs/,
+            .claude/, all top-level docs
+
+  Q2 — Project metadata: Option B (honest metadata, no new entry-point)
+    pyproject.toml:    rename "finscrape" -> "fincli";
+                       drop "yahooquery" from dependencies;
+                       drop "fundainsight" from [tool.mypy] files;
+                       prune now-redundant entries from
+                         [tool.ruff] extend-exclude.
+    requirements.txt:  drop the yahooquery line; preserve urllib3<2.
+    No [project.scripts] entry-point added — captured as future-work spec.
+
+  Q3 — Top-level doc rewrites: Option B (full single-mode rewrite)
+    All listed top-level + docs/ files rewritten as if writing fresh for a
+    single-mode CLI. FEEDBACK-LOG.md is append-only; one new dated entry only.
+    CLAUDE.md Phase Status table — Phase 2 body changes; Phases 3 & 4 stay.
+    CLAUDE.md Tech Debt — drop the adjust_assets entry; rewrite the history
+    path entry to point at the new follow-up spec.
+
+  Sub-decision A — harness rollout spec: banner only.
+    docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md
+    gets exactly one banner line under the title; body left intact.
+
+  Q4 — Configurator history-path fix: Option A (literal swap).
+    core/configuration/configurator.py:17 — replace 'fundainsight' with
+    'fincli'. Deeper Config-driven fix captured as a follow-up spec.
+
+  Two follow-up specs go under docs/refactoring/:
+    cli-entry-point-spec.md
+    history-path-config-spec.md
+  Both are deliverables of the BACKEND implementer, not of ARCH.
+
+  Settled commit ordering (load-bearing):
+    1. Delete abandoned scaffolds + remove their extend-exclude entries.
+    2. Fix configurator.py:17 BEFORE deleting fundainsight/.
+    3. Delete fundainsight/ + drop fundainsight from mypy files +
+       drop yahooquery from pyproject.toml deps + requirements.txt.
+    4. Rename package: finscrape -> fincli in pyproject.toml.
+    5. Edit launchers + audit .gitignore.
+    6. Top-level + docs/ rewrite.
+    7. agents/rules/ + agents/roles/ rewrite + harness rollout spec banner.
+    8. Append entry to docs/FEEDBACK-LOG.md.
+    9. Add the two follow-up specs at docs/refactoring/.
+
+  Settled verification checklist provided verbatim in the dispatch prompt
+  and lifted directly into the spec at §7.2.
+
+  Hard constraints provided:
+    - No Python source code edits by ARCH.
+    - No file deletions by ARCH.
+    - No creation of the two follow-up specs by ARCH.
+    - No modification of the harness rollout spec by ARCH.
+    - No modification of the docs whose rewrites are described.
+
+------------------------------------------------------------------------------
+SECTION 2 — Files read for grounding
+------------------------------------------------------------------------------
+
+Read tool calls (grounding before drafting):
+  - AGENTS.md
+  - agents/roles/code-architect.md         (ARCH role file)
+  - agents/rules/_shared-workflow.md
+  - ARCHITECTURE.md
+  - CONTRACTS.md
+  - TESTING.md
+  - pyproject.toml
+  - requirements.txt
+  - core/configuration/configurator.py     (the one-line-change file)
+  - docs/refactoring/README.md             (follow-up spec naming convention)
+  - docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md
+    (head section, to confirm where the banner lands)
+
+Directory listings:
+  - docs/superpowers/specs/   — only the 2026-05-02 harness spec exists today.
+  - docs/refactoring/         — README.md + archive/ subdir. No specs yet,
+                                so the two follow-up files do not pre-exist.
+
+CLAUDE.md was provided in the system prompt (system-reminder, "claudeMd"
+section); ARCH read it from there and did not re-read from disk.
+
+------------------------------------------------------------------------------
+SECTION 3 — Contradictions / gaps flagged
+------------------------------------------------------------------------------
+
+NO CONTRADICTIONS FOUND.
+
+All decisions in the dispatch prompt are mutually consistent. The commit
+ordering correctly addresses the one non-obvious sequencing trap (configurator
+fix MUST precede fundainsight/ deletion to avoid a transient FileNotFoundError
+on `fincli --history` in any intermediate snapshot). Q3 = Option B (full
+rewrite) is consistent with the surgical CLAUDE.md updates in §6.3 — the
+rewrite is the substrate; the surgical updates are explicit deltas the
+implementer must hit on top of the rewrite.
+
+Two minor items were noted but did NOT rise to the level of blocking
+contradictions; they are documented inside the spec as Assumptions:
+
+  - A2: Hooks were grepped before the spec was written; no hardcoded
+    "fundainsight" string. The implementer re-verifies post-deletion as
+    Risk R3's mitigation.
+
+  - A4: If CLAUDE.md's "history path" tech-debt entry has already been edited
+    or removed by another in-flight commit before this refactor lands, the
+    implementer surfaces back to ARCH before applying the §6.3 rewrite. This
+    is a defensive note, not a known conflict.
+
+The grep verification rule was treated as part of acceptance, not as a
+contradiction, even though it allows EXACTLY ONE residual `fundainsight`
+match — the banner line on the harness rollout spec. That is by design and
+captured at §7.2 of the spec.
+
+------------------------------------------------------------------------------
+SECTION 4 — Deliverables produced
+------------------------------------------------------------------------------
+
+DELIVERABLE 1 — Spec file:
+  Path:  docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md
+  Size:  ~13 KB Markdown
+  Sections:
+    1.  Summary
+    2.  Requirements (Goals / Non-Goals / Constraints / Success Criteria)
+    3.  Architecture (deletion table, edit table, new-files, NOT-touched list)
+    4.  API Contracts (CLI, internal, config, history JSON)
+    5.  Tasks by Agent (BACKEND ordered commits, no FRONTEND/UX_UI/QA design)
+    6.  Spec Updates (per-doc rewrite deltas, surgical CLAUDE.md updates,
+        append-only FEEDBACK-LOG entry, banner exact text, follow-up specs)
+    7.  Sequencing & Verification (commit ordering, verification checklist)
+    8.  Tests (no new bodies — operational verification only)
+    9.  Risks & Mitigations (R1 link breakage, R2 install cache, R3 hooks)
+    10. Acceptance Criteria
+    11. Assumptions and Open Questions
+    12. Next Steps
+
+DELIVERABLE 2 — This conversation transcript:
+  Path:  arch-conversation-fincli-only-refactor.txt    (repo root)
+  Plain text. Mirrors spec content + ARCH reasoning + handoff notes.
+
+------------------------------------------------------------------------------
+SECTION 5 — Plain-text mirror of the spec
+------------------------------------------------------------------------------
+
+(Mirror — see the spec file for canonical Markdown rendering. This is the
+substantive content in plaintext for offline review.)
+
+##### 1. SUMMARY
+
+Reduce algo_beta to a single-mode CLI: just the Finviz screener under
+fincli/. fundainsight/ and all abandoned scaffolds are removed. Shared
+infra (core/, config/, logger/, singleton.py) and the agent harness
+(agents/, .claude/, docs/) are preserved. Top-level docs are rewritten in
+full as if algo_beta had always been single-mode. One load-bearing one-line
+code fix is required (configurator.py:17 'fundainsight' -> 'fincli'),
+which must land BEFORE fundainsight/ is deleted.
+
+##### 2. REQUIREMENTS
+
+Goals (G1-G6):
+  G1 algo_beta builds, installs, runs `python -m fincli` end-to-end after
+     refactor with no fundainsight/yahooquery references in source, config,
+     or docs.
+  G2 fincli --history reads/writes fincli/local_history/filter_history.json.
+  G3 Honest project metadata (pyproject name = "fincli", no yahooquery).
+  G4 Top-level documentation reads as fresh single-mode CLI spec.
+  G5 Agent harness fully retargeted to single-mode reality. Harness rollout
+     spec preserved with one-line banner.
+  G6 Two follow-up specs at docs/refactoring/ capture deferred work.
+
+Non-Goals (N1-N7):
+  N1 No [project.scripts] entry-point.
+  N2 No Config-driven history path.
+  N3 No pytest test bodies (Phase 2 owns that, scope retargeted).
+  N4 No other source code edits.
+  N5 No urllib3 bump past 2.x.
+  N6 No body edit on harness rollout spec.
+  N7 No release / version bump.
+
+Constraints:
+  - Commit ordering is load-bearing.
+  - FEEDBACK-LOG.md is append-only.
+  - CLAUDE.md Phase Status & Tech Debt require surgical deltas.
+  - grep -r "fundainsight" / "yahooquery" outcomes are part of acceptance.
+  - No public CLI surface change for fincli; fundainsight CLI removed
+    entirely.
+
+Success criteria checklist: per §2.4 of the spec — 10 checkboxes covering
+the runtime smoke checks, lint, type-check, install, and grep residuals.
+
+##### 3. ARCHITECTURE
+
+This is a deletion-and-rewrite refactor. The remaining architecture is the
+unchanged single-mode pipeline:
+  End User -> Click CLI (fincli/app/cli.py) -> Orchestration (fincli/app/main.py)
+  -> Screener pipeline (cfscrape + BS4) -> Finviz.com.
+Cross-cutting unchanged: core/configuration/, config/config.py, logger/,
+singleton.py.
+
+Deletion table (with "Deleted because" column):
+  fundainsight/   — out-of-scope product; user is reducing to screener.
+  wisdom_fruit/   — experimental, abandoned; never on runtime path.
+  shared/         — empty scaffold from prior reorganization.
+  example/        — empty scaffold from prior reorganization.
+  src/            — empty scaffold (specifically src/finpack/).
+  benchmarks/     — empty scaffold; not on runtime path.
+
+Edit table (code & metadata only):
+  core/configuration/configurator.py:17  'fundainsight' -> 'fincli'
+  pyproject.toml [project] name           "finscrape" -> "fincli"
+  pyproject.toml [project] dependencies   remove "yahooquery"
+  pyproject.toml [tool.mypy] files        remove "fundainsight"
+  pyproject.toml [tool.ruff] extend-excl  remove wisdom_fruit/shared/example/
+                                          src/benchmarks
+  requirements.txt                        remove yahooquery line
+  run.sh, run.bat                         simplified to fincli-only
+  .gitignore                              audit fundainsight-only entries
+
+New files (created during implementation, not by ARCH):
+  docs/refactoring/cli-entry-point-spec.md
+  docs/refactoring/history-path-config-spec.md
+
+Files NOT touched: all of fincli/ source; core/ except the one-line fix;
+config/, logger/, singleton.py; .claude/hooks/ JS; .claude/settings.json;
+the harness rollout spec body; FEEDBACK-LOG past entries; tests/ structure;
+scripts/.
+
+##### 4. API CONTRACTS
+
+  fincli — public CLI surface unchanged (same flags, same exit codes,
+           same CSV schema).
+  fundainsight — public CLI surface REMOVED ENTIRELY. No migration offered.
+  build_config(...) — signature unchanged; only internal directory string
+                      change. Not part of any public API.
+  Config Pydantic model — fields unchanged.
+  filter_history.json — schema unchanged; only path location changes.
+
+##### 5. TASKS BY AGENT
+
+BACKEND, ordered commits (per settled ordering):
+  1. Delete scaffolds + ruff extend-exclude prune.
+  2. Configurator one-liner BEFORE fundainsight/ deletion.
+  3. Delete fundainsight/ + drop yahooquery + drop fundainsight from mypy.
+  4. Rename project finscrape -> fincli.
+  5. Simplify launchers + audit .gitignore.
+  6. Top-level + docs/ rewrite (may be split if size warrants).
+  7. agents/ rewrite + harness rollout spec banner.
+  8. Append FEEDBACK-LOG entry.
+  9. Add the two follow-up specs.
+
+FRONTEND, UX_UI: not invoked.
+QA: post-implementation; validates §8 checklist + acceptance criteria.
+REVIEWER: post-implementation; per §5.4 attention points.
+
+##### 6. SPEC UPDATES
+
+Files rewritten in full per Q3 = Option B:
+  README.md, ARCHITECTURE.md, CLAUDE.md, CONTRACTS.md, TESTING.md, AGENTS.md,
+  TOOLS_REFERENCE.md, docs/MODULE_REFERENCE.md, docs/THESIS.md.
+
+Append-only edits:
+  docs/FEEDBACK-LOG.md — one new entry dated 2026-05-04. Past entries
+                         untouched.
+
+Surgical updates inside CLAUDE.md:
+  Phase Status Phase 2 body — fincli/stock_screening/ + screener pipeline
+                              (no fundainsight/yahooquery).
+  Tech Debt — drop adjust_assets entry; rewrite history path entry to
+              cite the new follow-up spec.
+
+agents/ retargeting — full rewrite of all 5 rules + 8 roles to remove
+                      fundainsight/yahooquery/ThreadPoolExecutor refs.
+                      Examples re-anchored to fincli (e.g. convert_market
+                      _cap_to_numeric).
+
+Harness rollout spec banner (sub-decision A) — exact text:
+  "**Note (2026-05-04):** Phase-2 scope in this spec referenced
+   `fundainsight`. That module has since been removed. See
+   `docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md`;
+   future Phase-2 work targets `fincli`'s test suite only."
+Body left intact.
+
+Two new follow-up specs created during Commit 9 — content shape per
+docs/refactoring/README.md (<topic>-spec.md naming).
+
+##### 7. SEQUENCING & VERIFICATION
+
+(Commit ordering and verification checklist lifted verbatim from the
+dispatch prompt — see §7.1 and §7.2 of the spec for the canonical tables.)
+
+##### 8. TESTS
+
+No new test bodies. Verification is operational (CLI smoke tests, lint,
+type-check, grep-based residual checks). Phase 2 owns introducing pytest
+test bodies, scope retargeted to fincli/stock_screening/. Coverage gate
+deferred to Phase 3. mypy advisory in Phase 1.
+
+##### 9. RISKS & MITIGATIONS
+
+R1 — Doc cross-link breakage. Mitigated by grep + reviewer link spot-check.
+R2 — pip install -e . cache on existing dev environments. Mitigated by
+     clean-venv reinstall step in §7.2; documented in new README.
+R3 — Harness hooks hardcoding fundainsight. Pre-grepped clean; implementer
+     re-greps post-deletion as final check.
+
+##### 10. ACCEPTANCE CRITERIA
+
+8 categories (Behavior, Project metadata, Filesystem, Tooling,
+Documentation, Harness retargeting, Follow-ups, Residuals) — see §10
+of the spec for the canonical list.
+
+##### 11. ASSUMPTIONS & OPEN QUESTIONS
+
+5 assumptions (A1-A5). 0 blocking questions. 2 non-blocking deferred to
+follow-up specs.
+
+##### 12. NEXT STEPS
+
+HUMAN reviews -> BACKEND executes -> VERIFIER validates -> REVIEWER
+attention points -> QA acceptance -> HUMAN closes.
+
+------------------------------------------------------------------------------
+SECTION 6 — Handoff notes for the BACKEND implementer
+------------------------------------------------------------------------------
+
+These notes are reasoning the spec doesn't carry — narrative guidance for
+the implementer that complements the formal contract.
+
+1. THE ONE-LINER IS THE WHOLE GAME, FOR ORDERING PURPOSES.
+
+   Steps 1, 4, 5, 6, 7, 8, 9 of the commit ordering can be reordered among
+   themselves with no functional consequence. Steps 2 and 3 cannot. The
+   reason is concrete: between the deletion of fundainsight/ and the
+   configurator fix, `python -m fincli --history` would attempt to read
+   `os.path.realpath('fundainsight')/local_history/filter_history.json` —
+   a path that no longer exists — and raise FileNotFoundError at the user.
+   Even if no automated check catches that intermediate state, a developer
+   on the branch running `fincli --history` would hit a regression they
+   can't easily diagnose. The configurator fix lands FIRST.
+
+2. RESIST THE URGE TO BUNDLE.
+
+   The tempting move is "do the fundainsight/ deletion + configurator fix
+   in one commit, since they belong together conceptually." Don't. The
+   commits are split deliberately so the configurator fix is a recoverable,
+   bisectable, behavior-preserving point in history. If post-deletion
+   something breaks and the fix turns out to need refinement, you want a
+   commit that pins the fix in isolation.
+
+3. THE Q3 = OPTION B REWRITE IS NOT OPTIONAL OR PARTIAL.
+
+   When you reach commit 6, do not surgically edit ARCHITECTURE.md to
+   delete the fundainsight section and call it done. The user explicitly
+   chose Option B (full rewrite) because the reading experience matters:
+   a future contributor opening ARCHITECTURE.md should see a coherent
+   single-mode CLI architecture, not a two-mode doc with one mode
+   excised. Rewriting is more work than redacting; redaction is the
+   trap. Take the rewrite.
+
+4. THE BANNER IS LITERALLY ONE LINE.
+
+   The harness rollout spec banner (§6.5) is exactly one Markdown line
+   under the existing title heading. Not a section. Not a header. One
+   blockquote line. Body of the spec is HISTORICAL RECORD and stays.
+   Resist any urge to "clean up" Phase-2 wording in the body — that
+   would falsify the historical record.
+
+5. FEEDBACK-LOG.md IS APPEND-ONLY.
+
+   This is the most likely place an implementer accidentally violates the
+   contract. Don't reformat existing entries. Don't fix typos. Don't
+   reorder. Append exactly one new dated entry at the bottom (or wherever
+   the file's existing convention places new entries — read the file
+   first, match the convention, follow it).
+
+6. THE TWO FOLLOW-UP SPECS ARE STUBS, INTENTIONALLY.
+
+   docs/refactoring/cli-entry-point-spec.md and
+   docs/refactoring/history-path-config-spec.md are deliberately
+   stub-quality at creation time. The user has marked these as deferred,
+   not as ready-to-action. Each spec should:
+     - State the goal in a paragraph.
+     - List the affected files.
+     - List the open questions / decisions to make later.
+     - Be skeleton-shaped per docs/refactoring/README.md naming convention.
+   Do NOT do the design for these specs. Their detailed design is the
+   user's choice when they're ready to action them.
+
+7. THE GREP CHECK IS THE MOST DURABLE TEST WE HAVE.
+
+   Without a test suite, the `grep -r "fundainsight"` and `grep -r
+   "yahooquery"` checks are the strongest residual-detection mechanism in
+   the verification checklist. Run them yourself before declaring done.
+   The expected answers:
+     - "fundainsight" — exactly ONE match: the banner line on the harness
+                        rollout spec.
+     - "yahooquery"   — ZERO matches.
+   If you get unexpected matches, do not paper over them; surface back.
+
+8. THE RUFF EXTEND-EXCLUDE PRUNE IS REAL CLEANUP.
+
+   The wisdom_fruit, shared, example, src, benchmarks entries in
+   [tool.ruff] extend-exclude exist BECAUSE those folders existed.
+   Once they're deleted, the entries become noise pointing at non-existent
+   paths. Ruff doesn't error on them, but they confuse future readers.
+   Prune them in commit 1 alongside the deletion.
+
+9. .GITIGNORE AUDIT — LOOK FOR FUNDAINSIGHT-SPECIFIC PATTERNS.
+
+   Likely candidates: `fundainsight/local_history/` (entry that pinned
+   the fundainsight history path). Verify `fincli/local_history/` is
+   covered by an existing gitignore entry; if not, add it. Don't
+   add fundainsight/local_history if absent — the directory is being
+   deleted, the gitignore entry would be gibberish.
+
+10. PRE-REFACTOR MYPY BASELINE.
+
+    TESTING.md cites ~105 mypy errors across the current codebase as
+    Phase 1 baseline. Capture the actual baseline before commit 1 by
+    running `mypy fincli fundainsight core config logger` on the current
+    branch. After commit 3 (when fundainsight/ is gone), run
+    `mypy fincli core config logger` and confirm same-or-fewer errors.
+    "Same-or-fewer" allows for the ~zero error contribution of
+    fundainsight to disappear; this is expected.
+
+11. CLEAN-VENV INSTALL IS NOT OPTIONAL.
+
+    The `pip install -e ".[dev]"` from a clean venv is the only way to
+    catch the project rename actually taking effect. Existing dev
+    environments may have `finscrape` cached in egg-info; reinstalling
+    on top doesn't always recover cleanly. Clean venv test is the
+    canonical fix.
+
+12. ASK BEFORE IMPROVISING.
+
+    The spec is the formalization of approved decisions, not a
+    rendezvous. If you find a real contradiction or a gap, surface it
+    back to ARCH or HUMAN. Don't quietly improvise — that's how decisions
+    get made in shadow.
+
+------------------------------------------------------------------------------
+END OF TRANSCRIPT.
+
+Spec file:        docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md
+This transcript:  arch-conversation-fincli-only-refactor.txt
+==============================================================================
+
+
+==============================================================================
+AMENDMENT 2026-05-04 (v1.1) — applied after gpt-5.5-pro adversarial review
+==============================================================================
+
+After v1.0 was finalized, the user obtained an adversarial review of the spec
+from gpt-5.5-pro. The review identified five hardenable failure modes around
+clean-install evidence, broader docs blast radius, mypy baseline citation,
+tracked-automation audit coverage, and classification clarity. The user
+approved exactly five targeted amendments — no redesign, no scope creep — and
+re-dispatched ARCH to apply them. The prior body of this transcript (Sections
+1-6) reflects v1.0 design and remains accurate as a historical record;
+nothing prior to this amendment block was modified. Spec version bumped
+1.0 -> 1.1 with an "Amendments" entry added to the metadata block.
+
+------------------------------------------------------------------------------
+Amendment A — Clean-venv non-importability check (§7.2)
+------------------------------------------------------------------------------
+
+Strengthened the existing `pip install -e ".[dev]"` row in §7.2's verification
+table. After installation in a fresh venv, the implementer must additionally
+run two assertions:
+
+  1. python -c "import importlib.util; assert importlib.util.find_spec(
+     'fundainsight') is None, 'fundainsight is still importable'"
+  2. python -m fincli --help     (substantive smoke check beyond mere import)
+
+The pass condition combines both: find_spec returns None AND
+`python -m fincli --help` exits 0 showing the Click usage banner.
+
+Caveat captured in the cell: Q2 = Option B explicitly defers adding
+`[project.scripts] fincli = ...` to a follow-up spec, so the bare
+`fincli --help` shell command is NOT yet available post-refactor in v1.1.
+`python -m fincli --help` is the substantive smoke check that IS expected to
+work. This was added as a clarifying note in the existing row's Pass
+condition cell, not as a new row.
+
+Why: an importable-but-empty install would pass v1.0's bare `import fincli`
+check; gpt-5.5-pro flagged the gap. The negative assertion on `fundainsight`
+proves the deletion actually took effect rather than a stale cache hiding it.
+
+------------------------------------------------------------------------------
+Amendment B — Phrase-level docs grep (§7.2)
+------------------------------------------------------------------------------
+
+Added a new row to the §7.2 verification table immediately after the
+`grep -r "yahooquery"` row:
+
+  Check:  grep -ri -E "two modes|two-mode|python api|library mode" *.md docs/
+  Pass:   No matches OR each match reviewed and judged "intentional historical
+          residue" by the reviewer (e.g. journal-entry content inside
+          FEEDBACK-LOG.md).
+
+Why: the per-string `fundainsight` / `yahooquery` greps catch direct
+identifier references but miss broader "two-mode CLI" framing language. This
+new row catches phrase-level residue from the doc rewrites and gives the
+reviewer a recorded judgment criterion for legitimate historical mentions.
+
+------------------------------------------------------------------------------
+Amendment C — Softened A3 in §11.1 (no hardcoded baseline count)
+------------------------------------------------------------------------------
+
+Rewrote A3 to drop the unverified "~105 errors" citation entirely. New
+language requires the implementer to:
+
+  - Run `mypy fincli fundainsight core config logger` on the pre-refactor
+    branch and record the exact error count BEFORE Commit 1 begins.
+  - Run `mypy fincli core config logger` post-refactor.
+  - Report "same or fewer" relative to that recorded baseline, accounting
+    for the disappearance of the `fundainsight` rows.
+  - Capture the baseline count in the PR description so reviewers can
+    verify without checking out the pre-refactor SHA.
+
+Why: the v1.0 number was a citation, not a measurement. ARCH had not run
+mypy. Citing a number ARCH did not verify trains future readers to treat
+spec numbers as approximate, which corrodes spec discipline. The amended
+language puts the burden where it belongs: on the implementer measuring at
+implementation time.
+
+------------------------------------------------------------------------------
+Amendment D — Tracked-automation audit in Commit 1 (§5.1)
+------------------------------------------------------------------------------
+
+Appended a new sub-bullet to the description of Commit 1 in §5.1 requiring
+the implementer to grep tracked automation files for the literal string
+`fundainsight`:
+
+  - Files in scope: package.json, package-lock.json, run.sh, run.bat,
+    scripts/**, .pre-commit-config.yaml, .github/workflows/*, Makefile,
+    justfile, tox.ini, noxfile.py.
+  - Repo currently has only the first five; the rest are absent and need
+    not be created.
+  - If any tracked file OUTSIDE the §3.2 edit table hardcodes
+    `fundainsight`, the implementer surfaces back to ARCH rather than
+    self-deciding the fix.
+
+Why: v1.0 covered Python source and pyproject metadata but did not formally
+require auditing CI/automation/launcher files. The §7.2 grep would catch
+residual matches post-implementation, but Amendment D moves the audit into
+Commit 1 so the implementer encounters and surfaces unexpected files
+BEFORE making changes that depend on assumptions about what's tracked.
+
+------------------------------------------------------------------------------
+Amendment E — Classification clarifier in §3.0
+------------------------------------------------------------------------------
+
+Added a new short subsection §3.0 *Classification* placed BEFORE §3.1
+(Deletion Table). It decomposes "removing fundainsight" into three
+independent dimensions, each addressed in a different section:
+
+  1. Python import package          -> §3.1 + §5.1 Commit 3
+  2. Distribution package metadata  -> §3.2 + §5.1 Commit 4
+  3. Product / docs language        -> full single-mode rewrite in §6
+
+Notes that the distribution name was historically `"finscrape"` (NOT
+`"fundainsight"`), so dimension 2 is technically a sibling rename rather
+than a fundainsight removal; states that §7.2 grep covers dimensions 1 and
+3 while §10 acceptance criteria cover dimension 2.
+
+Why: gpt-5.5-pro flagged that v1.0 conflated three different concepts under
+"removing fundainsight" without separating them. The classification block
+gives reviewers and the BACKEND implementer a mental model that maps spec
+sections to the dimensions they cover, reducing the chance of a partial
+implementation that satisfies one dimension while leaving another orphaned.
+
+------------------------------------------------------------------------------
+Notes on what was NOT changed
+------------------------------------------------------------------------------
+
+  - No Python source code edits. (Hard constraint preserved.)
+  - No file deletions. (Hard constraint preserved.)
+  - No new follow-up specs created. (Hard constraint preserved.)
+  - No body edit on the harness rollout spec.
+  - No edits to docs whose rewrites are described.
+  - No "tidying up" of other sections. The five amendments are surgical.
+  - The prior body of this transcript (Sections 1-6) is unchanged and
+    remains accurate as a historical record of v1.0 design intent.
+
+==============================================================================
+END OF v1.1 AMENDMENT BLOCK.
+
+Spec file:        docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md  (v1.1)
+This transcript:  arch-conversation-fincli-only-refactor.txt
+==============================================================================
+
+
+==============================================================================
+AMENDMENT 2026-05-04 (v1.2) — applied after BACKEND surfaced two blockers
+==============================================================================
+
+BACKEND's Commits 1-9 landed cleanly on `refactor/fincli-only`. Two blockers
+were surfaced per the spec's escalation contract: Risk R3 fired (hooks DO
+hardcode `fundainsight` — the v1.0 pre-grep was insufficient and missed two
+files), and `pip install -e ".[dev]"` fails with a pre-existing setuptools
+auto-discovery error that breaks §10 acceptance and §7.2's install row.
+
+The user pre-authorized continued ARCH amendment passes. v1.2 authorizes two
+follow-through commits (Commits 10 and 11), drops the assumption that proved
+incorrect (A2 from v1.1 numbering), and renumbers downstream assumptions.
+Commits 1-9 are unchanged and remain shipped on the branch as-is.
+
+------------------------------------------------------------------------------
+Amendment F — Authorize fix to .claude/hooks/utils.js and on-stop.js
+------------------------------------------------------------------------------
+
+Added a new Commit 10 to §5.1 immediately after Commit 9. The commit edits
+two harness hook files to remove `fundainsight` references the v1.0 pre-grep
+missed:
+
+  .claude/hooks/utils.js:
+    - Remove the SERVICES.fundainsight entry (lines 62-67 pre-Commit-10).
+    - Drop 'fundainsight' from each dependency array in SERVICE_DEPENDENCIES
+      (core, config, logger). Drop the `fincli: ['fundainsight']` entry
+      entirely (fincli has no remaining service dependencies).
+    - Remove the two /fundainsight\/.../ regex patterns in
+      DOC_TRIGGER_PATTERNS (lines 205 and 210 pre-Commit-10).
+
+  .claude/hooks/on-stop.js:
+    - Update the comment on line 224 to drop ", fundainsight".
+    - Update the mypy command on line 269 from
+      `'mypy fundainsight fincli core config logger'` to
+      `'mypy fincli core config logger'`.
+
+§3.4 ("Files NOT Touched") was updated to enumerate the three hook files
+that remain untouched (`load-rules.js`, `post-edit.js`, `pre-read.js`) and
+note that `utils.js` and `on-stop.js` are amended by Commit 10.
+
+Risk R3 in §9 was updated: old wording asserted the hooks were grepped clean
+and used dynamic discovery; new wording acknowledges the v1.0 pre-grep was
+insufficient (it missed `utils.js` and `on-stop.js`) and states the risk is
+closed by Commit 10. R3's likelihood column was changed from "Low" to
+"Low (closed)" to reflect status.
+
+A2 in §11.1 was dropped — its assertion (no `.claude/hooks/*.js` script
+hardcodes `fundainsight`) proved wrong. Subsequent assumptions were
+renumbered: A3 -> A2, A4 -> A3, A5 -> A4. Each renumbered assumption carries
+a parenthetical note recording its v1.1 number for diff readability.
+
+Why: BACKEND surfaced the R3 fire honestly per the spec's escalation
+contract. Authorizing Commit 10 closes R3 without scope-creeping into
+unrelated hook changes. The on-stop hook would otherwise fail at every
+Stop event on a branch that supposedly removed fundainsight, which would
+silently degrade harness validation — exactly the failure mode Q1's "keep
+the harness" choice was meant to avoid.
+
+------------------------------------------------------------------------------
+Amendment G — Authorize [tool.setuptools.packages.find] addition
+------------------------------------------------------------------------------
+
+Added a new Commit 11 to §5.1 immediately after Commit 10. The commit adds
+two directives to `pyproject.toml` so modern setuptools (>= 67ish) can
+discover the installable surface in a flat-layout repo with multiple
+top-level packages:
+
+  [tool.setuptools.packages.find]
+  include = ["fincli*", "core*", "config*", "logger*"]
+
+  [tool.setuptools]
+  py-modules = ["singleton"]
+
+The §3.2 edit table was updated by appending one row:
+
+  pyproject.toml ([tool.setuptools.packages.find] +
+                  [tool.setuptools] py-modules)
+  | Add explicit package-discovery directive so flat-layout repo installs
+    cleanly under modern setuptools. Pre-existing condition unblocked here.
+
+§10 "Project metadata" bullet was left as-is in wording — the install
+requirement is now backed by Commit 11 and §7.2's pass condition was
+strengthened (see Amendment I).
+
+Why: this is a pre-existing condition that pre-dates the refactor —
+reproducing the failure on master confirmed that. But §10 acceptance
+explicitly requires `pyproject.toml ships as name = "fincli"` AND §7.2
+requires a clean-venv install to succeed. Without Commit 11, the spec's
+own acceptance criteria are unreachable. The user's pre-authorization
+explicitly covers ARCH amendments needed to reach stated acceptance
+criteria, so Commit 11 is in-scope despite being out-of-scope relative
+to v1.0's deletion-and-rewrite framing. The classification note in the
+commit body records this honestly rather than papering over it.
+
+------------------------------------------------------------------------------
+Amendment H — Bump version + metadata block
+------------------------------------------------------------------------------
+
+The spec's metadata block at the top of the file was updated:
+
+  - Version bumped 1.1 -> 1.2.
+  - Mode line clarified: now reads "REFACTOR (scope reduction;
+    deletion-heavy with one one-line code fix plus two follow-through
+    commits authorized in v1.2)".
+  - Amendments list received one new line:
+    "v1.2 (2026-05-04): Commits 10–11 added (R3 hook retargeting,
+     setuptools auto-discovery fix). A2 dropped; R3 closed."
+
+Why: the metadata block is the canonical "what version of this spec are you
+reading" record. v1.0 / v1.1 / v1.2 must remain distinguishable at a glance.
+
+------------------------------------------------------------------------------
+Amendment I — Update verification checklist (§7.2)
+------------------------------------------------------------------------------
+
+The existing `pip install -e ".[dev]"` row in the §7.2 verification table
+had its Pass condition strengthened to explicitly state that after Commit 11
+lands, the install must succeed in a fresh venv. The find_spec('fundainsight')
+is None and `python -m fincli --help` smoke checks from v1.1's Amendment A
+are preserved verbatim (no language change there). The footnote previously
+referenced "v1.1" as the version where [project.scripts] is deferred; that
+reference was updated to "v1.2" since v1.2 is now the current spec version.
+
+Why: §7.2 is the canonical operational verification surface. With Commit 11
+authorized, the install row's pass condition is achievable; the row should
+reflect that explicitly so the verifier knows this is a hard pass condition,
+not a known-failing check.
+
+------------------------------------------------------------------------------
+Notes on what was NOT changed
+------------------------------------------------------------------------------
+
+  - No Python source code edits. (Hard constraint preserved.)
+  - No file deletions. (Hard constraint preserved.)
+  - No edits to the harness rollout spec
+    (docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md).
+  - No edits to .claude/hooks/utils.js or .claude/hooks/on-stop.js by ARCH —
+    Commit 10's actual edits are BACKEND's job.
+  - No edits to pyproject.toml by ARCH — Commit 11's actual edits are
+    BACKEND's job.
+  - Commits 1-9 in §5.1 are untouched. They are already shipped on the
+    `refactor/fincli-only` branch and remain accurate.
+  - Goals G1-G6 and Non-Goals N1-N7 in §2.1 / §2.2 are unchanged.
+  - Section §3.0 (Classification), §6 (Spec Updates), §8 (Tests), §10
+    (Acceptance Criteria) bodies are unchanged in substance.
+
+------------------------------------------------------------------------------
+Closing note — re-dispatch
+------------------------------------------------------------------------------
+
+BACKEND will be re-dispatched to apply Commits 10 and 11 against v1.2. The
+v1.2 spec is the authoritative contract for the continuation pass; v1.1 is
+superseded but its body remains in this transcript as historical record.
+
+==============================================================================
+END OF v1.2 AMENDMENT BLOCK.
+
+Spec file:        docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md  (v1.2)
+This transcript:  arch-conversation-fincli-only-refactor.txt
+==============================================================================
+
+
+==============================================================================
+AMENDMENT 2026-05-04 (v1.3) — applied after live-test bug surfaced post-QA
+==============================================================================
+
+BACKEND's Commits 1-12 had landed on `refactor/fincli-only` and the v1.2
+validation cycle (VERIFIER/REVIEWER/QA) had returned all-green. The user ran
+`python -m fincli` against live Finviz for the first time and hit
+`IndexError: list index out of range` on a routine filter selection.
+Diagnosis: pre-existing display+parser mismatch in
+`fincli/cli/cli_stock_screener.py` where `display_options` mutated `start_idx`
+mid-loop, causing display numbers to diverge from dict positions for items
+beyond the first row. The orchestrating Claude proposed a fix inline (apply
+`prompt_section` helper with per-section local numbering + bounds-checked
+input), the user authorized, and the fix landed as Commit 13 (`c997224`).
+
+The validation cycle had completed with VERIFIER VERIFIED, REVIEWER
+APPROVE_WITH_NITS, and QA PASS — but only because QA elected Path B
+(deferred the live interactive happy-path to the user). The grep, lint, and
+import-time smoke checks the validation cycle did run could not have caught
+the bug because the bug lives in a runtime-interactive code path with no
+automated coverage. The v1.3 amendment honestly records the scope expansion
+rather than papering over it, and adds a Lessons-Learned section so the
+structural cause (Path B / Path A choice in §7.2) does not recur silently.
+
+Commits 1-12 are unchanged and remain shipped on the branch as-is. Commit 13
+is the only new code on the branch since v1.2; the remaining v1.3 work is
+spec-and-transcript text.
+
+------------------------------------------------------------------------------
+Amendment J — Narrow §2.2 N4 to acknowledge Commit 13 exception
+------------------------------------------------------------------------------
+
+The original N4 read: "No other source code edits, including the fundamental
+analysis logic that is being deleted (no migration / no preservation under
+another path)." That language was tenable at v1.0–v1.1 (only one source-code
+change, the configurator one-liner) and was already strained at v1.2
+(Commits 10 and 11 added; v1.2 did not amend N4 because Commits 10/11 touch
+hooks and pyproject only, not Python source under fincli/). Commit 13 IS a
+Python source edit under fincli/, so N4 had to be narrowed to acknowledge
+the exception explicitly.
+
+New N4 text states: "No other source code edits, EXCEPT the §3.2 configurator
+one-liner (Commit 2) and the §5.1 Commit 13 CLI section-prompt fix. The
+latter was added in v1.3 after the v1.2 validation cycle completed and live
+happy-path testing surfaced a pre-existing display+parser mismatch in
+`fincli/cli/cli_stock_screener.py` that had to be fixed for §10 Behavior
+acceptance to be reachable. No migration or preservation of the deleted
+`fundainsight` logic is offered."
+
+The "no migration" half of N4's intent is preserved verbatim. The "no other
+source edits" half is honestly bounded.
+
+Risk touched: §2.2 (Non-Goals). No risk introduced.
+
+------------------------------------------------------------------------------
+Amendment K — Add Commit 13 to §5.1 Tasks by Agent
+------------------------------------------------------------------------------
+
+Inserted immediately after Commit 12 (which is the existing v1.2 Commit 11
+position; Commit 12 in the branch history is the user's manual ruff-format
+commit on `cli_stock_screener.py` that preceded the inline fix authorization,
+and is captured in the same §5.1 entry rather than as its own bullet — see
+the orchestrator's note in the dispatch prompt for the rationale).
+
+The new Commit 13 entry describes:
+
+  - Replacing display_options + get_filters_indices with a single
+    prompt_section helper (per-section local 1-based numbering;
+    bounds-checked; blank input = skip section).
+  - Updating select_filters_and_values to invoke prompt_section three
+    times (Fundamental, Descriptive, Technical).
+  - Applying ruff format (mechanical; no semantic changes outside helper).
+  - Classifying the commit as scope-creep relative to v1.0–v1.2 N4
+    (now amended in v1.3) and recording it was authorized inline by the
+    user after live happy-path testing surfaced the bug.
+  - Verification: `python -m fincli` runs section-by-section against live
+    Finviz and produces stock_screener_<timestamp>.csv (user-confirmed).
+
+Risk touched: §5.1 (Tasks by Agent / commit ordering). The commit is a
+post-validation insertion; it does NOT re-order Commits 1-12. Sequencing
+constraints in §7.1 are unaffected.
+
+------------------------------------------------------------------------------
+Amendment L — Extend §3.2 Edit Table with Commit 13's file
+------------------------------------------------------------------------------
+
+Appended one row to the §3.2 edit table:
+
+  fincli/cli/cli_stock_screener.py (Commit 13)
+  | Replace display_options + get_filters_indices with a single
+    prompt_section helper that displays each filter group with per-section
+    local 1-based numbering, reprompts on bad input, and accepts blank-Enter
+    as "skip this section." Apply ruff format.
+
+The edit table is now the canonical record of every code/metadata file
+touched by this refactor. Commit 13's file appears alongside the
+configurator one-liner, the pyproject.toml deltas, requirements.txt, the
+launchers, and .gitignore.
+
+Risk touched: §3.2 (Edit Table). No risk introduced; the table is now
+honest about all files modified rather than implying Commit 13's edit
+was not part of the refactor.
+
+------------------------------------------------------------------------------
+Amendment M — Append section-by-section sub-bullet to §10 Behavior
+------------------------------------------------------------------------------
+
+The §10 Behavior acceptance criterion previously read in full: "`python -m
+fincli --debug` and `python -m fincli --history` both run end-to-end
+producing the expected CSV; the latter reads from
+`fincli/local_history/filter_history.json`." That language remains.
+
+Appended one sub-bullet stating that the interactive filter-selection flow
+proceeds section-by-section (Fundamental → Descriptive → Technical), with
+each section's numbers being local 1-based indices, blank input skipping a
+section, and out-of-range or non-integer input reprompting with a clear
+error message (no IndexError). Notes that the user verified this live on
+2026-05-04 against `refactor/fincli-only @ c997224`.
+
+Risk touched: §10 (Acceptance Criteria). The sub-bullet upgrades the
+behavior criterion from a smoke-only assertion ("CSV is produced") to a
+flow-level assertion ("interactive flow proceeds in three sections,
+bounds-checked"). This makes the criterion match what the user actually
+verified, rather than understating the test coverage.
+
+------------------------------------------------------------------------------
+Amendment N — Add v1.3 entry to metadata Amendments line
+------------------------------------------------------------------------------
+
+The spec's header metadata block previously listed v1.1 and v1.2 amendments.
+Added one new line:
+
+  v1.3 (2026-05-04): Commit 13 added (CLI section-prompt + bounds-checked
+  input fix, post-validation scope expansion). §2.2 N4 narrowed to
+  acknowledge the exception. §3.2 edit table extended. §10 Behavior
+  criterion appended with the section-by-section sub-bullet.
+
+This is the canonical "what version of this spec are you reading" record.
+v1.0 / v1.1 / v1.2 / v1.3 must remain distinguishable at a glance.
+
+Risk touched: metadata block. No risk introduced.
+
+------------------------------------------------------------------------------
+Amendment O — Bump version 1.2 → 1.3 + add Lessons Learned section
+------------------------------------------------------------------------------
+
+The Version line at the top of the spec was bumped from 1.2 to 1.3. The
+Mode line was extended to read: "REFACTOR (scope reduction; deletion-heavy
+with one one-line code fix plus two follow-through commits authorized in
+v1.2 plus one CLI bug-fix commit authorized in v1.3)."
+
+A new section §13 "Lessons Learned (added 2026-05-04 in v1.3)" was appended
+at the very end of the spec, after §12 Next Steps. Body:
+
+  - Records that the v1.2 validation cycle returned all-green only because
+    QA elected Path B (deferred live interactive happy-path to user).
+  - Records that an IndexError in cli_stock_screener.py had been latent in
+    master since before this branch existed.
+  - Captures two forward-looking takeaways:
+    1. Path B should be treated as a pending acceptance check, not a
+       closed one. The user should be invited to validate before any
+       "ready to merge" claim.
+    2. Refactor specs that claim "no behavior change in kept code" should
+       still require a 30-second smoke of the kept code's user-facing
+       surface — analogous to v1.1 Amendment A's clean-venv check, but
+       extended to interactive flows. Captured as a forward-looking item
+       for Phase 2 of the harness rollout.
+
+The Lessons-Learned section deliberately does not scapegoat QA. The §7.2
+Path A / Path B choice is the structural cause; QA's judgment to elect
+Path B was reasonable given the state of the §7.2 verification table.
+
+Risk touched: §13 (new section). No risk introduced; the section exists
+solely to document a structural lesson so the next refactor can adopt
+the corrective practice.
+
+------------------------------------------------------------------------------
+Amendment P — Append this v1.3 block to the transcript
+------------------------------------------------------------------------------
+
+This block. Mirrors the spec amendments in plain text for offline review
+and preserves the historical record of the v1.2 → v1.3 transition. The
+prior body of this transcript (Sections 1-6 of v1.0, the v1.1 amendment
+block, and the v1.2 amendment block) is unchanged and remains accurate
+as a historical record.
+
+Risk touched: transcript file (append-only). No risk introduced.
+
+------------------------------------------------------------------------------
+Lessons Learned (mirror of spec §13)
+------------------------------------------------------------------------------
+
+The v1.2 validation cycle completed with VERIFIER returning VERIFIED,
+REVIEWER returning APPROVE_WITH_NITS, and QA returning PASS — but only
+because QA elected Path B (deferred the live interactive happy-path to the
+user). On the user's first live run, an IndexError surfaced in
+fincli/cli/cli_stock_screener.py that had been latent in master since
+before this branch existed. The validation cycle's grep-and-import-based
+smoke checks could not have caught it because the bug was in a
+runtime-interactive code path with no automated coverage.
+
+Two takeaways for future refactors:
+
+  1. A "Behavior" acceptance criterion that requires a live network
+     round-trip should not be deferred to the user without the user
+     explicitly opting in. When QA reports Path B, the orchestrator should
+     treat that as a pending acceptance check, not a closed one — and the
+     user should be invited to validate before any "ready to merge" claim,
+     not after.
+
+  2. Refactor specs that say "no behavior change in the kept code" should
+     still require a 30-second smoke of the kept code's user-facing
+     surface. A refactor can pass every grep, lint, and type check while
+     leaving a years-old user-facing bug unmasked. The §7.2 Amendment-A
+     clean-venv check (added in v1.1) caught import-time failures; an
+     analogous "interactive smoke" check would have caught this. Captured
+     as a forward-looking item for Phase 2 of the harness rollout.
+
+------------------------------------------------------------------------------
+Notes on what was NOT changed
+------------------------------------------------------------------------------
+
+  - No Python source code edits by ARCH. (Hard constraint preserved.
+    Commit 13's actual code edit was applied by BACKEND inline before
+    ARCH was re-dispatched; ARCH's job here is spec-and-transcript text.)
+  - No file deletions. (Hard constraint preserved.)
+  - No edits to fincli/cli/cli_stock_screener.py by ARCH. (Commit 13
+    already landed; ARCH does not re-touch shipped code.)
+  - No edits to the harness rollout spec
+    (docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md).
+  - No re-ordering of Commits 1-12. They are shipped on the branch.
+  - No "tidying up" of v1.0/v1.1/v1.2 transcript blocks. Append-only.
+  - No changes to §1 Summary, §2.1 Goals, §3.0 Classification, §3.1
+    Deletion Table, §3.3 New Files, §3.4 Files NOT Touched, §4 API
+    Contracts, §5.2/§5.3/§5.4, §6, §7, §8, §9, §11, §12. The seven
+    v1.3 amendments are surgical.
+
+------------------------------------------------------------------------------
+Closing note — branch is implementation-complete
+------------------------------------------------------------------------------
+
+The spec is now at v1.3. The `refactor/fincli-only` branch carries 13
+commits on top of master and is NOT yet pushed. The orchestrating Claude
+will provide the final merge-ready summary; the user pushes the branch and
+opens the pull request.
+
+==============================================================================
+END OF v1.3 AMENDMENT BLOCK.
+
+Spec file:        docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md  (v1.3)
+This transcript:  arch-conversation-fincli-only-refactor.txt
+==============================================================================

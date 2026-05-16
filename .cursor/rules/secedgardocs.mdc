@@ -1,0 +1,8 @@
+---
+description: SEC edgar info source
+globs: 
+alwaysApply: false
+---
+SEC edgar info soruces
+sec edgar api https://www.sec.gov/search-filings/edgar-application-programming-interfaces
+sec devloper resources https://www.sec.gov/about/developer-resources

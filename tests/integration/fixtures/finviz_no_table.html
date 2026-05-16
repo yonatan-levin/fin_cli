@@ -1,0 +1,9 @@
+<html><body>
+<p>This page has no styled-table-new table at all — used by the
+Pillar-4 parse-failure test (exit code 4) to simulate a Finviz layout
+drift where the screener table element is missing. The
+``StockTableScreeningContent.all_table_content`` selector returns an
+empty list against this page; in isolation that would route through the
+zero-row success branch, so the test pairs it with a malformed row
+fixture to actually exercise the AttributeError -> DATA classifier path.</p>
+</body></html>

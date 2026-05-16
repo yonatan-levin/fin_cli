@@ -59,15 +59,6 @@ const SERVICES = {
     hasTests: true,
     testableExtensions: ['.py'],
   },
-  fundainsight: {
-    path: 'fundainsight/',
-    runtime: 'python',
-    testCommand: 'pytest tests/',
-    lintCommand: 'ruff check fundainsight/',
-    buildCommand: 'python -c "import fundainsight"',
-    hasTests: true,
-    testableExtensions: ['.py'],
-  },
   core: {
     path: 'core/',
     runtime: 'python',
@@ -102,10 +93,9 @@ const SERVICES = {
  * When a module is affected, its dependents should also be tested.
  */
 const SERVICE_DEPENDENCIES = {
-  core: ['fincli', 'fundainsight'],
-  config: ['fincli', 'fundainsight'],
-  logger: ['fincli', 'fundainsight'],
-  fincli: ['fundainsight'],
+  core: ['fincli'],
+  config: ['fincli'],
+  logger: ['fincli'],
 };
 
 /**
@@ -202,12 +192,10 @@ const SECURITY_FILE_PATTERNS = [
 const DOC_TRIGGER_PATTERNS = {
   contracts: [
     /fincli\/resource\/params\/.*\.py$/,         // Finviz filter parameter definitions are query contracts
-    /fundainsight\/calculators\/.*\.py$/,        // Calculator inputs/outputs are computation contracts
     /core\/configuration\/.*\.py$/,              // Configurator builds the Config contract
   ],
   architecture: [
     /fincli\/app\/main\.py$/,                    // Screening orchestration is architecture
-    /fundainsight\/app\/picker\.py$/,            // Fundamental analysis pipeline is architecture
     /^[^/]+\/__main__\.py$/,                     // Module entry points define architecture
     /pyproject\.toml$/,                          // Build/dependency config is architecture
   ],

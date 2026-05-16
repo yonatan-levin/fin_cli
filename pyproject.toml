@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "finscrape"
+name = "fincli"
 version = "0.1.0"
 requires-python = ">=3.12"
 
@@ -11,12 +11,12 @@ dependencies = [
     "requests",
     "urllib3<2",  # cfscrape requires urllib3 1.x API
     "pandas",
-    "yahooquery",
     "cfscrape",
     "click",
     "pydantic",
     "colorama",
     "beautifulsoup4",
+    "platformdirs",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +29,9 @@ dev = [
     "pip-audit",
 ]
 
+[project.scripts]
+fincli = "fincli.app.cli:run_main"
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
@@ -37,11 +40,6 @@ extend-exclude = [
     "workspace_materials",
     "dist",
     "htmlcov",
-    "wisdom_fruit",
-    "shared",
-    "example",
-    "src",
-    "benchmarks",
     "__pycache__",
     ".venv",
 ]
@@ -56,13 +54,13 @@ indent-style = "space"
 
 [tool.mypy]
 python_version = "3.12"
-files = ["fundainsight", "fincli", "core", "config", "logger"]
+files = ["fincli", "core", "config", "logger"]
 strict = true
 warn_unused_ignores = true
 show_error_codes = true
 
 [[tool.mypy.overrides]]
-module = ["cfscrape", "cfscrape.*", "yahooquery", "yahooquery.*"]
+module = ["cfscrape", "cfscrape.*", "requests", "requests.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -71,3 +69,9 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 addopts = "-ra"
+
+[tool.setuptools]
+py-modules = ["singleton"]
+
+[tool.setuptools.packages.find]
+include = ["fincli*", "core*", "config*", "logger*"]

@@ -3,11 +3,11 @@ alwaysApply: true
 ---
 # Pre-Flight Checklist Skill
 
-When invoked with `@preflight`, execute this mandatory checklist before any implementation in the **algo_beta** repository.
+When invoked with `@preflight`, execute this mandatory checklist before any implementation in the **fin_cli** repository.
 
 ## Purpose
 
-Ensures all required context is loaded, the task is properly broken down, and MCP tools are utilized before coding begins. Tailored to the algo_beta Python/CLI surface.
+Ensures all required context is loaded, the task is properly broken down, and MCP tools are utilized before coding begins. Tailored to the fin_cli Python/CLI surface.
 
 ## Automatic Actions
 
@@ -24,7 +24,7 @@ Use `sequential-thinking` MCP tool to:
 Based on the task, read these files using the Read tool:
 - Root `CLAUDE.md` — project identity, tech stack, conventions, important files
 - Root `AGENTS.md` — loading contract and cross-file relationships (created in C6 of the harness rollout — skip gracefully if not present)
-- Root `ARCHITECTURE.md` — overall system architecture (fincli + fundainsight + supporting modules)
+- Root `ARCHITECTURE.md` — overall system architecture (fincli + supporting modules)
 - Root `CONTRACTS.md` — CLI command surface + CSV output schema
 - Root `TESTING.md` — testing requirements and pytest layout
 - Root `TOOLS_REFERENCE.md` — MCP tooling reference
@@ -44,9 +44,9 @@ For any source-code change, before writing implementation:
 - [ ] Ran `ruff check <touched module>` — note any pre-existing findings
 - [ ] Ran `ruff format --check <touched module>`
 - [ ] Ran `mypy <touched module>` — **results are advisory in Phase 1**, but capture the baseline
-- [ ] Located the relevant Click command in `fincli/app/cli.py` or `fundainsight/app/cli.py`
+- [ ] Located the relevant Click command in `fincli/app/cli.py`
 - [ ] Located the relevant Pydantic config class in `config/config.py` or `core/configuration/configurator.py`
-- [ ] Identified affected modules across `fincli/`, `fundainsight/`, `core/`, `config/`, `logger/`
+- [ ] Identified affected modules across `fincli/`, `core/`, `config/`, `logger/`
 
 ### Step 5: Store Context in Memory
 
@@ -60,7 +60,7 @@ Use `memory:create_entities` to store:
 
 If new implementation patterns or unfamiliar libraries are involved:
 - Use `perplexity-ask` for general research
-- Use `context7` for library documentation (yahooquery, pandas, Click, Pydantic, cfscrape, colorama, beautifulsoup4)
+- Use `context7` for library documentation (Click, pandas, Pydantic, cfscrape, colorama, beautifulsoup4)
 
 ### Step 7: Memory Sync
 
@@ -101,7 +101,7 @@ Check for previous session data:
 - mypy: {N issues — advisory in Phase 1}
 
 ### Affected Modules
-- {fincli | fundainsight | core | config | logger | scripts | tests}
+- {fincli | core | config | logger | scripts | tests}
 
 ### Key Constraints
 - {constraint 1}
@@ -126,11 +126,11 @@ This skill can be chained with:
 ## Example Usage
 
 ```
-User: @preflight I need to add a new --min-market-cap filter to fundainsight
+User: @preflight I need to add a new --max-tickers cap to the fincli screener
 
 AI: [Executes sequential-thinking]
     [Reads CLAUDE.md, ARCHITECTURE.md, CONTRACTS.md]
-    [Reads fundainsight/app/cli.py and fundainsight/calculators/filters.py]
+    [Reads fincli/app/cli.py and fincli/app/main.py]
     [Runs ruff/mypy probes on touched modules]
     [Stores context in memory]
     [Outputs pre-flight checklist]

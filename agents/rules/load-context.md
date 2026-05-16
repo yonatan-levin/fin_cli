@@ -3,11 +3,11 @@ alwaysApply: true
 ---
 # Load Context Skill (Smart Router)
 
-When invoked with `@load-context {path}`, intelligently detect the type of path and load all relevant documentation and context for the **algo_beta** Python codebase.
+When invoked with `@load-context {path}`, intelligently detect the type of path and load all relevant documentation and context for the **fin_cli** Python codebase.
 
 ## Purpose
 
-Universal context loader that handles any path in the algo_beta project — modules, configuration, calculators, CLI surfaces, logger plumbing, scripts, tests, and documentation. Automatically detects the category and loads appropriate documentation.
+Universal context loader that handles any path in the fin_cli project — modules, configuration, CLI surface, logger plumbing, scripts, tests, and documentation. Automatically detects the category and loads appropriate documentation.
 
 ## Supported Paths
 
@@ -16,7 +16,6 @@ Universal context loader that handles any path in the algo_beta project — modu
 | Input | Resolves To | Description |
 |-------|-------------|-------------|
 | `fincli` | `fincli/` | Stock screener: Finviz HTML fetch + parse + DataFrame export |
-| `fundainsight` | `fundainsight/` | Fundamental analysis: Yahoo Finance enrichment + price-to-asset ratios |
 | `core` | `core/` | Base configuration classes, JSON converters |
 | `config` | `config/` | Pydantic configuration with history support |
 | `logger` | `logger/` | Singleton logger (console / file / JSON handlers) |
@@ -27,19 +26,16 @@ Universal context loader that handles any path in the algo_beta project — modu
 
 | Input | Resolves To | Description |
 |-------|-------------|-------------|
-| `fincli-cli` | `fincli/app/cli.py` | Click command group for screening |
-| `fundainsight-cli` | `fundainsight/app/cli.py` | Click command group for fundamental analysis |
-| `cli` | both `app/cli.py` files | All CLI entry points |
+| `fincli-cli` | `fincli/app/cli.py` | Click command group for the screener |
+| `cli` | `fincli/app/cli.py` | The CLI entry point |
 
 ### Domain Logic
 
 | Input | Resolves To | Description |
 |-------|-------------|-------------|
-| `calculators` | `fundainsight/calculators/` | Price-to-asset ratio math, DataFrame filters |
-| `equity-calc` | `fundainsight/calculators/equity_calc.py` | Asset adjustment + ratio computation |
-| `filters` | `fundainsight/calculators/filters.py` | Country / sector / price filters |
-| `picker` | `fundainsight/app/picker.py` | Fundamental analysis pipeline orchestration |
 | `screener` | `fincli/app/main.py` | Screening pipeline orchestration |
+| `parser` | `fincli/stock_screening/` | BeautifulSoup row parser + table extractor |
+| `filter-ui` | `fincli/cli/cli_stock_screener.py` | Interactive filter-selection UI |
 
 ### Web / Data Acquisition
 
@@ -78,7 +74,6 @@ Analyze the input path and determine category:
 ```
 Input -> Category Detection:
 +-- fincli/* or fincli            -> SCREENER
-+-- fundainsight/* or fundainsight -> ANALYSIS
 +-- core/* or core                 -> CORE
 +-- config/* or config             -> CONFIG
 +-- logger/* or logger             -> LOGGER
@@ -106,14 +101,6 @@ Read using Read tool:
 - `fincli/utils/quary_builders.py` — URL query construction
 - `fincli/resource/params/` — filter parameter definitions
 - `CONTRACTS.md` (CLI command surface section)
-
-#### For ANALYSIS category (fundainsight):
-Read using Read tool:
-- `fundainsight/app/cli.py` — Click command group surface
-- `fundainsight/app/picker.py` — analysis pipeline orchestration
-- `fundainsight/calculators/equity_calc.py` — financial math
-- `fundainsight/calculators/filters.py` — DataFrame filtering
-- `CONTRACTS.md` (CSV output schema section)
 
 #### For CORE category:
 Read using Read tool:
@@ -160,9 +147,9 @@ Read the specific file and provide context about its role in the codebase.
 | Task type | Read these docs first |
 |-----------|------------------------|
 | **API change** (CLI command surface or CSV schema) | `CONTRACTS.md` (CLI command surface + CSV schema sections) |
-| **Domain-logic change** (price-to-asset math, filters) | `ARCHITECTURE.md` + `fundainsight/calculators/` |
+| **Domain-logic change** (Finviz parser, market-cap conversion, filter UI) | `ARCHITECTURE.md` + `fincli/stock_screening/` + `fincli/app/main.py` |
 | **Config change** (new flag, new config field) | `config/config.py` + `core/configuration/configurator.py` |
-| **New CLI command** | `fincli/app/cli.py` or `fundainsight/app/cli.py` + Click conventions in `CLAUDE.md` |
+| **New CLI command** | `fincli/app/cli.py` + Click conventions in `CLAUDE.md` |
 | **Bug fix** | bug spec in `docs/bugs/<BUG-NNN>.md` if applicable; otherwise root-cause via `superpowers:systematic-debugging` |
 | **Logger change** | `logger/logger.py` + the singleton pattern note in `CLAUDE.md` |
 | **Test change** | `TESTING.md` + relevant `tests/<unit|domain|e2e>/` subtree |
@@ -179,7 +166,7 @@ Use `memory:create_entities` to store:
 ```
 ## Context Loaded: {path}
 
-### Category: {SCREENER | ANALYSIS | CORE | CONFIG | LOGGER | SCRIPTS | TESTS | DOCS | TOP_DOC | SINGLE_FILE}
+### Category: {SCREENER | CORE | CONFIG | LOGGER | SCRIPTS | TESTS | DOCS | TOP_DOC | SINGLE_FILE}
 
 ### Overview
 {brief description based on loaded documentation}
@@ -211,13 +198,11 @@ Quick reference for common shortcuts:
 | Shorthand | Full Path |
 |-----------|-----------|
 | `fincli` | `fincli/` |
-| `fundainsight` | `fundainsight/` |
 | `core` | `core/` |
 | `config` | `config/` |
 | `logger` | `logger/` |
-| `picker` | `fundainsight/app/picker.py` |
 | `screener` | `fincli/app/main.py` |
-| `calculators` | `fundainsight/calculators/` |
+| `parser` | `fincli/stock_screening/` |
 | `scripts` | `scripts/` |
 | `tests` | `tests/` |
 | `docs` | `docs/` |

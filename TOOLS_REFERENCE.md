@@ -8,18 +8,15 @@ A single-page reference for every command, skill, MCP tool, and Claude Code hook
 
 | Command | What it does |
 |---|---|
-| `pip install -e ".[dev]"` | Editable install with the `dev` extra (ruff, mypy, pytest, pytest-cov, types-beautifulsoup4). |
+| `pip install -e ".[dev]"` | Editable install with the `dev` extra (ruff, mypy, pytest, pytest-cov, types-beautifulsoup4, pip-audit). |
 | `pip install -r requirements.txt` | Install runtime deps only (no dev tooling). |
-| `python -m fincli` | Run the screener mode (interactive). |
+| `fincli` | Run the screener (preferred). Equivalent to `python -m fincli`; requires `pip install -e ".[dev]"` to register the entry point on PATH. |
+| `python -m fincli` | Run the screener (interactive). |
 | `python -m fincli --history` | Run the screener with the last filter selection. |
 | `python -m fincli --debug` | Run the screener with `DEBUG`-level logging. |
-| `python -m fundainsight --history` | Run fundamental analysis with last filter selection. |
-| `python -m fundainsight --set-filters '<json>'` | Run with explicit filter JSON. |
-| `python -m fundainsight --scrape-link '<url>'` | Run against a pre-built Finviz URL. |
-| `python -m fundainsight --debug` | Run analysis with `DEBUG`-level logging. |
-| `./run.sh` | Linux / macOS launcher with an interactive menu. |
-| `run.bat` | Windows launcher with an interactive menu. |
-| `python -c "import fincli; import fundainsight"` | Smoke-import test (Python has no separate build step). |
+| `./run.sh` | Linux / macOS launcher: install requirements, then `python -m fincli "$@"`. |
+| `run.bat` | Windows launcher: install requirements, then `python -m fincli %*`. |
+| `python -c "import fincli"` | Smoke-import test (Python has no separate build step). |
 
 ---
 
@@ -34,7 +31,7 @@ A single-page reference for every command, skill, MCP tool, and Claude Code hook
 | `pytest -k <pattern>` | Run tests whose name matches a substring/expression. |
 | `pytest -x` | Stop at first failure. |
 | `pytest -v` | Verbose output (one line per test). |
-| `pytest --cov=fundainsight --cov=fincli --cov=core --cov=config --cov-report=term-missing` | Coverage report (informational; gate deferred to Phase 3). |
+| `pytest --cov=fincli --cov=core --cov=config --cov-report=term-missing` | Coverage report (informational; gate deferred to Phase 3). |
 | `pytest -ra` | Short summary of skipped/xfailed/errored tests (default via `pyproject.toml`). |
 
 > Test bodies land in Phase 2 of the agent-harness rollout (`docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md` §8.1). Until then `pytest tests/` collects nothing.
@@ -66,11 +63,11 @@ A single-page reference for every command, skill, MCP tool, and Claude Code hook
 
 | Command | What it does |
 |---|---|
-| `mypy fundainsight fincli core config logger` | Type-check the active modules in strict mode (Phase 1: advisory; Phase 4: blocking). |
+| `mypy fincli core config logger` | Type-check the active modules in strict mode (Phase 1: advisory; Phase 4: blocking). |
 | `mypy <file>` | Check one file (used by `post-edit.js`). |
 | `mypy --no-incremental` | Bypass mypy's cache when diagnosing weirdness. |
 
-`pyproject.toml` contains the `[tool.mypy]` config: `strict = true` from day one, with `ignore_missing_imports = true` for `cfscrape` and `yahooquery` (no upstream stubs). `bs4` is typed via the `types-beautifulsoup4` dev dep.
+`pyproject.toml` contains the `[tool.mypy]` config: `strict = true` from day one, with `ignore_missing_imports = true` for `cfscrape` (no upstream stubs). `bs4` is typed via the `types-beautifulsoup4` dev dep.
 
 ---
 
@@ -100,7 +97,7 @@ One-line "when to reach for it" for the MCP servers wired in this repo.
 
 | Tool | Use when |
 |---|---|
-| `context7` (`resolve-library-id` -> `query-docs`) | Looking up Click / pandas / Pydantic / yahooquery / cfscrape / requests docs — preferred over web search for library docs. |
+| `context7` (`resolve-library-id` -> `query-docs`) | Looking up Click / pandas / Pydantic / cfscrape / BeautifulSoup4 / requests docs — preferred over web search for library docs. |
 | `perplexity-ask` | "How do other projects solve X" web research. |
 
 ### Memory
@@ -113,8 +110,8 @@ One-line "when to reach for it" for the MCP servers wired in this repo.
 ### Calling pattern
 
 ```text
-1. context7:  resolve-library-id("yahooquery")  -> id
-              query-docs(id, topic="Ticker.balance_sheet")
+1. context7:  resolve-library-id("cfscrape")  -> id
+              query-docs(id, topic="create_scraper")
 2. memory:    search_nodes("CSV output schema")  -> nodes
               open_nodes(["fincli stock_screener_csv"])
 3. zen:       thinkdeep(model="gpt-5.2-pro", question="...")
@@ -192,8 +189,8 @@ The hooks listed below are wired in `.claude/settings.json` and live under `.cla
 |---|---|---|---|
 | `SessionStart` | `.claude/hooks/load-rules.js` | 10 s | Auto-injects `agents/rules/_shared-workflow.md`, `preflight.md`, and `orchestrator.md` into the new session's context under the header `# Loaded Workflow Rules (agents/rules/)`. |
 | `PreToolUse:Read` | `.claude/hooks/pre-read.js` | 10 s | Guard rail before file reads — skips known sensitive paths and very large files; surfaces a helpful note if a denied path is read. |
-| `PostToolUse:Edit\|Write` | `.claude/hooks/post-edit.js` | 60 s | After every save: `ruff check --fix <file>`, `ruff format <file>`, `mypy <file>`. Also runs the secret/OWASP regex scan on the saved file and surfaces a doc-update reminder when the saved file matches `DOC_TRIGGER_PATTERNS` (e.g., editing a Finviz `params/*.py` reminds you to update `CONTRACTS.md`). |
-| `Stop` | `.claude/hooks/on-stop.js` | 600 s | At the end of a session: run repo-wide `ruff check .`, `ruff format --check .`, `mypy fundainsight fincli core config logger`, `pytest tests/`, and `pip-audit -r requirements.txt` (skipped if not on PATH). **Phase 1**: mypy results go through the `warnings` channel (advisory, non-blocking). Coverage check is stubbed as `{skipped: true, reason: "Phase 3 deferred"}`. **Phase 4** (after `mypy ... ` returns zero errors) flips mypy to the `issues` channel so it blocks Stop. **Phase 3** (after Phase 2 establishes a real test suite) enables a 90% coverage gate. |
+| `PostToolUse:Edit\|Write` | `.claude/hooks/post-edit.js` | 120 s | After every save: `ruff check --fix <file>`, `ruff format <file>`, `mypy <file>`. Also runs the secret/OWASP regex scan on the saved file and surfaces a doc-update reminder when the saved file matches `DOC_TRIGGER_PATTERNS` (e.g., editing a Finviz `params/*.py` reminds you to update `CONTRACTS.md`). |
+| `Stop` | `.claude/hooks/on-stop.js` | 600 s | At the end of a session: run repo-wide `ruff check .`, `ruff format --check .`, `mypy fincli core config logger`, `pytest tests/`, and `pip-audit -r requirements.txt` (skipped if not on PATH). **Phase 1**: mypy results go through the `warnings` channel (advisory, non-blocking). Coverage check is stubbed as `{skipped: true, reason: "Phase 3 deferred"}`. **Phase 4** (after `mypy ... ` returns zero errors) flips mypy to the `issues` channel so it blocks Stop. **Phase 3** (after Phase 2 establishes a real test suite) enables a 90% coverage gate. |
 
 ### Shared utilities
 
@@ -257,7 +254,7 @@ Without this, the sub-agent literally cannot make the call.
 
 | Server | Reminder |
 |---|---|
-| `context7` | Prefer over web search for library/framework docs (Click, pandas, Pydantic, yahooquery, cfscrape). Do NOT use for refactoring, business-logic debugging, or generic programming concepts. |
+| `context7` | Prefer over web search for library/framework docs (Click, pandas, Pydantic, cfscrape, BeautifulSoup4). Do NOT use for refactoring, business-logic debugging, or generic programming concepts. |
 | `zen-mcp` | Default model `gpt-5.2-pro` unless the user names a different one. |
 | `claude-in-chrome` | Each tool must be loaded with `ToolSearch("select:<tool_name>", 1)` before calling. Always start a session with `tabs_context_mcp`. |
 | `claude.ai Postman` | Read its instructions resource completely before answering API-related questions. |
@@ -268,7 +265,7 @@ Without this, the sub-agent literally cannot make the call.
 
 - Build/run conventions, file map, phase status: [`CLAUDE.md`](CLAUDE.md)
 - System architecture, layering, threading: [`ARCHITECTURE.md`](ARCHITECTURE.md)
-- CLI surface, CSV schema, Yahoo data shape, stability policy: [`CONTRACTS.md`](CONTRACTS.md)
+- CLI surface, CSV schema, stability policy: [`CONTRACTS.md`](CONTRACTS.md)
 - Test layout, mocking strategy, Phase 2/3/4 roadmap: [`TESTING.md`](TESTING.md)
-- Master agent index (Tier 1–4 reading order, sub-agent context diet): [`AGENTS.md`](AGENTS.md) (lands in the final commit of harness Phase 1)
+- Master agent index (Tier 1–4 reading order, sub-agent context diet): [`AGENTS.md`](AGENTS.md)
 - Project vision and roadmap: [`docs/THESIS.md`](docs/THESIS.md)

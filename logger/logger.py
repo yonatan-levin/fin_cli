@@ -1,9 +1,10 @@
 """Logging module for Auto-GPT."""
+
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import IO, TYPE_CHECKING, Any, Optional
 
 from colorama import Fore
 
@@ -48,9 +49,7 @@ class Logger(metaclass=Singleton):
         # Info handler in activity.log
         self.file_handler = logging.FileHandler(self.log_dir / log_file, "a", "utf-8")
         self.file_handler.setLevel(logging.DEBUG)
-        info_formatter = AlgoFormatter(
-            "%(asctime)s %(levelname)s %(title)s %(message_no_color)s"
-        )
+        info_formatter = AlgoFormatter("%(asctime)s %(levelname)s %(title)s %(message_no_color)s")
         self.file_handler.setFormatter(info_formatter)
 
         # Error handler error.log
@@ -127,13 +126,60 @@ class Logger(metaclass=Singleton):
         if message:
             if isinstance(message, list):
                 message = " ".join(message)
-        self.logger.log(
-            level, message, extra={"title": str(title), "color": str(title_color)}
-        )
+        self.logger.log(level, message, extra={"title": str(title), "color": str(title_color)})
 
     def set_level(self, level: logging._Level) -> None:
         self.logger.setLevel(level)
         self.typing_logger.setLevel(level)
+
+    def set_console_stream(self, stream: IO[str]) -> None:
+        """Retarget the two console handlers (typing-effect + plain) to `stream`.
+
+        Pillar 2's ``--output -`` mode requires CSV bytes to be the **only**
+        thing on stdout. The two human-readable console handlers normally
+        write to stdout, so this method exists to reroute them to ``stderr``
+        (or any other text-mode stream) before the CSV write begins. File
+        handlers (``activity.log``, ``error.log``) are unaffected — only the
+        in-process console stream changes.
+
+        Args:
+            stream: A text-mode file-like object with a writable ``write``
+                method (e.g., ``sys.stderr``, an ``io.StringIO`` for tests).
+        """
+        # The handlers extend ``logging.StreamHandler`` and our custom
+        # ``emit`` methods route through ``self.stream``, so updating the
+        # attribute here is sufficient to retarget both handlers' output.
+        self.typing_console_handler.stream = stream
+        self.console_handler.stream = stream
+
+    def set_quiet(self, quiet: bool) -> None:
+        """Toggle the console-suppression flag for the two console handlers.
+
+        Pillar 3's ``--quiet`` flag (spec §5.3.1) mutes human-readable
+        chatter on the console without affecting the logger level or the
+        file handlers. The handlers themselves implement the gate inside
+        ``emit`` (see ``ConsoleHandler`` / ``TypingConsoleHandler``); this
+        method exists so the orchestrator has a single named entry point
+        rather than mutating handler attributes directly.
+
+        Semantics:
+          - ``set_quiet(True)`` suppresses INFO and DEBUG records on the
+            console; WARNING and ERROR still surface so failure modes stay
+            visible. File handlers (``activity.log``, ``error.log``) are
+            unaffected — debug records under ``--debug --quiet`` still
+            land in ``activity.log``.
+          - ``set_quiet(False)`` restores the default behavior. Used by
+            tests to leave the singleton clean between cases.
+
+        Args:
+            quiet: ``True`` to suppress informational console output,
+                ``False`` to restore default behavior.
+        """
+        # Both handlers carry their own ``quiet`` attribute; flip them
+        # together so callers don't have to know about the dual-handler
+        # implementation detail.
+        self.typing_console_handler.quiet = quiet
+        self.console_handler.quiet = quiet
 
     def double_check(self, additionalText: Optional[str] = None) -> None:
         if not additionalText:

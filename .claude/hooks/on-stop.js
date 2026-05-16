@@ -221,7 +221,7 @@ async function main() {
     const gitDiffServices = getGitDiffAffectedServices();
     const mergedServices = [...new Set([...sessionServices, ...gitDiffServices])];
 
-    // Expand with dependent services (e.g., editing core → also test fincli, fundainsight)
+    // Expand with dependent services (e.g., editing core → also test fincli)
     const affectedServices = expandWithDependents(mergedServices);
 
     // Clean up the rules-loaded state so the next conversation starts fresh
@@ -266,7 +266,7 @@ async function main() {
       },
       {
         name: 'Type check (mypy)',
-        cmd: 'mypy fundainsight fincli core config logger',
+        cmd: 'mypy fincli core config logger',
         channel: 'warnings', // Phase 1: advisory only. Phase 4 flips to 'issues'.
       },
       {
