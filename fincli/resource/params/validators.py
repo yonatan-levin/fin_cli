@@ -27,6 +27,7 @@ Design notes:
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import TypedDict
 
 import click
 
@@ -34,6 +35,20 @@ from ._label_format import attr_to_label
 from .descriptive_params import Descriptive_Params
 from .fundamental_params import Fundamental_Params
 from .technical_params import Technical_Params
+
+
+class _LabelledEntry(TypedDict):
+    """Per-entry shape returned by ``list_valid_filters_with_labels``.
+
+    Pinning the shape as a TypedDict (rather than ``dict[str, object]``)
+    lets call sites read ``entry["values"]`` without an ``isinstance``
+    re-narrow — the type checker already knows it is a ``dict[str, str]``.
+    Folded in per REVIEWER LOW #1 on the T1 commit.
+    """
+
+    label: str
+    values: dict[str, str]
+
 
 # The three classes whose `[query_key, {value_code: display_name}]` attributes
 # define the universe of legal filter pairs. Centralized as a module constant
@@ -99,14 +114,15 @@ def list_valid_filters() -> dict[str, list[str]]:
         A mapping from each registered Finviz query key to the list of
         valid value codes for that key. Insertion order matches the param
         class declaration order (Fundamental, then Descriptive, then
-        Technical).
+        Technical). Drops the value labels — use
+        ``list_valid_filters_with_labels()`` if labels are needed.
     """
     return {
         query_key: list(values_dict) for _attr_name, query_key, values_dict in _iter_param_entries()
     }
 
 
-def list_valid_filters_with_labels() -> dict[str, dict[str, object]]:
+def list_valid_filters_with_labels() -> dict[str, _LabelledEntry]:
     """Return the inventory with human labels + value-label maps per spec §5.2.
 
     Sibling of `list_valid_filters`: same source data (walks
@@ -117,18 +133,17 @@ def list_valid_filters_with_labels() -> dict[str, dict[str, object]]:
     for non-Python consumers (Go, Node, etc.) per
     `docs/features/list-filters-spec.md` §5.4.
 
-    Per-entry shape: ``{"label": str, "values": {value_code: value_label}}``.
-    The empty-string value code (the "Any" sentinel) is preserved verbatim
-    because the validator accepts it as a legal value.
+    Per-entry shape (`_LabelledEntry`):
+    ``{"label": str, "values": {value_code: value_label}}``. The empty-string
+    value code (the "Any" sentinel) is preserved verbatim because the
+    validator accepts it as a legal value.
 
     Returns:
         A mapping ``{query_key: {"label": ..., "values": {...}}}`` whose
         insertion order matches param-class declaration order (Fundamental,
-        then Descriptive, then Technical). The ``object`` value type on
-        the inner dict is the union of ``str`` (label) and
-        ``dict[str, str]`` (values map); consumers narrow at use.
+        then Descriptive, then Technical).
     """
-    inventory: dict[str, dict[str, object]] = {}
+    inventory: dict[str, _LabelledEntry] = {}
     for attr_name, query_key, values_dict in _iter_param_entries():
         inventory[query_key] = {
             "label": attr_to_label(attr_name),

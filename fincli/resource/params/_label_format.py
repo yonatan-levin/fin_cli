@@ -43,6 +43,7 @@ _ACRONYMS: frozenset[str] = frozenset(
     }
 )
 
+# Lowercased only when not in position 0 (see attr_to_label).
 _CONNECTORS: frozenset[str] = frozenset({"to", "and", "or", "of", "in", "at", "by", "for", "with"})
 
 

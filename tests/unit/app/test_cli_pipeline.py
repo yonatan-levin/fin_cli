@@ -211,6 +211,67 @@ def test_history_and_scrape_link_still_mutex() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Mutex extension — `--list-filters` joins the input-mode mutex set as a
+# sixth alternative entry (metadata-dump mode). Pairing it with each of the
+# five existing input-mode flags must exit 2 with the extended canonical
+# mutex message. Pins docs/features/list-filters-spec.md §6 + §7.2 bullet 3-5.
+# ---------------------------------------------------------------------------
+
+
+def test_list_filters_and_filter_mutually_exclusive() -> None:
+    """`--list-filters --json` + `--filter` → exit 2 with mutex message."""
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--list-filters", "--json", "--filter", "fa_pe=u20"])
+    assert result.exit_code == 2
+    assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
+
+
+def test_list_filters_and_filters_json_mutually_exclusive() -> None:
+    """`--list-filters --json` + `--filters-json` → exit 2 with mutex message."""
+    runner = CliRunner()
+    result = runner.invoke(
+        run_main, ["--list-filters", "--json", "--filters-json", '{"fa_pe":"u20"}']
+    )
+    assert result.exit_code == 2
+    assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
+
+
+def test_list_filters_and_filters_file_mutually_exclusive(tmp_path: Path) -> None:
+    """`--list-filters --json` + `--filters-file` → exit 2 with mutex message."""
+    file_path = tmp_path / "filters.json"
+    file_path.write_text('{"sec":"energy"}', encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--list-filters", "--json", "--filters-file", str(file_path)])
+    assert result.exit_code == 2
+    assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
+
+
+def test_list_filters_and_history_mutually_exclusive() -> None:
+    """`--list-filters --json` + `--history` → exit 2 with mutex message."""
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--list-filters", "--json", "--history"])
+    assert result.exit_code == 2
+    assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
+
+
+def test_list_filters_and_scrape_link_mutually_exclusive() -> None:
+    """`--list-filters --json` + `--scrape-link` → exit 2 with mutex message."""
+    runner = CliRunner()
+    result = runner.invoke(
+        run_main,
+        ["--list-filters", "--json", "--scrape-link", "https://finviz.com/x"],
+    )
+    assert result.exit_code == 2
+    assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
+
+
+# ---------------------------------------------------------------------------
 # Malformed `--filter` token handling.
 # ---------------------------------------------------------------------------
 
