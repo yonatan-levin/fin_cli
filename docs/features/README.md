@@ -22,6 +22,7 @@ Banner format matches the precedent in `docs/refactoring/archive/` and `docs/rev
 |---|---|---|---|
 | `docs/features/archive/scrape-link-restoration-spec.md` | 2026-05-13 | `930f05d` | Restored the `--scrape-link` CLI option lost during the May-2026 single-mode refactor. |
 | `docs/features/archive/pipeline-mode-spec.md` | 2026-05-16 | `f775b7e..HEAD` | Pipeline mode umbrella — four pillars (structured filter input, deterministic output destination, stream discipline + JSON summary, differentiated exit codes 0/1/2/3/4) + two adjacent fixes (`convert_market_cap_to_numeric` nullable Float64, `Symbol` canonical + `--output -` Ticker carve-out). `fincli` is now consumable by another program. See `docs/FEEDBACK-LOG.md` 2026-05-16 entry for decisions captured. |
+| `docs/features/archive/list-filters-spec.md` | 2026-05-21 | `82d3d6e..HEAD` | `fincli --list-filters --json` filter-inventory dump for non-Python integrators (Go, Node, Rust) — mechanical label derivation in `fincli/resource/params/_label_format.attr_to_label`; sibling walker `list_valid_filters_with_labels` reusing a shared `_iter_param_entries` generator; canonical `keys` array ordering contract; new top-level `INTEGRATION.md` documenting the subprocess pattern. Closes the polyglot-discoverability gap deferred by pipeline mode. See `docs/FEEDBACK-LOG.md` 2026-05-21 entry for decisions captured. |
 
 ## Active entries
 

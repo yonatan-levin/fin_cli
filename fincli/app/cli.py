@@ -36,11 +36,12 @@ _MUTEX_MSG = (
 )
 
 # Schema version for the ``--list-filters --json`` payload. Mirrors the
-# JSON_SUMMARY_SCHEMA_VERSION pattern in ``fincli/app/main.py``: a module-level
-# constant so tests can import it directly and assert on the wire value.
-# Spec §5.2 stability policy: additions to the payload are non-breaking
-# (schema_version stays 1); renames/removals/type changes bump this.
-_LIST_FILTERS_SCHEMA_VERSION = 1
+# JSON_SUMMARY_SCHEMA_VERSION pattern in ``fincli/app/main.py``: a module-public
+# constant (no leading underscore) so tests and external integrators can import
+# it directly and assert on the wire value. Spec §5.2 stability policy:
+# additions to the payload are non-breaking (schema_version stays 1);
+# renames/removals/type changes bump this.
+LIST_FILTERS_SCHEMA_VERSION = 1
 
 
 def _normalize_filter_input(
@@ -107,17 +108,17 @@ def _emit_filter_inventory() -> None:
     order, so the ``keys`` list is the contract consumers index into
     ``filters[key]`` with).
 
-    Uses local imports (``json``, ``list_valid_filters_with_labels``) so
-    importing this module stays cheap for non-list-filters invocations,
-    mirroring the existing local import of ``run_stock_screener``.
+    Uses a local import (``list_valid_filters_with_labels``) so importing
+    this module stays cheap for non-list-filters invocations, mirroring the
+    existing local import of ``run_stock_screener``. ``json`` is already at
+    module scope (used by ``_normalize_filter_input``), so re-importing it
+    here would be redundant.
     """
-    import json
-
     from fincli.resource.params.validators import list_valid_filters_with_labels
 
     inventory = list_valid_filters_with_labels()
     payload: dict[str, object] = {
-        "schema_version": _LIST_FILTERS_SCHEMA_VERSION,
+        "schema_version": LIST_FILTERS_SCHEMA_VERSION,
         # Canonical ordering contract per spec §5.2: identical membership to
         # ``filters.keys()`` and same iteration order.
         "keys": list(inventory.keys()),

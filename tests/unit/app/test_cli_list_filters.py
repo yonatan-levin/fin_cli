@@ -3,7 +3,7 @@
 Pins the contract from ``docs/features/list-filters-spec.md`` §5.1 + §5.5 + §6:
 
   - Both flags surface in ``--help``.
-  - Module constant ``_LIST_FILTERS_SCHEMA_VERSION`` is importable from
+  - Module constant ``LIST_FILTERS_SCHEMA_VERSION`` is importable from
     ``fincli.app.cli`` so other call sites (and tests) can reference the
     schema version by name rather than re-typing the literal ``1``.
   - ``--list-filters`` alone (without ``--json``) exits 2 with a UsageError
@@ -37,7 +37,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from fincli.app.cli import _LIST_FILTERS_SCHEMA_VERSION, run_main
+from fincli.app.cli import LIST_FILTERS_SCHEMA_VERSION, run_main
 
 
 @pytest.fixture
@@ -99,7 +99,7 @@ def test_list_filters_with_json_exits_zero_and_emits_single_json_line() -> None:
     # Strip the trailing newline `click.echo` adds; the remainder must
     # parse as JSON in one shot — proving "exactly one line".
     payload = json.loads(result.output.strip())
-    assert payload["schema_version"] == _LIST_FILTERS_SCHEMA_VERSION
+    assert payload["schema_version"] == LIST_FILTERS_SCHEMA_VERSION
     assert isinstance(payload["keys"], list) and payload["keys"]
     assert isinstance(payload["filters"], dict) and payload["filters"]
 
@@ -195,7 +195,7 @@ def test_list_filters_with_output_path_does_not_create_file(tmp_path: Path) -> N
     )
     # The inventory still landed on stdout.
     payload = json.loads(result.output.strip())
-    assert payload["schema_version"] == _LIST_FILTERS_SCHEMA_VERSION
+    assert payload["schema_version"] == LIST_FILTERS_SCHEMA_VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +250,7 @@ def test_list_filters_matrix_short_circuits_before_every_other_handler(
     )
     # Parseable in one shot — proving "exactly one line".
     payload = json.loads(stdout.strip())
-    assert payload["schema_version"] == _LIST_FILTERS_SCHEMA_VERSION
+    assert payload["schema_version"] == LIST_FILTERS_SCHEMA_VERSION
     assert set(payload.keys()) == {"schema_version", "keys", "filters"}
 
     # No welcome banner anywhere (CliRunner captures both streams).

@@ -55,10 +55,12 @@ At the start of any work session, read these files in order. Stop at the first t
 | 20 | `docs/bugs/` | Bug tracker and known-issue registry |
 | 21 | `docs/refactoring/` | Refactoring specs and upgrade design docs |
 | 22 | `docs/reviewer/` | Review follow-up tracker |
-| 23 | `fincli/` | Stock screener source code |
-| 24 | `core/` | Base configuration and JSON converter utilities |
-| 25 | `config/` | Pydantic-based configuration with history support |
-| 26 | `logger/` | Singleton logger (console typing effect, file, JSON handlers) |
+| 23 | `docs/features/` | Feature-restoration / feature-addition specs; shipped specs move to `archive/` |
+| 24 | `docs/pendingwork/` | Session handoff docs (dated); historical handoffs move to `archive/` |
+| 25 | `fincli/` | Stock screener source code |
+| 26 | `core/` | Base configuration and JSON converter utilities |
+| 27 | `config/` | Pydantic-based configuration with history support |
+| 28 | `logger/` | Singleton logger (console typing effect, file, JSON handlers) |
 
 ---
 

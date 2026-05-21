@@ -61,6 +61,41 @@ This file captures user corrections and validations not yet promoted to durable 
 
 **How to apply:** Existing dev environments must `pip install -e ".[dev]"` (or `pip install platformdirs`) once after pulling this commit. A pre-existing `fincli/local_history/filter_history.json` cache from the prior repo-root default will NOT be auto-migrated — the new default path is different. To preserve a cache, either copy the file to the new platformdirs path manually, or set `HISTORY_DIR=fincli/local_history` to point back at the old location. For most personal use, just regenerate the cache by going through the interactive flow once. Future env-var additions in this project should follow the un-namespaced UPPER_CASE_WITH_UNDERSCORES convention (no `FINCLI_` prefix) to match `USE_HISTORY` and `HISTORY_DIR`.
 
+### 2026-05-21 — Filter inventory dump (`--list-filters --json`) + INTEGRATION.md
+
+**What:** Shipped the `list-filters-spec.md` feature over three tasks landing in commits `82d3d6e` (T1: helpers), `6a8c343` (T2: CLI wiring), and the umbrella-closer T3 (this doc sweep + spec archive). `fincli --list-filters --json` dumps the full Finviz filter inventory as a single-line JSON object (`{schema_version, keys, filters: {key: {label, values}}}`) to stdout and exits 0, short-circuiting the screener pipeline. A new top-level `INTEGRATION.md` documents the subprocess pattern for non-Python consumers (Go, Node, Rust). The spec moved to `docs/features/archive/list-filters-spec.md` with a SHIPPED banner. Earlier deep-think pass at `16c79ec` amended both the spec and the plan with the canonical `keys` ordering contract before T1 began.
+
+**Decisions captured:**
+
+- **Polyglot framing**: JSON is the format; all four shape options considered were JSON. Picked the nested-with-labels shape (`{label, values: {...}}`) over flat codes-only or grouped-by-category. Anti-polyglot Python-tuple form was rejected upfront. Spec §5.2.
+
+- **Mechanical label derivation, not data augmentation.** `fincli/resource/params/_label_format.attr_to_label` derives display labels from Python attribute names (e.g., `FORWARD_PE` -> `"Forward PE"`) with acronym preservation (`PE`, `ROA`, `EPS`, `RSI`, ...) and connector lowercasing (`to`, `and`, `of`, ...). Avoids touching the params files' two-element-list contract (CONTRACTS §2). Known cosmetic limitations (preserves the `Fifty_Tow_Day_High_Low` typo; `PE` renders as `PE` not `P/E`; `QTR` renders as `Qtr`) are intentional starting-point trade-offs that consumers can override locally. Spec §5.3 + OQ4/OQ5.
+
+- **`LIST_FILTERS_SCHEMA_VERSION = 1` pinning**, mirroring the `JSON_SUMMARY_SCHEMA_VERSION` pattern from pipeline mode (CONTRACTS §5.5). Adding new filter entries or new value codes is **additive** and does NOT bump the version; rename/remove/type changes bump it and are breaking. The constant is a module-public name (no leading underscore) so polyglot integrators with a Python shim can `from fincli.app.cli import LIST_FILTERS_SCHEMA_VERSION` rather than re-typing the literal.
+
+- **`keys` array as the canonical ordering contract** (deep-think amendment at `16c79ec`). Go's `encoding/json` decode into `map[string]T` randomizes iteration; JS object iteration is engine-defined. The top-level `keys` list pins the Fundamental -> Descriptive -> Technical declaration order so consumers can iterate it and index into `filters[key]`. `set(keys) == set(filters.keys())` and `len(keys) == len(filters)` are tested invariants. The key-ordering nuance — `sh_*` prefix appears in both `Fundamental_Params` (ownership) and `Descriptive_Params` (shares/volume) but class membership wins over prefix grouping — is documented in spec §5.2 and CONTRACTS §5.6.
+
+- **`--list-filters`, not `--help-filters`.** Leaves `--help-filters` available for a future human-readable terminal view (currently deferred). Spec §3 / §9.
+
+- **No HTTP server / no `fincli serve`.** Subprocess pattern stays the integration boundary — the pipeline-mode umbrella made the CLI deterministic enough to be a single-shot building block, and INTEGRATION.md documents how to use it as one. Spec §3 / §9.
+
+- **Per-language cookbook deferred.** INTEGRATION.md lands the language-agnostic patterns now (bootstrap, per-screen call flow, exit-code routing table, `OUTPUT_PATH=` recovery, concurrency notes, caching guidance); working Go / Node / Rust examples are placeholder-only until the downstream consumer project is further along. Spec §9 + INTEGRATION.md "Per-language cookbook" section.
+
+- **`--json` flag is silently ignored when `--list-filters` is not set** (spec OQ2 HUMAN-approved default). Sub-flag of `--list-filters`, not a free-standing format selector — adding bare `--json` to an unrelated invocation must not break it. Pinned by an explicit unit test (`tests/unit/app/test_cli_list_filters.py::test_bare_json_flag_is_silently_ignored`) per spec OQ-E.
+
+- **Integrated OQ-B/C/D matrix test** (BACKEND step 9, per the `16c79ec` deep-think follow-up). One matrix-style test pins the short-circuit + mutex + orthogonal-flag interaction as a single unit: `--list-filters --json --quiet --debug --json-summary --output -` exits 0, stdout is a single JSON line, no banner anywhere, no progress logs, no `OUTPUT_PATH=` line, no JSON summary. Pins the **interaction** (short-circuit fires BEFORE banner emission, BEFORE the `run_stock_screener` import, BEFORE each orthogonal-flag handler), not isolated rules.
+
+**Not shipped (tracked):**
+
+- Per-language cookbook code examples (Go, Node, Rust). Placeholder in INTEGRATION.md awaits the downstream consumer project.
+- `--help-filters` (human-readable terminal variant). Reserved name; could be added later.
+- Other format flags (`--list-filters --yaml`, `--list-filters --text`). `--json` is the only currently-supported format.
+- Typo fix for `Fifty_Tow_Day_High_Low` (-> `Two`). Separate one-line PR; this spec preserved the existing label to avoid conflating cleanup with feature work.
+
+**How to apply:** Existing dev environments need no reinstall — no new runtime dependency. The new flags layer onto the existing CLI with zero behavioral change for users who don't set them. For non-Python integrators: read `INTEGRATION.md` for the subprocess pattern; CONTRACTS §5.6 for the inventory JSON schema; CONTRACTS §5.5 for the per-run summary schema; `fincli/app/exit_codes.py` for the classifier constants. For Python integrators: continue to use the importable surface in `core.configuration.configurator.build_config` + `fincli.app.main.run_stock_screener` per CONTRACTS §6.
+
+---
+
 ### 2026-05-16 — Pipeline mode (structured input + deterministic output + stream discipline + exit codes)
 
 **What:** Shipped the `pipeline-mode-spec.md` umbrella feature over six tasks landing across commits `f775b7e..HEAD` on the `refactor/fincli-only` branch. fincli is now usable as a single-shot building block in a downstream automation pipeline. The spec moved to `docs/features/archive/pipeline-mode-spec.md` with a Shipped banner.

@@ -1,14 +1,30 @@
 # List-Filters — Feature Spec
 
+> **SHIPPED — 2026-05-21.** Three sequential tasks landed across commits `82d3d6e..HEAD` on the `refactor/fincli-only` branch (T1 helpers — `attr_to_label` + `list_valid_filters_with_labels` + shared `_iter_param_entries`; T2 CLI wiring — `--list-filters --json` short-circuit + extended six-flag mutex + `_emit_filter_inventory`; T3 doc sweep — this banner + `CONTRACTS.md` §5.6 + new `INTEGRATION.md` at repo root + `docs/MODULE_REFERENCE.md` + `docs/THESIS.md` Change Log + `docs/FEEDBACK-LOG.md` + `README.md` pointer + `TESTING.md` + spec archive move). Closes the polyglot-discoverability gap that pipeline mode (shipped 2026-05-16) intentionally deferred — non-Python consumers (Go, Node, Rust) can now discover the full Finviz filter vocabulary via `fincli --list-filters --json` and follow `INTEGRATION.md` for the subprocess pattern. 16 new tests, 0 regressions in the pre-existing 229 cases. Field decisions captured in `docs/FEEDBACK-LOG.md` (2026-05-21 entry). The earlier deep-think pass at `16c79ec` amended both this spec and the implementation plan with the canonical `keys` ordering contract before T1 began.
+
+**Status:** SHIPPED (was DRAFT)
+**Spec ID:** `list-filters`
+**Date drafted:** 2026-05-17
+**Date shipped:** 2026-05-21
+**Author:** brainstorming skill (interactive design with user)
+**Related:**
+- `docs/features/archive/pipeline-mode-spec.md` (Pillar 1 validator + §6.7) — the umbrella that made the subprocess pattern viable
+- `CONTRACTS.md` §1 (CLI surface), §5.5 (JSON summary precedent for `schema_version`), §5.6 (this feature's inventory schema), §7 (stability policy)
+- `INTEGRATION.md` (NEW at repo root) — language-agnostic subprocess patterns for non-Python integrators
+- `fincli/resource/params/validators.py` (sibling helpers `list_valid_filters` + `list_valid_filters_with_labels` consuming a shared `_iter_param_entries` walker)
+
+---
+
 ## 1. Status / Metadata
 
 | Field | Value |
 |---|---|
-| Status | DRAFT |
+| Status | SHIPPED |
 | Drafted | 2026-05-17 |
+| Shipped | 2026-05-21 |
 | Author | brainstorming skill (interactive design with user) |
 | Spec ID | list-filters |
-| Related | `docs/features/archive/pipeline-mode-spec.md` (Pillar 1 validator + §6.7); `CONTRACTS.md` §1 (CLI surface), §5.5 (JSON summary precedent for `schema_version`); `fincli/resource/params/validators.py` (existing `list_valid_filters()` helper) |
+| Related | `docs/features/archive/pipeline-mode-spec.md` (Pillar 1 validator + §6.7); `CONTRACTS.md` §1 (CLI surface), §5.5 (JSON summary precedent for `schema_version`), §5.6 (this feature's inventory schema); `INTEGRATION.md` (NEW at repo root); `fincli/resource/params/validators.py` (sibling helper `list_valid_filters_with_labels`) |
 
 ---
 
@@ -121,7 +137,9 @@ A new `--list-filters --json` flag that dumps the full inventory in one shot, pl
 
 **Source of truth**: walks the same three param classes (`Fundamental_Params`, `Descriptive_Params`, `Technical_Params`) that `validators.py:list_valid_filters()` walks. Reuses the existing walker logic; extends it to capture the human label (today's helper drops it).
 
-**Payload size**: ~20 KB across the 3 classes × ~177 filter params × avg ~12 value codes each. Small enough to fetch once at consumer-app startup and cache.
+**Payload size**: ~46 KB across the 3 classes (66 filter keys total: 29 Fundamental + 18 Descriptive + 19 Technical, measured live post-T2 at 47,216 bytes). Small enough to fetch once at consumer-app startup and cache.
+
+**Key-ordering nuance**: `keys` ordering is by **class membership**, not by key-prefix. Keys with prefix `sh_*` appear in both `Fundamental_Params` (insider/institutional ownership: `sh_insiderown`, `sh_insidertrans`, `sh_instown`, `sh_insttrans`) and `Descriptive_Params` (shares outstanding / average volume / price / float: `sh_outstanding`, `sh_opt`, `sh_avgvol`, `sh_relvol`, `sh_curvol`, `sh_price`, `sh_float`); both groups respect the Fundamental → Descriptive → Technical class order even though their prefixes interleave. Consumers iterating `keys` see all Fundamental `sh_*` entries first, then a switch into Descriptive entries (some of which are also `sh_*`), then Technical.
 
 **Stability policy**: the JSON payload format is added to `CONTRACTS.md` §7 stability list alongside the JSON summary schema (§5.5).
 
