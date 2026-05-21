@@ -80,6 +80,7 @@ A new `--list-filters --json` flag that dumps the full inventory in one shot, pl
 ```json
 {
   "schema_version": 1,
+  "keys": ["fa_pe", "sec", "ta_rsi"],
   "filters": {
     "fa_pe": {
       "label": "PE",
@@ -113,9 +114,10 @@ A new `--list-filters --json` flag that dumps the full inventory in one shot, pl
 | Field | Type | Notes |
 |---|---|---|
 | `schema_version` | int | Pinned to `1`. Bump on any breaking change (rename, remove, dtype change). Adding new filter entries or new value codes inside an existing entry is **additive** and does NOT bump the version. |
-| `filters` | dict | Keyed by Finviz `query_key` (NOT the Python attribute name). Insertion order = param-class declaration order: Fundamental → Descriptive → Technical. Python 3.7+ preserves dict insertion order; JSON serializers respect it. Go's `encoding/json` doesn't guarantee order on decode into `map[string]T`; consumers needing grouping should use a separate `[]string` of keys. |
+| `keys` | list[str] | **Canonical ordering contract.** Lists every Finviz `query_key` in canonical declaration order (Fundamental → Descriptive → Technical). Consumers that need stable order (Go's `encoding/json` decode into `map[string]T` randomizes iteration; JS object iteration is engine-defined) MUST iterate `keys` and index into `filters[key]`. Length and membership must equal `filters.keys()` exactly — this is a tested invariant per §7.3. |
+| `filters` | dict | Keyed by Finviz `query_key` (NOT the Python attribute name). Python emits in `keys` order, but consumers MUST NOT rely on JSON-object iteration order across languages — use the `keys` field instead. |
 | `filters[key].label` | str | Human-readable label for the key, derived per §5.3. Starting-point only; consumers can override locally for UX polish. |
-| `filters[key].values` | dict | `{value_code: value_label}`. The empty `""` value-code (the "Any" sentinel) is included — it's a legal filter value the validator accepts. |
+| `filters[key].values` | dict | `{value_code: value_label}`. The empty `""` value-code (the "Any" sentinel) is included — it's a legal filter value the validator accepts. Same iteration-order caveat as `filters` — if value-order ever matters to a consumer, raise an OQ for a parallel `values_keys` array (out of scope today; not needed for the Go consumer per spec §4.2). |
 
 **Source of truth**: walks the same three param classes (`Fundamental_Params`, `Descriptive_Params`, `Technical_Params`) that `validators.py:list_valid_filters()` walks. Reuses the existing walker logic; extends it to capture the human label (today's helper drops it).
 
@@ -237,7 +239,12 @@ def _emit_filter_inventory() -> None:
     import json
     from fincli.resource.params.validators import list_valid_filters_with_labels
 
-    payload = {"schema_version": 1, "filters": list_valid_filters_with_labels()}
+    inventory = list_valid_filters_with_labels()
+    payload = {
+        "schema_version": 1,
+        "keys": list(inventory.keys()),  # canonical ordering contract per §5.2
+        "filters": inventory,
+    }
     click.echo(json.dumps(payload, ensure_ascii=False))
     # caller (run_main) handles the exit
 ```
@@ -296,8 +303,12 @@ are mutually exclusive; pick one input mode.
 
 ### 7.3 JSON payload — schema
 - [ ] Stdout contains exactly one JSON object on a single line (no pretty-printing — see OQ1; tests assert by parsing the line, not by counting newlines beyond the trailing `\n` that `click.echo` adds).
-- [ ] Top-level keys: exactly `["schema_version", "filters"]`.
+- [ ] Top-level keys: exactly `["schema_version", "keys", "filters"]`.
 - [ ] `schema_version == 1`.
+- [ ] `keys` is a non-empty list of strings.
+- [ ] `set(keys) == set(filters.keys())` (membership matches exactly — no orphan keys, no missing entries).
+- [ ] `len(keys) == len(filters)` (no duplicate keys).
+- [ ] `keys` order matches param-class declaration order: every Fundamental key appears before every Descriptive key; every Descriptive before every Technical.
 - [ ] `filters` is a non-empty dict.
 - [ ] Every value in `filters` is a dict with exactly the keys `["label", "values"]`.
 - [ ] Every `filters[k].label` is a non-empty string.
