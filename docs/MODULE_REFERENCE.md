@@ -110,7 +110,7 @@ CSV destination resolved via the Pillar-2 precedence chain: `--output PATH` > `-
 
 Pipeline mode adds two side-effect outputs the orchestrator surfaces on every run:
 
-- `OUTPUT_PATH=<value>` line written to stderr immediately before exit (absolute path, or `-` for stdout streaming, or empty when an exception fired before the destination was resolved).
+- `OUTPUT_PATH=<value>` line written to stderr immediately before exit (absolute path for `--output PATH` and default-destination runs, or `-` for stdout streaming). The destination is resolved before the orchestrator's try-block opens, so the line is populated on every exit code (0/1/3/4) for any `--output PATH` invocation — never empty.
 - If `--json-summary` is set, a single-line JSON object (schema in CONTRACTS §5.5) written to stdout by default (stderr under `--output -`).
 
 ### Error modes

@@ -340,6 +340,15 @@ def run_stock_screener(
     # without an edit.
     code = exit_codes.SUCCESS
 
+    # Pre-resolve the file destination BEFORE the try-block. Path resolution
+    # is pure (no I/O, no network) so it cannot raise the upstream/data
+    # exceptions the try-block guards against — and lifting it here
+    # guarantees ``_resolve_output_path_label`` sees a populated value on
+    # every exception path. Closes the empty-``OUTPUT_PATH=`` regression
+    # where a parser/network failure left the discovery line bare.
+    if not csv_on_stdout:
+        resolved_file_path = config.file_path("stock_screener")
+
     try:
         logger.info(f"Fetching HTML content from {quarry}", "Fetching HTML - Started")
         html_content = fetch_page_sync(quarry)
@@ -349,14 +358,6 @@ def run_stock_screener(
 
         pages = fetch_urls(quarry, stock_screener_page.page_count)
         data_rows = aggregate_rows(pages)
-
-        # Pillar 2 dispatch decision lives at the orchestrator boundary so
-        # the CSV write site can hand pandas a path *or* ``sys.stdout``
-        # uniformly. Pre-resolve `resolved_file_path` here so it's also
-        # available for the zero-row branch below (which needs to write a
-        # header-only file at the same destination).
-        if not csv_on_stdout:
-            resolved_file_path = config.file_path("stock_screener")
 
         # ``aggregate_rows`` returns a list-of-lists: one inner list per
         # matched ``<table>``, each containing zero-or-more row tuples.

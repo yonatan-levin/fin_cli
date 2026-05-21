@@ -49,6 +49,19 @@ def finviz_happy_html() -> bytes:
     return _read_fixture("finviz_happy.html")
 
 
+def finviz_one_page_html() -> bytes:
+    """Single-page screener result mirroring the live 1-page Finviz shape.
+
+    Regression fixture for the ``page_count`` IndexError: Finviz emits
+    exactly one ``<a class="screener-pages is-selected">1</a>`` element
+    when the query matches a single page (no ``is-next`` arrow). The old
+    ``content[-2]`` indexing crashed on this shape because ``len(content)
+    == 1``. Mirrors the live capture saved under ``scratch/`` during
+    e2e validation.
+    """
+    return _read_fixture("finviz_one_page.html")
+
+
 def finviz_empty_html() -> bytes:
     """Screener page with the table present but empty ``<tbody>``.
 

@@ -34,6 +34,7 @@ import requests
 from _fixtures_loader import (
     finviz_happy_html,
     finviz_malformed_row_html,
+    finviz_one_page_html,
 )
 from click.testing import CliRunner
 
@@ -219,3 +220,34 @@ def test_happy_path_exits_with_success_code(tmp_path: Path) -> None:
 
     assert result.exit_code == exit_codes.SUCCESS, f"stderr: {result.stderr}"
     assert target.exists()
+
+
+# ---------------------------------------------------------------------------
+# Live-shape regression — single-page Finviz result. Mirrors the live capture
+# from the ``fa_pe=u5,sec=energy`` query that surfaced the original IndexError
+# in ``StockTableScreeningContent.page_count``. Old code did ``content[-2]``
+# unconditionally and crashed when Finviz emitted exactly one
+# ``<a class="screener-pages is-selected">1</a>`` (no ``is-next`` arrow).
+# ---------------------------------------------------------------------------
+
+
+def test_single_page_result_exits_with_success_code(tmp_path: Path) -> None:
+    """1-page Finviz result -> exit 0, CSV written, no IndexError leaks."""
+    target = tmp_path / "out.csv"
+    runner = CliRunner()
+    with patch("fincli.app.main.fetch_page_sync", return_value=finviz_one_page_html()):
+        result = runner.invoke(
+            run_main,
+            ["--filter", "fa_pe=u5", "--filter", "sec=energy", "--output", str(target)],
+            catch_exceptions=False,
+        )
+
+    assert result.exit_code == exit_codes.SUCCESS, (
+        f"Expected SUCCESS; got {result.exit_code}. stderr: {result.stderr}"
+    )
+    assert "IndexError" not in result.stderr
+    assert target.exists(), "Single-page run must produce the CSV file"
+
+    lines = target.read_text(encoding="utf-8").splitlines()
+    # Header + at least one data row (fixture has 3).
+    assert len(lines) >= 2, f"Expected header + data rows; got {lines!r}"

@@ -578,3 +578,65 @@ def test_quiet_composes_with_debug(mock_runner: MagicMock) -> None:
     kwargs = mock_runner.call_args.kwargs
     assert kwargs.get("debug") is True
     assert kwargs.get("quiet") is True
+
+
+# ---------------------------------------------------------------------------
+# Regression — OUTPUT_PATH= must carry the user's --output value on every
+# exception path, including data-class failures (IndexError raised before
+# any I/O fires). Previously the destination was resolved inside the
+# try-block AFTER `fetch_urls(quarry, stock_screener_page.page_count)`,
+# so an IndexError from `page_count` left `resolved_file_path` as None and
+# the discovery line surfaced as empty `OUTPUT_PATH=`. The hoist of the
+# `if not csv_on_stdout: resolved_file_path = config.file_path(...)` block
+# before the try-block guarantees the abs-path label is always populated.
+# ---------------------------------------------------------------------------
+
+
+def test_output_path_populated_on_data_exception(tmp_path: Path) -> None:
+    """IndexError from page_count -> exit 4, OUTPUT_PATH= carries the path.
+
+    Pins the closure of the empty-OUTPUT_PATH= regression on the DATA
+    exit path. Uses an absolute --output target so the assertion can match
+    the resolved label without depending on CWD.
+    """
+    from pathlib import PurePath
+
+    from fincli.app import exit_codes
+    from fincli.app.main import OUTPUT_PATH_LINE_PREFIX
+
+    target = tmp_path / "out.csv"
+    runner = CliRunner()
+    # Drive the parser into IndexError by patching `fetch_page_sync` to
+    # return non-Finviz HTML, then make `StockTableScreeningContent` raise
+    # the same IndexError the live one-page-result path used to produce.
+    with (
+        patch("fincli.app.main.fetch_page_sync", return_value=b"<html></html>"),
+        patch(
+            "fincli.app.main.StockTableScreeningContent",
+        ) as content_cls,
+    ):
+        instance = content_cls.return_value
+        type(instance).page_count = property(
+            lambda self: (_ for _ in ()).throw(IndexError("list index out of range")),
+        )
+        result = runner.invoke(
+            run_main,
+            ["--filter", "fa_pe=u20", "--output", str(target)],
+            catch_exceptions=False,
+        )
+
+    assert result.exit_code == exit_codes.DATA, (
+        f"Expected DATA exit; got {result.exit_code}. stderr: {result.stderr}"
+    )
+
+    # Resolve the expected absolute label exactly as `_resolve_output_path_label`
+    # produces it (Path.resolve(strict=False)) so the assertion is independent
+    # of OS path normalization quirks (e.g., Windows short-name expansion).
+    expected_label_line = f"{OUTPUT_PATH_LINE_PREFIX}{PurePath(str(target.resolve()))}"
+    assert expected_label_line in result.stderr, (
+        f"Expected stderr to contain {expected_label_line!r}; got: {result.stderr!r}"
+    )
+    # And specifically NOT the bug-state empty value.
+    assert f"{OUTPUT_PATH_LINE_PREFIX}\n" not in result.stderr, (
+        "Regression: OUTPUT_PATH= must not be empty on the DATA exit path"
+    )

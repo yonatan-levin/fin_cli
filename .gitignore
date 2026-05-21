@@ -180,3 +180,7 @@ package.json
 .claude/hooks/.session-edits.json
 .claude/hooks/.rules-loaded
 .claude/projects/
+
+# Debugging scratchwork (session-local, not for the repo)
+scratch/
+e2e_*.txt
