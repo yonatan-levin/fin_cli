@@ -1,7 +1,7 @@
 """Tests for `fincli.resource.params._label_format.attr_to_label`.
 
 Pins the mechanical label-derivation algorithm specified in
-`docs/features/list-filters-spec.md` §5.3 and acceptance §7.5.
+`docs/features/archive/list-filters-spec.md` §5.3 and acceptance §7.5.
 
 These tests guard the contract that downstream JSON consumers (and the
 upcoming `--list-filters --json` CLI flag) rely on:

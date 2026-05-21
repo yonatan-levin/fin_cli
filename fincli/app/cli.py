@@ -7,7 +7,7 @@ via ``--scrape-link``, structured input via ``--filter`` / ``--filters-json``
 the structured-input options closes the gap that prevented fincli from being
 driven non-interactively in a downstream pipeline — see
 ``docs/features/archive/pipeline-mode-spec.md`` §5.1 (Pillar 1). The
-``--list-filters --json`` mode (``docs/features/list-filters-spec.md``)
+``--list-filters --json`` mode (``docs/features/archive/list-filters-spec.md``)
 short-circuits the screener pipeline entirely and emits the filter inventory
 as machine-readable JSON for non-Python consumers.
 
@@ -29,7 +29,7 @@ from config.config import STDOUT_SENTINEL
 # may need updating in parallel. Kept as a module constant so it is trivially
 # assertable from tests and so the wording stays consistent across every
 # input-mode combination. Matches the verbatim text in
-# docs/features/list-filters-spec.md §6 (extended mutex set).
+# docs/features/archive/list-filters-spec.md §6 (extended mutex set).
 _MUTEX_MSG = (
     "--filter / --filters-json / --filters-file / --history / --scrape-link / "
     "--list-filters are mutually exclusive; pick one input mode."
@@ -101,7 +101,7 @@ def _emit_filter_inventory() -> None:
     """Dump the filter inventory as JSON to stdout (caller handles exit 0).
 
     Builds the 3-key payload contract (``schema_version`` + ``keys`` +
-    ``filters``) per ``docs/features/list-filters-spec.md`` §5.2 + §5.5
+    ``filters``) per ``docs/features/archive/list-filters-spec.md`` §5.2 + §5.5
     (amended per gpt-5.5 deep-think to surface a canonical ``keys``
     ordering that polyglot consumers can iterate against — Go's
     ``encoding/json`` decode into ``map[string]T`` randomizes iteration

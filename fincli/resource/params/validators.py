@@ -131,7 +131,7 @@ def list_valid_filters_with_labels() -> dict[str, _LabelledEntry]:
 
     Used by ``fincli --list-filters --json`` to dump the inventory as JSON
     for non-Python consumers (Go, Node, etc.) per
-    `docs/features/list-filters-spec.md` §5.4.
+    `docs/features/archive/list-filters-spec.md` §5.4.
 
     Per-entry shape (`_LabelledEntry`):
     ``{"label": str, "values": {value_code: value_label}}``. The empty-string

@@ -4,7 +4,7 @@ Subprocesses ``python -m fincli --list-filters --json`` (matching the
 ``tests/integration/test_pipeline_*.py`` convention — uses the module form
 rather than the entry-point shim so the test does not depend on the script
 being on ``PATH`` in CI) and asserts the full §7.3 (schema) + §7.4 (content
-sampling) acceptance bullets from ``docs/features/list-filters-spec.md``.
+sampling) acceptance bullets from ``docs/features/archive/list-filters-spec.md``.
 
 This is the polyglot-consumer contract test: every assertion below is the
 exact shape a Go / Node integrator's decoder would lock against.

@@ -214,7 +214,7 @@ def test_history_and_scrape_link_still_mutex() -> None:
 # Mutex extension — `--list-filters` joins the input-mode mutex set as a
 # sixth alternative entry (metadata-dump mode). Pairing it with each of the
 # five existing input-mode flags must exit 2 with the extended canonical
-# mutex message. Pins docs/features/list-filters-spec.md §6 + §7.2 bullet 3-5.
+# mutex message. Pins docs/features/archive/list-filters-spec.md §6 + §7.2 bullet 3-5.
 # ---------------------------------------------------------------------------
 
 

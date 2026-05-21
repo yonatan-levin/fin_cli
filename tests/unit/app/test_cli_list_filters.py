@@ -1,6 +1,6 @@
 """Click-surface tests for ``--list-filters --json`` (list-filters-spec).
 
-Pins the contract from ``docs/features/list-filters-spec.md`` §5.1 + §5.5 + §6:
+Pins the contract from ``docs/features/archive/list-filters-spec.md`` §5.1 + §5.5 + §6:
 
   - Both flags surface in ``--help``.
   - Module constant ``LIST_FILTERS_SCHEMA_VERSION`` is importable from
@@ -220,7 +220,7 @@ def test_list_filters_matrix_short_circuits_before_every_other_handler(
     discovery line, no JSON summary.
 
     Per gpt-5.5 deep-think follow-up to BACKEND step 9 in
-    docs/features/list-filters-plan.md §3 T2.
+    docs/features/archive/list-filters-plan.md §3 T2.
     """
     # Click 8.2+ separates stderr by default; `mix_stderr=False` was removed.
     # `result.stdout` and `result.stderr` are independently captured.
