@@ -26,8 +26,11 @@ Design notes:
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import click
 
+from ._label_format import attr_to_label
 from .descriptive_params import Descriptive_Params
 from .fundamental_params import Fundamental_Params
 from .technical_params import Technical_Params
@@ -47,20 +50,25 @@ _PARAM_CLASSES: tuple[type, ...] = (
 _MAX_SUGGESTIONS: int = 10
 
 
-def list_valid_filters() -> dict[str, list[str]]:
-    """Return the full ``{query_key: [value_code, ...]}`` inventory.
+def _iter_param_entries() -> Iterator[tuple[str, str, dict[str, str]]]:
+    """Yield ``(attr_name, query_key, values_dict)`` for every legal entry.
 
-    Walks every `[query_key, {value_code: display_name}]` attribute on each
-    of the registered params classes. Used by `validate_filter_pairs` to
-    build error-message suggestions and by the future `--help-filters` flag.
+    Single source of truth for walking the registered param classes. Both
+    `list_valid_filters` and `list_valid_filters_with_labels` consume this
+    so the param-class introspection rules (skip dunders, require
+    2-element list shape, require ``[str, dict]`` types) live in one place.
 
-    Returns:
-        A mapping from each registered Finviz query key to the list of
-        valid value codes for that key. Insertion order matches the param
-        class declaration order (Fundamental, then Descriptive, then
-        Technical).
+    Filter entries on each class are conventionally ``UPPER_SNAKE_CASE``
+    attribute names bound to ``[query_key, {value_code: display_name}]``
+    lists. Anything that does not match that shape (helper methods,
+    nested classes, metadata constants) is silently skipped — same
+    behavior the original inline walker had.
+
+    Yields:
+        ``(attr_name, query_key, values_dict)`` triples in param-class
+        declaration order (Fundamental, then Descriptive, then Technical),
+        with each class's entries in source-file declaration order.
     """
-    inventory: dict[str, list[str]] = {}
     for cls in _PARAM_CLASSES:
         for attr_name, attr_value in vars(cls).items():
             if attr_name.startswith("__"):
@@ -73,7 +81,59 @@ def list_valid_filters() -> dict[str, list[str]]:
                 continue
             # Cast keys to str defensively — every legitimate registry entry
             # already uses string keys, but this keeps mypy strict happy.
-            inventory[query_key] = [str(code) for code in values_dict]
+            normalized_values: dict[str, str] = {
+                str(code): str(label) for code, label in values_dict.items()
+            }
+            yield attr_name, query_key, normalized_values
+
+
+def list_valid_filters() -> dict[str, list[str]]:
+    """Return the full ``{query_key: [value_code, ...]}`` inventory.
+
+    Walks every `[query_key, {value_code: display_name}]` attribute on each
+    of the registered params classes via `_iter_param_entries`. Used by
+    `validate_filter_pairs` to build error-message suggestions and by the
+    future `--help-filters` flag.
+
+    Returns:
+        A mapping from each registered Finviz query key to the list of
+        valid value codes for that key. Insertion order matches the param
+        class declaration order (Fundamental, then Descriptive, then
+        Technical).
+    """
+    return {
+        query_key: list(values_dict) for _attr_name, query_key, values_dict in _iter_param_entries()
+    }
+
+
+def list_valid_filters_with_labels() -> dict[str, dict[str, object]]:
+    """Return the inventory with human labels + value-label maps per spec §5.2.
+
+    Sibling of `list_valid_filters`: same source data (walks
+    `_iter_param_entries`) but preserves the value labels and adds a
+    derived key label (via `attr_to_label`) instead of dropping them.
+
+    Used by ``fincli --list-filters --json`` to dump the inventory as JSON
+    for non-Python consumers (Go, Node, etc.) per
+    `docs/features/list-filters-spec.md` §5.4.
+
+    Per-entry shape: ``{"label": str, "values": {value_code: value_label}}``.
+    The empty-string value code (the "Any" sentinel) is preserved verbatim
+    because the validator accepts it as a legal value.
+
+    Returns:
+        A mapping ``{query_key: {"label": ..., "values": {...}}}`` whose
+        insertion order matches param-class declaration order (Fundamental,
+        then Descriptive, then Technical). The ``object`` value type on
+        the inner dict is the union of ``str`` (label) and
+        ``dict[str, str]`` (values map); consumers narrow at use.
+    """
+    inventory: dict[str, dict[str, object]] = {}
+    for attr_name, query_key, values_dict in _iter_param_entries():
+        inventory[query_key] = {
+            "label": attr_to_label(attr_name),
+            "values": dict(values_dict),
+        }
     return inventory
 
 

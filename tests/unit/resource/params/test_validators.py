@@ -17,7 +17,11 @@ from __future__ import annotations
 import click
 import pytest
 
-from fincli.resource.params.validators import list_valid_filters, validate_filter_pairs
+from fincli.resource.params.validators import (
+    list_valid_filters,
+    list_valid_filters_with_labels,
+    validate_filter_pairs,
+)
 
 # ---------------------------------------------------------------------------
 # Happy paths — known keys + known value codes pass silently.
@@ -161,3 +165,146 @@ def test_inventory_round_trips_through_validator() -> None:
 
     # If this raises, the validator and the inventory have diverged.
     validate_filter_pairs(pairs)
+
+
+# ---------------------------------------------------------------------------
+# `list_valid_filters_with_labels` helper — spec §5.4 sibling that adds
+# human labels (key label via `attr_to_label` + preserved value-label map).
+#
+# Tests below pin the spec §7.4 invariants at the HELPER layer; the
+# end-to-end CLI surface (parsing stdout JSON, etc.) is exercised by T2's
+# integration tests.
+# ---------------------------------------------------------------------------
+
+
+def test_list_valid_filters_with_labels_returns_dict_shape() -> None:
+    """Top-level shape: ``dict[str, dict[str, object]]`` with at least one
+    entry from each of the three param classes."""
+    inventory = list_valid_filters_with_labels()
+
+    assert isinstance(inventory, dict)
+    assert "fa_pe" in inventory, "Fundamental entry missing"
+    assert "sec" in inventory, "Descriptive entry missing"
+    assert "ta_rsi" in inventory, "Technical entry missing"
+
+
+def test_list_valid_filters_with_labels_entry_has_label_and_values_keys() -> None:
+    """Every entry has exactly the two keys ``{'label', 'values'}`` —
+    extra keys would silently expand the spec §5.2 schema.
+
+    Pins the per-entry shape so a future addition (e.g., 'description',
+    'group') is a conscious schema_version bump rather than an accidental
+    extra field that downstream Go consumers see and ignore.
+    """
+    inventory = list_valid_filters_with_labels()
+
+    for key, entry in inventory.items():
+        assert isinstance(entry, dict), f"{key} entry is {type(entry)}"
+        assert set(entry.keys()) == {"label", "values"}, (
+            f"{key} entry has keys {sorted(entry.keys())!r}, expected {{'label', 'values'}}"
+        )
+
+
+def test_list_valid_filters_with_labels_label_is_nonempty_string() -> None:
+    """Every ``entry['label']`` is a non-empty string. Empty labels would
+    produce blank dropdown headers downstream."""
+    inventory = list_valid_filters_with_labels()
+
+    for key, entry in inventory.items():
+        label = entry["label"]
+        assert isinstance(label, str), f"{key}.label is {type(label)}"
+        assert label, f"{key}.label is empty string"
+
+
+def test_list_valid_filters_with_labels_values_is_str_to_str_dict() -> None:
+    """Every ``entry['values']`` is a ``dict[str, str]`` — both code and
+    label sides are strings (matches the JSON shape promised by the
+    inventory dump contract)."""
+    inventory = list_valid_filters_with_labels()
+
+    for key, entry in inventory.items():
+        values = entry["values"]
+        assert isinstance(values, dict), f"{key}.values is {type(values)}"
+        assert values, f"{key}.values is empty dict"
+        for code, label in values.items():
+            assert isinstance(code, str), f"{key}.values code {code!r} is {type(code)}"
+            assert isinstance(label, str), f"{key}.values[{code!r}] is {type(label)}"
+
+
+def test_list_valid_filters_with_labels_preserves_empty_string_value_code() -> None:
+    """The empty-string value code (the 'Any' sentinel) is registered on
+    every entry and MUST survive into the labelled inventory — the validator
+    accepts ``""`` as a legal value (see test_known_key_with_empty_string_value_passes).
+    """
+    inventory = list_valid_filters_with_labels()
+
+    fa_pe_values = inventory["fa_pe"]["values"]
+    assert isinstance(fa_pe_values, dict)
+    assert fa_pe_values.get("") == "Any", (
+        f"Empty-string sentinel dropped or relabelled; got {fa_pe_values.get('')!r}"
+    )
+
+
+def test_list_valid_filters_with_labels_known_label_samples() -> None:
+    """Spot-check the §7.4 content invariants at the helper layer.
+
+    These same assertions appear in T2's integration test in their
+    end-to-end form (parsing JSON off stdout). Pinning them at the helper
+    layer lets T1 ship and regress independently of CLI wiring.
+    """
+    inventory = list_valid_filters_with_labels()
+
+    assert inventory["fa_pe"]["label"] == "PE"
+    assert inventory["sec"]["label"] == "Sector"
+    assert inventory["ta_rsi"]["label"] == "RSI 14"
+
+
+def test_list_valid_filters_with_labels_known_value_samples() -> None:
+    """Spot-check known value labels survive the walker."""
+    inventory = list_valid_filters_with_labels()
+
+    fa_pe_values = inventory["fa_pe"]["values"]
+    sec_values = inventory["sec"]["values"]
+    assert isinstance(fa_pe_values, dict)
+    assert isinstance(sec_values, dict)
+
+    assert fa_pe_values["u20"] == "Under 20"
+    assert sec_values["basicmaterials"] == "Basic Materials"
+
+
+def test_list_valid_filters_with_labels_insertion_order_fundamental_first() -> None:
+    """Insertion order is Fundamental → Descriptive → Technical (matches
+    `_PARAM_CLASSES` declaration order).
+
+    Pins the canonical ordering contract the upcoming `--list-filters --json`
+    `keys` field relies on (spec §5.2). A regression that re-orders the
+    walker would silently break Go consumers iterating the `keys` array.
+    """
+    inventory = list_valid_filters_with_labels()
+    keys = list(inventory.keys())
+
+    fa_pe_idx = keys.index("fa_pe")  # Fundamental
+    sec_idx = keys.index("sec")  # Descriptive
+    ta_rsi_idx = keys.index("ta_rsi")  # Technical
+
+    assert fa_pe_idx < sec_idx, (
+        f"Fundamental ('fa_pe' at {fa_pe_idx}) must precede Descriptive ('sec' at {sec_idx})"
+    )
+    assert sec_idx < ta_rsi_idx, (
+        f"Descriptive ('sec' at {sec_idx}) must precede Technical ('ta_rsi' at {ta_rsi_idx})"
+    )
+
+
+def test_list_valid_filters_with_labels_keys_match_list_valid_filters() -> None:
+    """The two sibling helpers MUST advertise the same universe of query
+    keys. Divergence would mean the labelled inventory is missing entries
+    the validator considers legal (or vice versa) — a polyglot consumer
+    would then validate against one set and dropdown-render the other.
+    """
+    codes_inventory = list_valid_filters()
+    labels_inventory = list_valid_filters_with_labels()
+
+    assert list(codes_inventory.keys()) == list(labels_inventory.keys()), (
+        "list_valid_filters and list_valid_filters_with_labels disagree on "
+        "either the membership or the order of registered query keys."
+    )
