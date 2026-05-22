@@ -33,8 +33,10 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 | `--output` | `-o` | string | `""` | Exact CSV destination. Parent dir must exist. No timestamp added; overwrites if the file exists. Use `-` to stream CSV to stdout. Orthogonal to all input-mode flags. |
 | `--quiet` | `-q` | flag | `False` | Suppress human chatter (welcome banner + INFO/DEBUG console lines). Warnings and errors still surface. Does not change `--debug` level; debug records still land in `logs/activity.log`. Orthogonal to `--output`. |
 | `--json-summary` | — | flag | `False` | Emit a single-line JSON summary of the run at end. Goes to stdout by default; routed to stderr when `--output -` streams CSV on stdout. Always the last line on its stream. Schema in §5.5. |
+| `--list-filters` | — | flag | `False` | Dump the filter inventory as JSON to stdout and exit 0; the screener pipeline does not run. Requires `--json` (the only currently-supported format). Mutually exclusive with all input-mode flags (extended mutex set; see below). `--output` / `--quiet` / `--debug` / `--json-summary` are no-ops in this mode. Payload schema in §5.6. |
+| `--json` | — | flag | `False` | Format selector for `--list-filters`; today the only valid format. Silently ignored when `--list-filters` is not set (sub-flag, not a free-standing format selector). |
 
-**Mutual-exclusion set:** `--filter`, `--filters-json`, `--filters-file`, `--history`, `--scrape-link`. At most one input mode may be set; passing two or more raises `click.UsageError` (exit 2) with the canonical message `--filter / --filters-json / --filters-file / --history / --scrape-link are mutually exclusive; pick one input mode.` See `docs/features/archive/pipeline-mode-spec.md` §6.2. Note: `--output` is **not** in this set — it composes with any input mode.
+**Mutual-exclusion set:** `--filter`, `--filters-json`, `--filters-file`, `--history`, `--scrape-link`, `--list-filters`. At most one input mode may be set; passing two or more raises `click.UsageError` (exit 2) with the canonical message `--filter / --filters-json / --filters-file / --history / --scrape-link / --list-filters are mutually exclusive; pick one input mode.` `--list-filters` joins the mutex set as a sixth alternative entry mode (metadata-dump instead of screen-run) per `docs/features/archive/list-filters-spec.md` §6 / §13.1. The original five-flag form is documented in `docs/features/archive/pipeline-mode-spec.md` §6.2. Note: `--output`, `--quiet`, `--json-summary`, and `--debug` are **not** in this set — they compose with any input mode and are silently ignored under `--list-filters`.
 
 **Behavior**
 
@@ -50,6 +52,7 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 | `--output -` | CSV bytes are streamed to **stdout**. **Stdout contains only CSV bytes**: the two console handlers (typing-effect + plain) are rerouted to stderr at run start, the welcome banner is suppressed, and the previously stdout-bound `Base Url:` echo from the query builder is removed (the URL is still logged at INFO via the rerouted logger). Log progress, banner location, errors all land on stderr. The `Ticker` column is replaced with the raw symbol under `--output -` (the Excel `=HYPERLINK(...)` wrap is hostile to `pandas.read_csv` consumers downstream) — see §3.1 for the canonical-column note. |
 | `--quiet` | Suppresses INFO/DEBUG console emission on both console handlers (typing-effect + plain) and the `click.echo` welcome banner. WARNING and ERROR records still emit. File handlers (`logs/activity.log`, `logs/error.log`) are **unaffected** — debug records under `--debug --quiet` still land in `activity.log`. Output destination is unchanged (the `OUTPUT_PATH=` stderr line still emits — pipelines need it even under `--quiet`). |
 | `--json-summary` | Emit one single-line JSON object at end of run on the stream not occupied by CSV bytes: **stdout** by default, **stderr** when `--output -` is set. Always the last line on its stream. Schema in §5.5. Composes orthogonally with `--quiet` and `--debug`. |
+| `--list-filters --json` | Dump the filter inventory as a single-line JSON object to stdout and exit 0. The screener pipeline does NOT run — no Finviz fetch, no CSV, no `OUTPUT_PATH=` line. `--output` / `--quiet` / `--json-summary` / `--debug` are silently ignored in this mode (the inventory always goes to stdout). Mutually exclusive with all input-mode flags. `--list-filters` without `--json` exits 2 with a `click.UsageError` naming `--json` as required. Payload schema in §5.6. |
 | `FINCLI_OUTPUT_DIR=<dir>` env var | Replaces the parent directory of the default `workspace_output/stock_screener_{date}.csv` while preserving the timestamped basename. Loses to an explicit `--output PATH`. Read by `core.configuration.configurator.build_config`. |
 
 **Exit codes**
@@ -67,7 +70,7 @@ Classifier source-of-truth is `fincli/app/exit_codes.py`; downstream pipelines s
 **Output side effects**
 
 - CSV destination resolved via the Pillar-2 precedence chain: `--output PATH` > `--output -` (stdout stream) > `FINCLI_OUTPUT_DIR=<dir>` env var (parent-dir override) > default `workspace_output/stock_screener_YYYY-MM-DD_HH-MM.csv` under CWD.
-- A `OUTPUT_PATH=<value>` discovery line is **always** written to **stderr** exactly once, immediately before the process exits. `<value>` is the absolute path the CSV was written to, or the literal `-` for stdout streaming. Independent of `--quiet` and `--json-summary` so pipeline integrators can recover the destination via `tail -n1 stderr | cut -d= -f2-` even when both other flags are absent. Spec `docs/features/archive/pipeline-mode-spec.md` §5.3.3.
+- A `OUTPUT_PATH=<value>` discovery line is **always** written to **stderr** exactly once, immediately before the process exits. `<value>` is the absolute path the CSV was written to, or the literal `-` for stdout streaming. Independent of `--quiet` and `--json-summary` so pipeline integrators can recover the destination via `tail -n1 stderr | cut -d= -f2-` even when both other flags are absent. The destination is resolved before any potentially-failing I/O, so the value is populated on every exit code (0/1/3/4) — never empty for a `--output PATH` invocation. Spec `docs/features/archive/pipeline-mode-spec.md` §5.3.3.
 - When `--json-summary` is set, a single-line JSON summary (schema in §5.5) is written immediately after the `OUTPUT_PATH=` line. The summary stream is **stdout** by default and **stderr** when `--output -` claims stdout for CSV bytes; on stderr it always comes after `OUTPUT_PATH=`. Spec §5.3.4.
 - `<Config.history_dir>/filter_history.json` is overwritten with the current filter selection on a successful run. (See §4.1 for the default value and `HISTORY_DIR` env-var override.)
 - `logs/activity.log` (DEBUG+) and `logs/error.log` (ERROR+) appended.
@@ -311,6 +314,54 @@ Stable per-run output emitted by `fincli/app/main.py:run_stock_screener` when th
 
 The schema is contract-pinned by `tests/integration/test_pipeline_summary.py`. Source-of-truth constants live in `fincli/app/main.py`: `JSON_SUMMARY_SCHEMA_VERSION` (the `1` literal) and `OUTPUT_PATH_LINE_PREFIX` (the `OUTPUT_PATH=` token).
 
+### 5.6 Filter inventory schema (`--list-filters --json`)
+
+Stable JSON payload emitted to **stdout** by `fincli --list-filters --json` for non-Python integrators (Go, Node, Rust, etc.) that need to validate user input or build dropdowns without reading the Python params files. One line, valid JSON, terminated by the single newline `click.echo` adds. No data is fetched from Finviz on this code path — the screener pipeline is short-circuited entirely. Spec: `docs/features/archive/list-filters-spec.md` §5.2.
+
+```json
+{
+  "schema_version": 1,
+  "keys": ["fa_pe", "fa_fpe", "fa_peg", "sec", "ta_rsi"],
+  "filters": {
+    "fa_pe": {
+      "label": "PE",
+      "values": {
+        "": "Any",
+        "low": "Low (<15)",
+        "u20": "Under 20"
+      }
+    },
+    "sec": {
+      "label": "Sector",
+      "values": {
+        "": "Any",
+        "basicmaterials": "Basic Materials"
+      }
+    },
+    "ta_rsi": {
+      "label": "RSI 14",
+      "values": { "": "Any", "ob70": "Overbought (70)", "os30": "Oversold (30)" }
+    }
+  }
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `schema_version` | int | Pinned to `1`. Bump on any breaking schema change (field removed or renamed; field semantics changed). Adding new filter entries or new value codes inside an existing entry is **additive** and does NOT bump the version. |
+| `keys` | list[str] | **Canonical ordering contract.** Lists every Finviz `query_key` in canonical declaration order (Fundamental → Descriptive → Technical). Consumers that need a stable iteration order (Go's `encoding/json` decode into `map[string]T` randomizes iteration; JS object iteration is engine-defined) MUST iterate `keys` and index into `filters[key]`. Length and membership must equal `filters.keys()` exactly. |
+| `filters` | object | Keyed by Finviz `query_key` (NOT the Python attribute name). Python emits in `keys` order, but consumers MUST NOT rely on JSON-object iteration order across languages — use the `keys` field instead. |
+| `filters[key].label` | str | Human-readable label for the key, derived mechanically from the Python attribute name (acronyms preserved; connector words lowercased). Starting-point only; consumers can override locally for UX polish. |
+| `filters[key].values` | object | `{value_code: value_label}`. The empty `""` value-code (the "Any" sentinel) is included — the validator accepts it as a legal filter value. |
+
+**Key-ordering nuance** (spec §5.2): ordering is by **class membership**, not by key-prefix. Keys with prefix `sh_*` appear in both `Fundamental_Params` (insider/institutional ownership) and `Descriptive_Params` (shares outstanding / average volume / price / float); both groups respect the Fundamental → Descriptive → Technical class order even though their prefixes interleave.
+
+**Payload size** (measured live 2026-05-19): 66 filter keys (29 Fundamental + 18 Descriptive + 19 Technical), 47,216 bytes single-line. Small enough to fetch once at consumer-app startup and cache for hours-to-days.
+
+**Source of truth**: `fincli.resource.params.validators.list_valid_filters_with_labels` (importable but interim-private — sibling of the existing `list_valid_filters` per §6.7). Walks the same `_PARAM_CLASSES` constant via the shared `_iter_param_entries` helper. The schema-version constant lives at `fincli.app.cli.LIST_FILTERS_SCHEMA_VERSION` (mirrors the `JSON_SUMMARY_SCHEMA_VERSION` pattern in §5.5).
+
+**Stability policy reference**: see §7 — additions are non-breaking; removals/renames/type changes bump `schema_version`.
+
 ---
 
 ## 6. Internal Service Interfaces (importable surface)
@@ -412,6 +463,7 @@ A change is **breaking** if it alters any of:
 - The `logger` Singleton method names in §5.1.
 - Any `def` signature in §6.
 - The `--json-summary` schema in §5.5 — removing or renaming a field, or changing the semantics of an existing field, bumps `schema_version`. Adding new fields is non-breaking.
+- The §5.6 filter inventory JSON schema (field set, types, value constraints) — adding new filter entries or new value codes inside an existing entry is **non-breaking** and bumps no version; removals, renames, or semantic changes bump `schema_version` and are breaking. Polyglot consumers iterate the `keys` array (not `filters` directly) to lock iteration order — changing `keys` ordering away from declaration order is a breaking change.
 - The `OUTPUT_PATH=<value>` stderr discovery-line format (§1, "Output side effects"). The literal prefix is `OUTPUT_PATH=` and the value is either the absolute path or the `-` sentinel; pipeline integrators rely on `tail -n1 stderr | cut -d= -f2-` working unchanged.
 
 When a breaking change is unavoidable:

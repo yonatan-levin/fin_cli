@@ -211,6 +211,67 @@ def test_history_and_scrape_link_still_mutex() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Mutex extension — `--list-filters` joins the input-mode mutex set as a
+# sixth alternative entry (metadata-dump mode). Pairing it with each of the
+# five existing input-mode flags must exit 2 with the extended canonical
+# mutex message. Pins docs/features/archive/list-filters-spec.md §6 + §7.2 bullet 3-5.
+# ---------------------------------------------------------------------------
+
+
+def test_list_filters_and_filter_mutually_exclusive() -> None:
+    """`--list-filters --json` + `--filter` → exit 2 with mutex message."""
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--list-filters", "--json", "--filter", "fa_pe=u20"])
+    assert result.exit_code == 2
+    assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
+
+
+def test_list_filters_and_filters_json_mutually_exclusive() -> None:
+    """`--list-filters --json` + `--filters-json` → exit 2 with mutex message."""
+    runner = CliRunner()
+    result = runner.invoke(
+        run_main, ["--list-filters", "--json", "--filters-json", '{"fa_pe":"u20"}']
+    )
+    assert result.exit_code == 2
+    assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
+
+
+def test_list_filters_and_filters_file_mutually_exclusive(tmp_path: Path) -> None:
+    """`--list-filters --json` + `--filters-file` → exit 2 with mutex message."""
+    file_path = tmp_path / "filters.json"
+    file_path.write_text('{"sec":"energy"}', encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--list-filters", "--json", "--filters-file", str(file_path)])
+    assert result.exit_code == 2
+    assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
+
+
+def test_list_filters_and_history_mutually_exclusive() -> None:
+    """`--list-filters --json` + `--history` → exit 2 with mutex message."""
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--list-filters", "--json", "--history"])
+    assert result.exit_code == 2
+    assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
+
+
+def test_list_filters_and_scrape_link_mutually_exclusive() -> None:
+    """`--list-filters --json` + `--scrape-link` → exit 2 with mutex message."""
+    runner = CliRunner()
+    result = runner.invoke(
+        run_main,
+        ["--list-filters", "--json", "--scrape-link", "https://finviz.com/x"],
+    )
+    assert result.exit_code == 2
+    assert _MUTEX_MSG_FRAGMENT in result.output.lower()
+    assert "Traceback" not in result.output
+
+
+# ---------------------------------------------------------------------------
 # Malformed `--filter` token handling.
 # ---------------------------------------------------------------------------
 
@@ -517,3 +578,65 @@ def test_quiet_composes_with_debug(mock_runner: MagicMock) -> None:
     kwargs = mock_runner.call_args.kwargs
     assert kwargs.get("debug") is True
     assert kwargs.get("quiet") is True
+
+
+# ---------------------------------------------------------------------------
+# Regression — OUTPUT_PATH= must carry the user's --output value on every
+# exception path, including data-class failures (IndexError raised before
+# any I/O fires). Previously the destination was resolved inside the
+# try-block AFTER `fetch_urls(quarry, stock_screener_page.page_count)`,
+# so an IndexError from `page_count` left `resolved_file_path` as None and
+# the discovery line surfaced as empty `OUTPUT_PATH=`. The hoist of the
+# `if not csv_on_stdout: resolved_file_path = config.file_path(...)` block
+# before the try-block guarantees the abs-path label is always populated.
+# ---------------------------------------------------------------------------
+
+
+def test_output_path_populated_on_data_exception(tmp_path: Path) -> None:
+    """IndexError from page_count -> exit 4, OUTPUT_PATH= carries the path.
+
+    Pins the closure of the empty-OUTPUT_PATH= regression on the DATA
+    exit path. Uses an absolute --output target so the assertion can match
+    the resolved label without depending on CWD.
+    """
+    from pathlib import PurePath
+
+    from fincli.app import exit_codes
+    from fincli.app.main import OUTPUT_PATH_LINE_PREFIX
+
+    target = tmp_path / "out.csv"
+    runner = CliRunner()
+    # Drive the parser into IndexError by patching `fetch_page_sync` to
+    # return non-Finviz HTML, then make `StockTableScreeningContent` raise
+    # the same IndexError the live one-page-result path used to produce.
+    with (
+        patch("fincli.app.main.fetch_page_sync", return_value=b"<html></html>"),
+        patch(
+            "fincli.app.main.StockTableScreeningContent",
+        ) as content_cls,
+    ):
+        instance = content_cls.return_value
+        type(instance).page_count = property(
+            lambda self: (_ for _ in ()).throw(IndexError("list index out of range")),
+        )
+        result = runner.invoke(
+            run_main,
+            ["--filter", "fa_pe=u20", "--output", str(target)],
+            catch_exceptions=False,
+        )
+
+    assert result.exit_code == exit_codes.DATA, (
+        f"Expected DATA exit; got {result.exit_code}. stderr: {result.stderr}"
+    )
+
+    # Resolve the expected absolute label exactly as `_resolve_output_path_label`
+    # produces it (Path.resolve(strict=False)) so the assertion is independent
+    # of OS path normalization quirks (e.g., Windows short-name expansion).
+    expected_label_line = f"{OUTPUT_PATH_LINE_PREFIX}{PurePath(str(target.resolve()))}"
+    assert expected_label_line in result.stderr, (
+        f"Expected stderr to contain {expected_label_line!r}; got: {result.stderr!r}"
+    )
+    # And specifically NOT the bug-state empty value.
+    assert f"{OUTPUT_PATH_LINE_PREFIX}\n" not in result.stderr, (
+        "Regression: OUTPUT_PATH= must not be empty on the DATA exit path"
+    )

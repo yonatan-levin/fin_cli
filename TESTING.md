@@ -159,6 +159,10 @@ To add a new pipeline-mode integration test:
 3. Write the test in a new or existing `test_pipeline_*.py` file under `tests/integration/`. Use `CliRunner().invoke(run_main, [...], catch_exceptions=False)`.
 4. Assert on `result.exit_code` (using constants from `fincli.app.exit_codes`, not hardcoded integers), `result.stdout`, `result.stderr`, and `tmp_path` contents.
 
+### List-filters tests
+
+The list-filters feature (shipped 2026-05-21; spec at `docs/features/archive/list-filters-spec.md`) added three new test files that follow the existing layout convention: `tests/unit/resource/params/test_label_format.py` parametrizes the `attr_to_label` mechanical-label-derivation algorithm; `tests/unit/app/test_cli_list_filters.py` pins the Click surface for `--list-filters` / `--json` (option-presence, the `--json`-required usage error, the silent-ignore behavior of bare `--json` per spec OQ2, mutex with each input mode, orthogonal-flag no-ops, and the integrated OQ-B/C/D matrix test that locks the short-circuit ordering); `tests/integration/test_list_filters_output.py` subprocess-invokes `python -m fincli --list-filters --json` and validates the JSON-inventory schema (CONTRACTS §5.6) end-to-end. The inventory dump short-circuits the screener pipeline, so no `fetch_page_sync` mock or HTML fixture is needed — the unit tests use `CliRunner` directly and the integration test uses `subprocess.run`.
+
 ### What NOT to mock
 
 - **pandas DataFrame operations.** pandas is fast and deterministic; mocking it produces tests that no longer test anything real.

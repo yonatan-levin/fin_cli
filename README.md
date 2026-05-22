@@ -85,6 +85,8 @@ tail -n1 /tmp/log | cut -d= -f2-     # -> /abs/path/to/out.csv
 
 Exit codes (full table in CONTRACTS §1): `0` SUCCESS, `1` INTERNAL, `2` USAGE, `3` UPSTREAM, `4` DATA. Zero-row results stay exit 0 and write a header-only CSV.
 
+For non-Python integrators (Go, Node, etc.), see [INTEGRATION.md](INTEGRATION.md).
+
 ### Output
 
 Results land in `workspace_output/` as a timestamped CSV named by `Config.file_path`:

@@ -15,8 +15,12 @@ class StockTableScreeningContent:
         ]
 
     @property
-    def page_count(self):
+    def page_count(self) -> int:
         content = self.soup.find_all(class_=StockTableLocators.PAGE_CLASS)
-        num_of_pages = int(content[-2].string) if len(content) != 0 else 0
-
-        return num_of_pages
+        if len(content) == 0:
+            return 0
+        # Single match = exactly 1 page (selected, no next-arrow); >1 = numeric
+        # links + trailing is-next arrow at [-1], so last numeric is at [-2].
+        if len(content) == 1:
+            return int(content[0].get_text(strip=True))
+        return int(content[-2].get_text(strip=True))

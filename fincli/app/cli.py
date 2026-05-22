@@ -1,11 +1,15 @@
 """Click entry point for the Fin CLI stock screener.
 
-Surfaces the screener pipeline as a single-command CLI with five mutually-
+Surfaces the screener pipeline as a single-command CLI with six mutually-
 exclusive input modes (interactive picker, ``--history`` reload, direct URL
 via ``--scrape-link``, structured input via ``--filter`` / ``--filters-json``
-/ ``--filters-file``). Adding the structured-input options closes the gap
-that prevented fincli from being driven non-interactively in a downstream
-pipeline — see ``docs/features/archive/pipeline-mode-spec.md`` §5.1 (Pillar 1).
+/ ``--filters-file``, and the metadata-dump mode ``--list-filters``). Adding
+the structured-input options closes the gap that prevented fincli from being
+driven non-interactively in a downstream pipeline — see
+``docs/features/archive/pipeline-mode-spec.md`` §5.1 (Pillar 1). The
+``--list-filters --json`` mode (``docs/features/archive/list-filters-spec.md``)
+short-circuits the screener pipeline entirely and emits the filter inventory
+as machine-readable JSON for non-Python consumers.
 
 The CLI is the single normalization point: it collapses the three structured
 forms into one canonical JSON string before handing off to
@@ -21,13 +25,23 @@ import click
 
 from config.config import STDOUT_SENTINEL
 
-# Canonical mutual-exclusion message kept as a module constant so it is
-# trivially assertable from tests and so the wording stays consistent across
-# every input-mode combination. Matches the verbatim text in spec §6.2.
+# Canonical mutex message — change this and tests/unit/app/test_cli_pipeline.py
+# may need updating in parallel. Kept as a module constant so it is trivially
+# assertable from tests and so the wording stays consistent across every
+# input-mode combination. Matches the verbatim text in
+# docs/features/archive/list-filters-spec.md §6 (extended mutex set).
 _MUTEX_MSG = (
-    "--filter / --filters-json / --filters-file / --history / --scrape-link "
-    "are mutually exclusive; pick one input mode."
+    "--filter / --filters-json / --filters-file / --history / --scrape-link / "
+    "--list-filters are mutually exclusive; pick one input mode."
 )
+
+# Schema version for the ``--list-filters --json`` payload. Mirrors the
+# JSON_SUMMARY_SCHEMA_VERSION pattern in ``fincli/app/main.py``: a module-public
+# constant (no leading underscore) so tests and external integrators can import
+# it directly and assert on the wire value. Spec §5.2 stability policy:
+# additions to the payload are non-breaking (schema_version stays 1);
+# renames/removals/type changes bump this.
+LIST_FILTERS_SCHEMA_VERSION = 1
 
 
 def _normalize_filter_input(
@@ -81,6 +95,39 @@ def _normalize_filter_input(
         return Path(filters_file).read_text(encoding="utf-8")
 
     return ""
+
+
+def _emit_filter_inventory() -> None:
+    """Dump the filter inventory as JSON to stdout (caller handles exit 0).
+
+    Builds the 3-key payload contract (``schema_version`` + ``keys`` +
+    ``filters``) per ``docs/features/archive/list-filters-spec.md`` §5.2 + §5.5
+    (amended per gpt-5.5 deep-think to surface a canonical ``keys``
+    ordering that polyglot consumers can iterate against — Go's
+    ``encoding/json`` decode into ``map[string]T`` randomizes iteration
+    order, so the ``keys`` list is the contract consumers index into
+    ``filters[key]`` with).
+
+    Uses a local import (``list_valid_filters_with_labels``) so importing
+    this module stays cheap for non-list-filters invocations, mirroring the
+    existing local import of ``run_stock_screener``. ``json`` is already at
+    module scope (used by ``_normalize_filter_input``), so re-importing it
+    here would be redundant.
+    """
+    from fincli.resource.params.validators import list_valid_filters_with_labels
+
+    inventory = list_valid_filters_with_labels()
+    payload: dict[str, object] = {
+        "schema_version": LIST_FILTERS_SCHEMA_VERSION,
+        # Canonical ordering contract per spec §5.2: identical membership to
+        # ``filters.keys()`` and same iteration order.
+        "keys": list(inventory.keys()),
+        "filters": inventory,
+    }
+    # Single-line JSON (no ``indent=``) + trailing newline from ``click.echo``.
+    # ``ensure_ascii=False`` keeps the output clean if labels ever contain
+    # non-ASCII characters; today's labels are all ASCII.
+    click.echo(json.dumps(payload, ensure_ascii=False))
 
 
 @click.group(invoke_without_command=True)
@@ -147,6 +194,26 @@ def _normalize_filter_input(
         "by default; routed to stderr when --output - streams CSV on stdout."
     ),
 )
+@click.option(
+    "--list-filters",
+    "list_filters",
+    is_flag=True,
+    help=(
+        "Dump the filter inventory as JSON to stdout and exit 0. "
+        "Requires --json (the only currently-supported format). "
+        "Mutually exclusive with all input-mode flags. "
+        "--output / --quiet / --debug / --json-summary are ignored in this mode."
+    ),
+)
+@click.option(
+    "--json",
+    "json_format",
+    is_flag=True,
+    help=(
+        "Format selector for --list-filters; the only currently-supported "
+        "format. Silently ignored when --list-filters is not set."
+    ),
+)
 @click.pass_context
 def run_main(
     ctx: click.Context,
@@ -159,6 +226,8 @@ def run_main(
     output_path: str = "",
     quiet: bool = False,
     json_summary: bool = False,
+    list_filters: bool = False,
+    json_format: bool = False,
 ) -> None:
     """
     Welcome to the Stock Screener CLI!
@@ -166,6 +235,8 @@ def run_main(
     # Count the active input modes; mutual exclusion is "at most one set".
     # An empty `filter_pairs` tuple counts as unset; a non-empty one counts
     # as one input mode regardless of how many --filter flags were repeated.
+    # `--list-filters` joins the mutex set as a sixth alternative entry mode
+    # (metadata-dump instead of screen-run) — spec §6 extended mutex set.
     input_modes_set = sum(
         [
             bool(filter_pairs),
@@ -173,10 +244,28 @@ def run_main(
             bool(filters_file),
             history,
             bool(scrape_link),
+            list_filters,
         ]
     )
     if input_modes_set > 1:
         raise click.UsageError(_MUTEX_MSG)
+
+    # --list-filters short-circuit: dump the filter inventory and exit 0
+    # WITHOUT running the screener pipeline. Placed after the mutex check
+    # (so combining --list-filters with an input mode still fails fast) but
+    # BEFORE banner emission and BEFORE the local `run_stock_screener`
+    # import — that import is intentionally lazy and we keep it lazy on the
+    # metadata-dump path too. --output / --quiet / --debug / --json-summary
+    # are orthogonal no-ops in this mode (spec §5.1 routing block + §7.2).
+    if list_filters:
+        if not json_format:
+            # --json is the only currently-supported format; rejecting bare
+            # --list-filters keeps the door open for future --yaml / --text.
+            raise click.UsageError(
+                "--list-filters requires --json (the only currently-supported format)."
+            )
+        _emit_filter_inventory()
+        ctx.exit(0)
 
     # Collapse the three structured forms into the single JSON string the
     # configurator expects. Empty string means "no structured input" (and
