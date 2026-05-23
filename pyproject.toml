@@ -14,9 +14,12 @@ dependencies = [
     "cfscrape",
     "click",
     "pydantic",
+    "pydantic-settings",
     "colorama",
     "beautifulsoup4",
     "platformdirs",
+    "fastapi",
+    "uvicorn[standard]",
 ]
 
 [project.optional-dependencies]
@@ -27,10 +30,16 @@ dev = [
     "pytest-cov>=5",
     "types-beautifulsoup4",
     "pip-audit",
+    # FastAPI TestClient transport (httpx>=0.23 required by starlette TestClient).
+    "httpx",
+    # YAML emission for scripts/dump_openapi.py (dev-only tooling; not used at
+    # API runtime, which serves JSON via FastAPI's built-in /openapi.json).
+    "pyyaml",
 ]
 
 [project.scripts]
 fincli = "fincli.app.cli:run_main"
+fincli-api = "fincli_api.main:main"
 
 [tool.ruff]
 line-length = 100
@@ -79,10 +88,17 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = "-ra"
+# Default invocation excludes live tests so `pytest tests/` is fast and offline.
+# The live tier (HTTP API e2e + any future live-Finviz check) is opt-in via
+# `pytest -m live`. Spec §6.3 mandates the live-Finviz gate as a pre-PR check
+# for fincli_api/ and fincli/stock_screening/ — that gate runs `-m live`.
+addopts = "-ra -m 'not live'"
+markers = [
+    "live: marks tests as requiring live Finviz HTTP (deselect with -m 'not live')",
+]
 
 [tool.setuptools]
 py-modules = ["singleton"]
 
 [tool.setuptools.packages.find]
-include = ["fincli*", "core*", "config*", "logger*"]
+include = ["fincli*", "core*", "config*", "logger*", "fincli_api*"]

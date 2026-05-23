@@ -1,10 +1,16 @@
+from collections.abc import Iterable
+
 from ..resource.params.const import BASE_URL
 from ..resource.params.descriptive_params import Descriptive_Params
 from ..resource.params.fundamental_params import Fundamental_Params
 from ..resource.params.technical_params import Technical_Params
 
 
-def build_stock_screener_query(filters_tuple, v=111, ft=2):
+def build_stock_screener_query(
+    filters_tuple: Iterable[tuple[str, str]],
+    v: int = 111,
+    ft: int = 2,
+) -> str:
     base_url = BASE_URL + "screener.ashx?"
 
     filters_list = []
