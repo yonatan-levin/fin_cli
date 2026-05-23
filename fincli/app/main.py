@@ -181,14 +181,13 @@ def _screen_from_query(quarry: str, *, hyperlink_wrap: bool) -> pd.DataFrame:
     flattened_row_count = sum(len(rows) for rows in data_rows)
 
     if flattened_row_count == 0:
-        # Text preserved verbatim from the pre-refactor inline path so the
-        # CLI's human-readable console output is byte-equivalent. The
-        # "writing header-only CSV" wording stays accurate for the CLI
-        # caller (which writes a CSV immediately after this returns) and
-        # is acceptable for the HTTP API caller (a backend log line, not
-        # user-facing in the response).
+        # Mode-neutral phrasing: this helper is shared by the CLI's
+        # CSV-write path and the HTTP API adapter, so the log line
+        # cannot assume a CSV destination. The CLI still writes a
+        # header-only CSV downstream; the API caller projects the empty
+        # frame into an empty ``stocks`` list.
         logger.warn(
-            "No data was found for the given filters; writing header-only CSV.",
+            "No rows matched the given filters; returning header-only frame.",
             title="Data Handling --->",
         )
         # ``stream_to_stdout`` here is a column-symmetry parameter only; the
