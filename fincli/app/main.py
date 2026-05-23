@@ -120,7 +120,10 @@ def build_data_frame(data_rows, stream_to_stdout: bool = False):
         # the CSV in Excel / Google Sheets gives clickable tickers. Spec
         # §5.6 — preserved exception for `--output -` only.
         df["Ticker"] = '=HYPERLINK("' + df["Link"] + '", "' + df["Ticker"] + '")'
-    df.drop(columns=["Link"], axis=1, inplace=True)
+    # ``columns=`` already implies axis=1; pandas 2.x rejects the legacy
+    # ``axis=1`` co-spec with ``ValueError: Cannot specify both 'axis' and
+    # 'index'/'columns'``.
+    df.drop(columns=["Link"], inplace=True)
     return df
 
 

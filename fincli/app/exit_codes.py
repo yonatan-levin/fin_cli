@@ -34,6 +34,7 @@ silent-corruption hazard the spec was written to close.
 
 from __future__ import annotations
 
+import click
 import requests
 
 # Exit-code constants — pinned values per spec §5.4. Renumbering any of these
@@ -62,11 +63,27 @@ def classify(exc: BaseException) -> int:
             here and continue to propagate).
 
     Returns:
-        One of ``UPSTREAM``, ``DATA``, or ``INTERNAL``. The other two
-        constants (``SUCCESS``, ``USAGE``) are never produced by this
-        function: ``SUCCESS`` is the no-exception path, and ``USAGE`` is
-        emitted by Click before any code reaches the orchestrator.
+        One of ``USAGE``, ``UPSTREAM``, ``DATA``, or ``INTERNAL``.
+        ``SUCCESS`` is never produced — it is the no-exception path.
+        ``USAGE`` is normally emitted by Click before any code reaches
+        the orchestrator (CLI mutual-exclusion errors etc.), but is
+        ALSO produced here when a non-CLI caller (notably the HTTP API
+        in ``fincli_api``) invokes ``validate_filter_pairs`` and that
+        validator raises ``click.UsageError`` mid-pipeline. Routing it
+        through the classifier lets the HTTP layer map USAGE -> 422 via
+        the same single-source-of-truth table the CLI uses.
     """
+    # Usage / validation failures. ``validate_filter_pairs`` raises
+    # ``click.UsageError`` (a ``click.exceptions.UsageError`` subclass)
+    # on unknown filter key/value. In CLI mode Click itself emits exit
+    # code 2 before reaching the orchestrator; in HTTP-API mode the
+    # validator runs inside a route handler so the exception bubbles to
+    # this classifier and the API maps USAGE -> 422 ``validation``.
+    # Checked first because ``UsageError`` is not a subclass of any of
+    # the other recognised families.
+    if isinstance(exc, click.exceptions.UsageError):
+        return USAGE
+
     # Upstream / network failures. ``requests.exceptions.RequestException``
     # is the umbrella base class for ConnectionError, Timeout, HTTPError,
     # and the broader request-lifecycle errors; ``cfscrape``'s wrapper

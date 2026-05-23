@@ -3,11 +3,9 @@
 Hosts the `app` instance discovered by uvicorn and ASGI tooling, plus the
 `main()` callable bound to the ``fincli-api`` console script.
 
-T1 deliberately ships an empty router set — routes, models, adapters, and
-exception handlers land in T2-T4 per
-``docs/features/fincli-api-plan.md``. FastAPI still auto-generates a valid
-OpenAPI 3.0 document for an empty app, which T1's acceptance gates rely on
-to prove the wiring is sound.
+Composes the app from the three T4 routers (filters / screens / meta)
+plus T4d's classifier-driven exception handler. Each router is
+self-contained; this module owns only the wiring.
 """
 
 from __future__ import annotations
@@ -16,6 +14,8 @@ import uvicorn
 from fastapi import FastAPI
 
 from fincli_api.config import ApiConfig
+from fincli_api.exception_handlers import register_exception_handlers
+from fincli_api.routes import filters_router, meta_router, screens_router
 
 # Constants kept module-level so the OpenAPI dump script and tests can
 # reference the same source of truth without instantiating the app.
@@ -24,9 +24,17 @@ API_VERSION = "0.1.0"
 
 app = FastAPI(title=API_TITLE, version=API_VERSION)
 
-# Routes wired in T4 (filters / screens / meta) — kept empty here so this
-# module stays the minimal "compose the app" file. Exception handlers also
-# land in T4d.
+# Routers are mounted at the app root (no prefix). Each router declares
+# its own path (`/filters`, `/screens`, `/healthz`); main.py owns only
+# the inclusion order, which incidentally determines OpenAPI ordering.
+app.include_router(filters_router)
+app.include_router(screens_router)
+app.include_router(meta_router)
+
+# Classifier-driven exception handler (spec §5) — single seat that maps
+# any uncaught exception through fincli.app.exit_codes.classify into the
+# correct HTTP status + ErrorResponse envelope.
+register_exception_handlers(app)
 
 
 def main() -> None:
