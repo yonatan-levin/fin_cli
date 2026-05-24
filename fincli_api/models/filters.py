@@ -4,7 +4,7 @@ Mirrors the JSON shape emitted by ``fincli --list-filters --json`` so the
 CLI and HTTP transports stay byte-equivalent (modulo HTTP framing). Both
 paths ultimately call
 ``fincli.resource.params.validators.list_valid_filters_with_labels`` —
-see CONTRACTS.md §5.6 and ``docs/superpowers/specs/2026-05-22-fincli-api-design.md`` §4.4.
+see CONTRACTS.md §5.6 and ``docs/superpowers/specs/archive/2026-05-22-fincli-api-design.md`` §4.4.
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
 
 This module is the **only** file in ``fincli_api/`` allowed to import from
 ``fincli/`` (architectural rule per spec
-``docs/superpowers/specs/2026-05-22-fincli-api-design.md`` §3.2). The two
+``docs/superpowers/specs/archive/2026-05-22-fincli-api-design.md`` §3.2). The two
 exported functions bridge the Pydantic API models to fincli's existing
 synchronous screener pipeline:
 

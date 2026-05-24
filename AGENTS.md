@@ -62,6 +62,13 @@ At the start of any work session, read these files in order. Stop at the first t
 | 27 | `config/` | Pydantic-based configuration with history support |
 | 28 | `logger/` | Singleton logger (console typing effect, file, JSON handlers) |
 
+> **API test paths** (subset of `TESTING.md` for quick orientation):
+> - `tests/unit/api/` — FastAPI `TestClient` + mocked adapter (~19 tests, <500ms)
+> - `tests/integration/api/` — `TestClient` + real fincli + mocked Finviz HTML (~11 tests, <3s; conftest patches `fincli.app.main.fetch_page_sync` per the local-binding rule)
+> - `tests/e2e/api/` — `TestClient` + live Finviz HTTP, opt-in via `pytest -m live` (~3 tests, ~3s)
+>
+> Full testing strategy: see `TESTING.md` (API tests section).
+
 ---
 
 ## File Roles (Quick Reference)

@@ -1,6 +1,6 @@
 """Pydantic request/response models for the ``/screens`` endpoint.
 
-Mirrors the spec in ``docs/superpowers/specs/2026-05-22-fincli-api-design.md``
+Mirrors the spec in ``docs/superpowers/specs/archive/2026-05-22-fincli-api-design.md``
 §4.2 (``ScreenRequest``) and §4.3 (``ScreenResult`` + ``Stock``).
 """
 

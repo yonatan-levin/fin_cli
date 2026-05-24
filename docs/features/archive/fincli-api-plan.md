@@ -1,6 +1,10 @@
 # Fin CLI HTTP API — Implementation Plan
 
-> **For executing agents:** This plan translates an already-approved spec into sequenced, parallelizable tasks. Do NOT re-design — the spec at `docs/superpowers/specs/2026-05-22-fincli-api-design.md` is the source of truth for *what* and *why*. This plan owns *how* and *in what order*. Each task is gated by VERIFIER → REVIEWER → QA → HUMAN per the pipeline-mode + list-filters precedent.
+> **Status:** SHIPPED on 2026-05-24. All 12 tasks (T1-T8 + T-FINAL) closed
+> across 11 commits on branch `feat/fincli-api`. The spec this plan
+> implemented is at `docs/superpowers/specs/archive/2026-05-22-fincli-api-design.md`.
+
+> **For executing agents (historical context):** This plan translated an already-approved spec into sequenced, parallelizable tasks. The spec at `docs/superpowers/specs/archive/2026-05-22-fincli-api-design.md` was the source of truth for *what* and *why*. This plan owned *how* and *in what order*. Each task was gated by VERIFIER → REVIEWER → QA → HUMAN per the pipeline-mode + list-filters precedent.
 
 ---
 

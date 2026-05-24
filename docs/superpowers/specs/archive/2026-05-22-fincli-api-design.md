@@ -1,8 +1,13 @@
 # Fin CLI HTTP API — Design Specification
 
+> **Status:** SHIPPED on 2026-05-24 in commits T1-T8 on branch `feat/fincli-api`.
+> This file is archived — see `docs/FEEDBACK-LOG.md` 2026-05-24 entry for
+> the post-ship retrospective + durable patterns. The plan that executed
+> this design is at `docs/features/archive/fincli-api-plan.md`.
+
 **Version:** 0.1 DRAFT
 **Date:** 2026-05-22
-**Status:** DESIGN
+**Status:** SHIPPED (was DESIGN)
 **Author:** yonatan
 **Mode:** PLAN_AND_CREATE (new module + cross-cutting docs sweep)
 **Builds on:** Pipeline-mode + list-filters umbrellas (`docs/features/archive/pipeline-mode-spec.md`, `docs/features/archive/list-filters-spec.md`), `INTEGRATION.md`

@@ -1,6 +1,6 @@
 """Exception-handler registration — routes via ``fincli.app.exit_codes.classify``.
 
-Spec ref: ``docs/superpowers/specs/2026-05-22-fincli-api-design.md`` §5.
+Spec ref: ``docs/superpowers/specs/archive/2026-05-22-fincli-api-design.md`` §5.
 
 This module is the architectural anti-drift seat between the CLI's
 differentiated exit codes (Pillar 4) and the HTTP API's error envelope:

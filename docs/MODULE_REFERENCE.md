@@ -9,9 +9,10 @@ See `ARCHITECTURE.md` for the system-level diagram and data-flow narrative. See 
 ## Table of Contents
 
 1. [`fincli/`](#fincli) — Finviz stock screener
-2. [`core/`](#core) — Configuration framework
-3. [`config/`](#config) — Project-level settings
-4. [`logger/`](#logger) — Singleton logger
+2. [`fincli_api/`](#fincli_api) — FastAPI HTTP surface over the screener
+3. [`core/`](#core) — Configuration framework
+4. [`config/`](#config) — Project-level settings
+5. [`logger/`](#logger) — Singleton logger
 
 ---
 
@@ -126,6 +127,82 @@ Pipeline mode adds two side-effect outputs the orchestrator surfaces on every ru
 
 - **Depends on** `core/` for config building, `config/` for the `Config` class, `logger/` for the Singleton logger.
 - No reverse dependencies — nothing in this repo imports from `fincli/`.
+
+---
+
+## `fincli_api/`
+
+### Purpose
+
+FastAPI HTTP surface that exposes the Fin CLI screener over JSON-over-HTTP. Wraps the existing `fincli/` orchestrator without modifying it — all CLI behaviors (filter validation, exit-code classification, scrape pipeline) are reused verbatim through a single adapter boundary. Designed for local-only use under the `fincli-api` console script; production hardening (auth, rate-limiting, TLS) is out of scope for the initial cut. Full design in `docs/superpowers/specs/archive/2026-05-22-fincli-api-design.md`.
+
+### Key files
+
+| File | Role |
+|------|------|
+| `fincli_api/main.py` | FastAPI app composition. Builds the `FastAPI` instance, mounts the three routers (`filters`, `screens`, `meta`), and calls `register_exception_handlers(app)` to wire the classifier-driven error envelope. `main()` is the `fincli-api` console-script entry point — reads `ApiConfig` and launches `uvicorn.run(app, host=..., port=..., log_level=...)`. Spec §3.1. |
+| `fincli_api/config.py` | `ApiConfig(BaseSettings)` via pydantic-settings. Fields: `host` (default `127.0.0.1`), `port` (default `8000`), `log_level` (default `"info"`). Env prefix `FINCLI_API_` so `FINCLI_API_PORT=9000` overrides. No secrets; local-bind default keeps the service off the public network. Spec §3.1 + §6 (security). |
+| `fincli_api/routes/filters.py` | `GET /filters` router. Calls `adapters.fincli.get_filter_inventory()` and returns the `FilterInventory` Pydantic model. Mirrors the `fincli --list-filters --json` CLI surface (CONTRACTS §5.6). Spec §4.1. |
+| `fincli_api/routes/screens.py` | `POST /screens` router. **Calls `validate_filter_pairs(pairs)` BEFORE `adapters.fincli.run_screen(...)`** to close the silent-drop hazard at the HTTP boundary (matches the CLI's same precondition in `core.configuration.configurator.build_config`). Returns a `ScreenResult` with the resolved stocks. Spec §4.2 + §5.1 (classifier → HTTP-status mapping). |
+| `fincli_api/routes/meta.py` | `GET /healthz` router. Returns `{"status": "ok"}` for liveness probes. No dependency on `fincli/` — safe to hit before any screen is loaded. Spec §4.3. |
+| `fincli_api/models/filters.py` | `FilterInventory` (top-level response) + `FilterEntry` (per-filter shape mirroring the CLI's `_LabelledEntry` TypedDict). Pydantic v2 models with explicit field types so OpenAPI docs render correctly. Spec §3.3. |
+| `fincli_api/models/screens.py` | `ScreenRequest` (input shape: `filters: dict[str, str]`), `ScreenResult` (response wrapper: `stocks: list[Stock]`, `count: int`), `Stock` (per-row shape derived from the screener `DataFrame` columns in CONTRACTS §3.1). Spec §3.3. |
+| `fincli_api/models/errors.py` | `ErrorResponse` envelope with a `Literal["usage", "upstream", "data", "internal"]` discriminator + `message` field. Mirrors the four non-success exit-code classes from `fincli.app.exit_codes.classify` so HTTP consumers get the same error taxonomy as CLI users. Spec §5.1. |
+| `fincli_api/adapters/fincli.py` | **Boundary layer — the ONLY file in `fincli_api/` allowed to import from `fincli/`.** Two functions: `get_filter_inventory() -> FilterInventory` (wraps `fincli.resource.params.validators.list_valid_filters_with_labels`), `run_screen(filters: dict[str, str]) -> ScreenResult` (wraps the screener pipeline). Architectural invariant: any future feature that needs to touch `fincli/` adds a function HERE, not in the routes/models layers. Spec §3.2. |
+| `fincli_api/exception_handlers.py` | `register_exception_handlers(app)` — installs the FastAPI exception handler chain that routes every uncaught exception through `fincli.app.exit_codes.classify` to obtain the Pillar-4 code, then maps the code to the spec §5.1 HTTP status (USAGE=400, UPSTREAM=502, DATA=502, INTERNAL=500) and returns the `ErrorResponse` envelope. Reuses the CLI classifier so the exit-code/HTTP-status mapping has a single source of truth. Spec §5.1. |
+
+### Public surface
+
+```python
+# fincli_api/main.py
+app: FastAPI                                 # for ASGI servers / tests
+def main() -> None                           # uvicorn entry — fincli-api console script
+
+# fincli_api/config.py
+class ApiConfig(BaseSettings):
+    host: str = "127.0.0.1"
+    port: int = 8000
+    log_level: str = "info"
+    # env_prefix = "FINCLI_API_"
+
+# fincli_api/adapters/fincli.py
+def get_filter_inventory() -> FilterInventory
+def run_screen(filters: dict[str, str]) -> ScreenResult
+
+# fincli_api/exception_handlers.py
+def register_exception_handlers(app: FastAPI) -> None
+```
+
+HTTP surface (full OpenAPI doc auto-generated by FastAPI; see spec §4):
+
+```
+GET  /filters     -> FilterInventory
+POST /screens     -> ScreenResult     (body: ScreenRequest)
+GET  /healthz     -> {"status": "ok"}
+```
+
+### Data shapes
+
+- `FilterInventory` — same shape as the `fincli --list-filters --json` CLI dump (CONTRACTS §5.6): `{query_key: {"label": str, "values": {value_code: value_label}}}` wrapped in a Pydantic model.
+- `ScreenRequest.filters` — flat `{query_key: value_code}` object, identical to the CLI's `--filters-json` shape (CONTRACTS §5.1 + §5.3).
+- `ScreenResult.stocks` — array of `Stock` objects whose fields mirror the screener `DataFrame` columns (`Symbol`, `Company`, `Sector`, `Industry`, `Country`, `Market Cap`, `P/E`, `Price`, `Change`, `Volume`). Spec §3.3.
+- `ErrorResponse` — `{"kind": "usage" | "upstream" | "data" | "internal", "message": str}`. The `kind` discriminator is type-pinned with `Literal` so consumers can switch on it.
+
+### Error modes
+
+| Condition | Behavior |
+|-----------|----------|
+| Unknown filter key/value in `POST /screens` body | `validate_filter_pairs` raises `click.UsageError` → classifier returns USAGE (2) → `exception_handlers` returns HTTP 400 with `kind: "usage"`. Spec §5.1. |
+| Malformed `ScreenRequest` body (wrong types, missing fields) | FastAPI/Pydantic returns HTTP 422 directly; bypasses the classifier (Pydantic validation runs before route body). |
+| Cloudflare 429/503 exhaustion or other `requests.RequestException` | Classifier returns UPSTREAM (3) → HTTP 502 with `kind: "upstream"`. |
+| HTML parse failure (`IndexError`/`AttributeError`/`KeyError`) | Classifier returns DATA (4) → HTTP 502 with `kind: "data"`. |
+| Any other unhandled exception | Classifier returns INTERNAL (1) → HTTP 500 with `kind: "internal"`. Exception details are logged but not leaked in the response body. |
+
+### Integration
+
+- **Depends on** `fincli.resource.params.validators` (via adapter), `fincli.app.exit_codes` (via exception handlers), and the `fincli` screener pipeline (via adapter). Also depends on `logger/` for structured logs.
+- **Architectural invariant** — only `fincli_api/adapters/fincli.py` and `fincli_api/exception_handlers.py` are allowed to import from `fincli/`. Routes and models stay framework-pure so the boundary can be re-pointed (e.g., to a different orchestrator implementation) without touching the HTTP layer. Spec §3.2.
+- **No reverse dependencies** — `fincli/` does not import from `fincli_api/` (would create a cycle and pull FastAPI into the CLI surface).
 
 ---
 
@@ -300,4 +377,4 @@ Handlers are not part of the public surface — they are initialized internally 
 
 ---
 
-*Last updated: 2026-05-21 (list-filters-spec shipped: new `fincli.resource.params._label_format` private module, extended `fincli.resource.params.validators` with `list_valid_filters_with_labels` + shared `_iter_param_entries` walker, extended `fincli.app.cli` with `--list-filters --json` short-circuit + `LIST_FILTERS_SCHEMA_VERSION = 1`). Prior milestone 2026-05-16 (pipeline-mode shipped: new `fincli.app.exit_codes` module, `fincli.utils.market_cap` carve-out, `fincli.resource.params.validators`, updated `fincli.app.main` / `core.configuration.configurator` / `core.converters.json` / `config.config` / `logger.logger` surfaces). Maintained alongside source changes — update this file whenever a module's public surface, key files, or error modes change.*
+*Last updated: 2026-05-24 (fincli_api/ package added: FastAPI HTTP surface with 3 routers, adapter-boundary discipline, classifier-driven error envelope — spec `docs/superpowers/specs/archive/2026-05-22-fincli-api-design.md`). Prior milestone 2026-05-21 (list-filters-spec shipped: new `fincli.resource.params._label_format` private module, extended `fincli.resource.params.validators` with `list_valid_filters_with_labels` + shared `_iter_param_entries` walker, extended `fincli.app.cli` with `--list-filters --json` short-circuit + `LIST_FILTERS_SCHEMA_VERSION = 1`). Prior milestone 2026-05-16 (pipeline-mode shipped: new `fincli.app.exit_codes` module, `fincli.utils.market_cap` carve-out, `fincli.resource.params.validators`, updated `fincli.app.main` / `core.configuration.configurator` / `core.converters.json` / `config.config` / `logger.logger` surfaces). Maintained alongside source changes — update this file whenever a module's public surface, key files, or error modes change.*
