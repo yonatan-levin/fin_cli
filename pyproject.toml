@@ -83,19 +83,10 @@ show_error_codes = true
 module = ["cfscrape", "cfscrape.*", "requests", "requests.*"]
 ignore_missing_imports = true
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = "test_*.py"
-python_classes = "Test*"
-python_functions = "test_*"
-# Default invocation excludes live tests so `pytest tests/` is fast and offline.
-# The live tier (HTTP API e2e + any future live-Finviz check) is opt-in via
-# `pytest -m live`. Spec §6.3 mandates the live-Finviz gate as a pre-PR check
-# for fincli_api/ and fincli/stock_screening/ — that gate runs `-m live`.
-addopts = "-ra -m 'not live'"
-markers = [
-    "live: marks tests as requiring live Finviz HTTP (deselect with -m 'not live')",
-]
+# Pytest configuration lives in `pytest.ini` at repo root, NOT here. Pytest
+# precedence picks up pytest.ini first when both files exist, which silently
+# made any `[tool.pytest.ini_options]` settings inert. T5c surfaced this; the
+# fix consolidates pytest config in pytest.ini as the single source of truth.
 
 [tool.setuptools]
 py-modules = ["singleton"]
