@@ -55,7 +55,10 @@ def _render(spec: dict[str, Any]) -> tuple[str, str]:
           (which mirrors the order routes/models were declared, the most
           human-readable choice). ``default_flow_style=False`` for block
           style. ``allow_unicode=True`` so non-ASCII descriptions survive.
-        - JSON: ``indent=2`` + ``sort_keys=False`` + trailing newline for
+        - JSON: ``indent=2`` + ``sort_keys=False`` + ``ensure_ascii=False``
+          for glyph parity with the YAML sibling (the em-dash in module
+          docstrings round-trips as the literal character in both files
+          rather than ``\\u2014`` in JSON only). Trailing newline for
           POSIX-friendly diffs.
     """
     yaml_text = yaml.safe_dump(
@@ -64,7 +67,7 @@ def _render(spec: dict[str, Any]) -> tuple[str, str]:
         default_flow_style=False,
         allow_unicode=True,
     )
-    json_text = json.dumps(spec, indent=2, sort_keys=False) + "\n"
+    json_text = json.dumps(spec, indent=2, sort_keys=False, ensure_ascii=False) + "\n"
     return yaml_text, json_text
 
 
