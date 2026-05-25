@@ -1,0 +1,392 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Fin CLI HTTP API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/filters": {
+      "get": {
+        "summary": "List all valid Finviz filter keys with labels and value codes.",
+        "description": "Returns the full filter inventory matching `fincli --list-filters --json`. Polyglot consumers should iterate the `keys` array (not the `filters` map directly) to lock iteration order — Go's `encoding/json` decode-into-map randomizes key order, so the explicit `keys` list is the canonical sequence.",
+        "operationId": "list_filters_filters_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilterInventory"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unclassified internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/screens": {
+      "post": {
+        "summary": "Run a Finviz screen with the given filter map.",
+        "description": "Validates filter keys/values via fincli's chokepoint validator (unknown -> HTTP 422 via the API exception handler), then runs the screen and returns the matching stocks.",
+        "operationId": "run_screen_endpoint_screens_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScreenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Filter validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unclassified internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream Finviz fetch or parse failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "summary": "Liveness check.",
+        "description": "Returns 200 + {\"status\": \"ok\"} if the process is up. No dependencies checked.",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErrorResponse": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version",
+            "default": 1
+          },
+          "error_class": {
+            "type": "string",
+            "enum": [
+              "validation",
+              "upstream",
+              "parsing",
+              "internal"
+            ],
+            "title": "Error Class"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Human-readable; safe to surface in UI."
+          },
+          "details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details",
+            "description": "Error-class-specific structured payload. Shape varies by error_class (see CONTRACTS §8 for per-class schemas)."
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "description": "UUID4 generated for 5xx paths so operators can cross-reference the response with server logs. Absent on 4xx (caller's own fault — no log to look up)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "error_class",
+          "message"
+        ],
+        "title": "ErrorResponse",
+        "description": "Error envelope for HTTP 4xx/5xx responses (spec §5.2).\n\n`error_class` is the discriminator. Clients route on it to choose\na recovery strategy:\n  - `validation` (HTTP 422): caller's input was bad — fix and retry\n  - `upstream` (HTTP 502): Finviz fetch failed — retry with backoff\n  - `parsing` (HTTP 502): Finviz HTML didn't parse — likely structural\n    drift; retry rarely helps\n  - `internal` (HTTP 500): unclassified bug — surface request_id to\n    the operator for log cross-reference\n\nMaps from fincli's existing classifier at fincli/app/exit_codes.py\n(`classify(exc)` returns the int that the exception handler at\nfincli_api/exception_handlers.py translates into this envelope).\n\nAttributes:\n    schema_version: Contract version (CONTRACTS §7); bump on breaking\n        envelope changes.\n    error_class: Discriminator selecting the recovery strategy.\n    message: Human-readable explanation; safe to surface in UI.\n    details: Error-class-specific structured payload; shape varies\n        (see CONTRACTS §8).\n    request_id: UUID4 for 5xx paths so operators can cross-reference\n        server logs. Absent on 4xx."
+      },
+      "FilterEntry": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Values"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "values"
+        ],
+        "title": "FilterEntry",
+        "description": "One filter's metadata: human label plus value-code to value-label map.\n\nMirrors the per-entry shape in CONTRACTS §5.6 / spec §4.4. The empty\nstring value code (the Finviz \"Any\" sentinel) is a legal map key — the\nvalidator accepts it — so consumers must not filter it out blindly.\n\nAttributes:\n    label: Human-readable label for the filter key, derived mechanically\n        from the underlying Python attribute name (acronyms preserved;\n        connector words lowercased). Starting point only — UI consumers\n        may override locally for polish.\n    values: ``{value_code: value_label}`` map for the filter's legal\n        values. Iteration order in the wire JSON follows Python dict\n        insertion order, which mirrors the source params-class\n        declaration order."
+      },
+      "FilterInventory": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version",
+            "default": 1
+          },
+          "keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keys",
+            "description": "Canonical filter-key ordering (Fundamental -> Descriptive -> Technical). Polyglot consumers iterate this list to lock iteration order (Go's encoding/json randomizes map iteration)."
+          },
+          "filters": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FilterEntry"
+            },
+            "type": "object",
+            "title": "Filters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "keys",
+          "filters"
+        ],
+        "title": "FilterInventory",
+        "description": "Full filter inventory response for ``GET /filters``.\n\nByte-equivalent (modulo HTTP framing) to ``fincli --list-filters --json``\noutput — both paths consume ``list_valid_filters_with_labels`` via\ndifferent transports (CLI vs. HTTP). See spec §4.4 and CONTRACTS §5.6.\n\nAttributes:\n    schema_version: Contract version per CONTRACTS §7. Pinned to ``1``;\n        bumps independently from the release version and only on\n        breaking schema changes (field removed/renamed or semantics\n        changed). Additive changes do not bump.\n    keys: Canonical filter-key ordering (Fundamental -> Descriptive ->\n        Technical). Polyglot consumers iterate this list to lock\n        iteration order — Go's ``encoding/json`` randomizes map\n        iteration and JS object iteration is engine-defined, so the\n        ``filters`` dict alone is not a stable ordering contract.\n    filters: ``{query_key: FilterEntry}`` map keyed by Finviz query key\n        (not the Python attribute name)."
+      },
+      "HealthStatus": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthStatus",
+        "description": "Liveness response payload."
+      },
+      "ScreenRequest": {
+        "properties": {
+          "filters": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Filters",
+            "description": "Map of Finviz filter key to value code. See ``GET /filters`` for the valid set.",
+            "examples": [
+              {
+                "fa_pe": "u5",
+                "sec": "energy"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "filters"
+        ],
+        "title": "ScreenRequest",
+        "description": "Request body for ``POST /screens`` (spec §4.2)."
+      },
+      "ScreenResult": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version",
+            "default": 1
+          },
+          "row_count": {
+            "type": "integer",
+            "title": "Row Count"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms"
+          },
+          "started_at": {
+            "type": "string",
+            "title": "Started At"
+          },
+          "finished_at": {
+            "type": "string",
+            "title": "Finished At"
+          },
+          "stocks": {
+            "items": {
+              "$ref": "#/components/schemas/Stock"
+            },
+            "type": "array",
+            "title": "Stocks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row_count",
+          "duration_ms",
+          "started_at",
+          "finished_at",
+          "stocks"
+        ],
+        "title": "ScreenResult",
+        "description": "Response body for ``POST /screens`` on success (spec §4.3).\n\nMirrors fincli's ``--json-summary`` schema (CONTRACTS §5.5) plus the\n``stocks`` array. ``schema_version`` bumps independently from the\nAPI release version per CONTRACTS §7.\n\n``started_at`` / ``finished_at`` are ISO 8601 strings (e.g.\n``\"2026-05-22T15:23:01.234Z\"``) rather than ``datetime`` for\nbyte-equivalence with what fincli's ``--json-summary`` already\nemits. Tightening to ``datetime`` would change the JSON shape and\ntherefore requires a ``schema_version`` bump."
+      },
+      "Stock": {
+        "properties": {
+          "ticker": {
+            "type": "string",
+            "title": "Ticker"
+          },
+          "company": {
+            "type": "string",
+            "title": "Company"
+          },
+          "sector": {
+            "type": "string",
+            "title": "Sector"
+          },
+          "industry": {
+            "type": "string",
+            "title": "Industry"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "market_cap": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Cap"
+          },
+          "pe": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pe"
+          },
+          "price": {
+            "type": "string",
+            "title": "Price"
+          },
+          "change": {
+            "type": "string",
+            "title": "Change"
+          },
+          "volume": {
+            "type": "string",
+            "title": "Volume"
+          },
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "finviz_url": {
+            "type": "string",
+            "title": "Finviz Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticker",
+          "company",
+          "sector",
+          "industry",
+          "country",
+          "market_cap",
+          "pe",
+          "price",
+          "change",
+          "volume",
+          "rank",
+          "finviz_url"
+        ],
+        "title": "Stock",
+        "description": "One row from a Finviz screener result, serialized as snake_case JSON.\n\nField-naming rule (spec §4.3): snake_case. The verbatim Finviz CSV\ncolumns (``Ticker``, ``Market Cap``, ``P/E``, ``No.``) are normalized\nto ``ticker``, ``market_cap``, ``pe``, and ``rank`` respectively.\n\nNumeric vs. string preservation: numeric for already-coerced values\n(``market_cap`` is converted via ``fincli/utils/market_cap.py``), and\nstring for fincli-formatted values that carry units / currency /\npercent signs (``pe``, ``price``, ``change``, ``volume``). Consumers\nopt in to parsing those.\n\n``finviz_url`` reuses fincli's existing URL builder\n``StockTableScreenerParser.ticker_link()`` in\n``fincli/stock_screening/parsers/stock_table.py`` (concatenates\n``BASE_URL`` from ``fincli/resource/params/const.py`` with the per-row\nhref). That same value lands in the DataFrame's ``Link`` column and is\nwhat the CLI wraps in an Excel ``=HYPERLINK(...)`` formula on the CSV\nwrite path (then dropped). The T3 adapter is the bridge that calls\ninto fincli to populate this field."
+      }
+    }
+  }
+}

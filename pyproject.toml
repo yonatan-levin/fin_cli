@@ -14,9 +14,12 @@ dependencies = [
     "cfscrape",
     "click",
     "pydantic",
+    "pydantic-settings",
     "colorama",
     "beautifulsoup4",
     "platformdirs",
+    "fastapi",
+    "uvicorn[standard]",
 ]
 
 [project.optional-dependencies]
@@ -27,10 +30,16 @@ dev = [
     "pytest-cov>=5",
     "types-beautifulsoup4",
     "pip-audit",
+    # FastAPI TestClient transport (httpx>=0.23 required by starlette TestClient).
+    "httpx",
+    # YAML emission for scripts/dump_openapi.py (dev-only tooling; not used at
+    # API runtime, which serves JSON via FastAPI's built-in /openapi.json).
+    "pyyaml",
 ]
 
 [project.scripts]
 fincli = "fincli.app.cli:run_main"
+fincli-api = "fincli_api.main:main"
 
 [tool.ruff]
 line-length = 100
@@ -74,15 +83,13 @@ show_error_codes = true
 module = ["cfscrape", "cfscrape.*", "requests", "requests.*"]
 ignore_missing_imports = true
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = "test_*.py"
-python_classes = "Test*"
-python_functions = "test_*"
-addopts = "-ra"
+# Pytest configuration lives in `pytest.ini` at repo root, NOT here. Pytest
+# precedence picks up pytest.ini first when both files exist, which silently
+# made any `[tool.pytest.ini_options]` settings inert. T5c surfaced this; the
+# fix consolidates pytest config in pytest.ini as the single source of truth.
 
 [tool.setuptools]
 py-modules = ["singleton"]
 
 [tool.setuptools.packages.find]
-include = ["fincli*", "core*", "config*", "logger*"]
+include = ["fincli*", "core*", "config*", "logger*", "fincli_api*"]

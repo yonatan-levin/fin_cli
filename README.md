@@ -1,15 +1,18 @@
-# Fin CLI — Finviz stock screener
+# Fin CLI — Finviz stock screener (CLI + HTTP API)
 
-> A Python command-line tool that scrapes Finviz.com's stock screener, parses the result table, and emits a timestamped CSV.
+> A Python package that scrapes Finviz.com's stock screener through two co-equal entry points: a command-line tool that emits a timestamped CSV, and a FastAPI HTTP service that returns the same screen as JSON.
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ## Overview
 
-Fin CLI is a single-mode command-line application. You pick filter values from the standard Finviz vocabulary (P/E, sector, country, RSI, market cap, etc.); the tool builds the corresponding Finviz URL, fetches every paginated result page through `cfscrape` (Cloudflare bypass), parses the HTML stock table with BeautifulSoup, and writes a timestamped CSV to `workspace_output/`.
+Fin CLI is a Python package with two co-equal entry points sharing one orchestrator:
 
-There is no server, no database, no broker integration, no REST API. Outputs are CSVs you read in Excel, in pandas, or in any tool that opens CSV.
+- **CLI** (`fincli/`) — pick filter values from the standard Finviz vocabulary (P/E, sector, country, RSI, market cap, etc.); the tool builds the corresponding Finviz URL, fetches every paginated result page through `cfscrape` (Cloudflare bypass), parses the HTML stock table with BeautifulSoup, and writes a timestamped CSV to `workspace_output/`.
+- **HTTP API** (`fincli_api/`) — a FastAPI service that exposes the same screener over REST+JSON for polyglot consumers (Go/TS/Rust integrators codegen typed clients from the committed OpenAPI snapshot at `docs/api/openapi.yaml`).
+
+There is no database and no broker integration. CLI outputs are CSVs you read in Excel, in pandas, or in any tool that opens CSV; API outputs are typed JSON envelopes. See the [Pipeline mode](#pipeline-mode) section for non-interactive CLI usage and the [HTTP API](#http-api) section for the FastAPI surface.
 
 ## Quick Start
 
@@ -86,6 +89,87 @@ tail -n1 /tmp/log | cut -d= -f2-     # -> /abs/path/to/out.csv
 Exit codes (full table in CONTRACTS §1): `0` SUCCESS, `1` INTERNAL, `2` USAGE, `3` UPSTREAM, `4` DATA. Zero-row results stay exit 0 and write a header-only CSV.
 
 For non-Python integrators (Go, Node, etc.), see [INTEGRATION.md](INTEGRATION.md).
+
+### HTTP API
+
+Fin CLI also exposes its screener over REST+JSON via a sibling FastAPI package
+(`fincli_api/`). The API consumes the same orchestrator the CLI uses, so the
+contract cannot drift across surfaces — every filter validated by `fincli
+--filter` is validated identically by `POST /screens`, and every row in the
+streamed CSV maps 1:1 to a row in the JSON response.
+
+#### Quick start
+
+```bash
+# Install (if not already done)
+pip install -e ".[dev]"
+
+# Start the API on localhost:8000 (dev mode with auto-reload)
+uvicorn fincli_api.main:app --reload
+
+# Or via the console script (installed by `[project.scripts]`)
+fincli-api
+```
+
+Then open `http://localhost:8000/docs` for the Swagger UI (auto-generated
+from Pydantic models — every endpoint is fully typed).
+
+#### Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/filters` | Dump the full Finviz filter inventory as JSON (same shape as `fincli --list-filters --json`) |
+| `POST` | `/screens` | Run a screen with provided filters; returns matching stocks as JSON |
+| `GET` | `/healthz` | Liveness check |
+| `GET` | `/openapi.json` | Auto-generated OpenAPI 3.1 spec |
+| `GET` | `/docs` | Swagger UI |
+| `GET` | `/redoc` | Redoc UI |
+
+#### Sample curl
+
+```bash
+# List all valid filter keys + value codes
+curl http://localhost:8000/filters | jq .
+
+# Run a screen — returns stocks as typed JSON
+curl -X POST http://localhost:8000/screens \
+  -H 'Content-Type: application/json' \
+  -d '{"filters": {"fa_pe": "u5", "sec": "energy"}}' \
+  | jq .
+
+# Liveness
+curl http://localhost:8000/healthz
+# -> {"status": "ok"}
+```
+
+#### Polyglot consumers
+
+The committed OpenAPI snapshot at [`docs/api/openapi.yaml`](docs/api/openapi.yaml)
+is the contract artifact for non-Python clients. Generate typed clients via
+your language's preferred tooling:
+
+- Go: `oapi-codegen -config codegen.yaml docs/api/openapi.yaml`
+- TypeScript: `openapi-typescript docs/api/openapi.yaml > api.d.ts`
+- Rust: `openapi-generator-cli generate -i docs/api/openapi.yaml -g rust`
+
+The snapshot is regeneratable and drift-checkable via:
+
+```bash
+python scripts/dump_openapi.py            # regenerate the snapshot
+python scripts/dump_openapi.py --check    # CI/pre-commit drift check (exit 1 on drift)
+```
+
+#### Error responses
+
+All non-2xx responses use the `ErrorResponse` envelope (see
+[`docs/api/openapi.yaml`](docs/api/openapi.yaml) `components.schemas.ErrorResponse`):
+
+| HTTP | `error_class` | Meaning |
+|---|---|---|
+| 422 | `validation` | Bad filter key/value (caller's fault — fix and retry) |
+| 502 | `upstream` | Finviz fetch failed (retry with backoff) |
+| 502 | `parsing` | Finviz HTML unparseable (likely structural drift) |
+| 500 | `internal` | Unclassified bug — surface `request_id` to operator |
 
 ### Output
 

@@ -188,6 +188,34 @@ def test_fetch_urls_returns_one_blob_per_page(mock_create_scraper, finviz_sample
     assert all(isinstance(p, bytes) for p in pages)
 ```
 
+## API tests (fincli_api/)
+
+The API has a 3-tier test pyramid mirroring the spec §6 structure (`docs/superpowers/specs/archive/2026-05-22-fincli-api-design.md`):
+
+| Tier | Path | What's mocked | What's real | Target speed |
+|---|---|---|---|---|
+| Unit | `tests/unit/api/` | adapter (`fincli_api.adapters.fincli` functions) | FastAPI routes, Pydantic validation, error envelope | <500ms |
+| Integration | `tests/integration/api/` | `fincli.app.main.fetch_page_sync` (HTTP boundary) | Adapter, fincli orchestrator, BS4 parsing | <3s |
+| E2E | `tests/e2e/api/` | nothing | Full stack: API -> fincli -> live Finviz | <30s |
+
+### Default invocation excludes live tier
+
+`pytest tests/` skips the live tier via `pytest.ini`'s `addopts = -q -ra -m "not live"`. Explicit `pytest -m live tests/e2e/api/` runs the 3 live-Finviz smoke tests.
+
+### Conftest patterns
+
+**Both unit and integration conftests use `TestClient(app, raise_server_exceptions=False)`**. Starlette's default re-raises exceptions through middleware in tests, which bypasses our `@app.exception_handler(Exception)`. Without the override, every test that triggers a handler-mapped exception sees the raw exception instead of the JSONResponse envelope.
+
+**Mock target rule** (T3 BACKEND surprise): integration tier patches `fincli.app.main.fetch_page_sync`, NOT `fincli.utils.web_scraper.fetch_page_sync`. The former is the local-name binding via `from ... import fetch_page_sync` in `main.py`; patching the original location doesn't affect what `main.py` already imported. (Same rule as the pipeline-mode integration suite — see "Mocking Strategy" above.)
+
+### MAJOR #4 deferred limitation
+
+`tests/integration/api/test_screens_integration.py` pairs a `@pytest.mark.xfail(strict=True)` test (spec-intent: 502 parsing) with a current-behavior pin test (actual: 200 empty) for the `finviz_no_table.html` fixture. Closing MAJOR #4 (malformed HTML -> 502) will mechanically trip both tests in the same commit — forcing a coordinated code + test + docs update. See `fincli_api/exception_handlers.py` module docstring for the deferred rationale.
+
+### Pre-PR live-Finviz gate
+
+Per FEEDBACK-LOG.md 2026-05-22 + 2026-05-24 entries, `pytest -m live tests/e2e/api/` is MANDATORY before HUMAN approval on any change to `fincli_api/` or `fincli/stock_screening/`. The umbrella's near-miss (1-page IndexError that shipped because mocked tests didn't exercise the live path) is the durable rationale.
+
 ## Coverage
 
 **Coverage is deferred to Phase 3** of the harness rollout (`docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md`, §8.2).

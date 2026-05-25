@@ -42,6 +42,7 @@ from fincli.cli.cli_stock_screener import select_filters_and_values
 from fincli.stock_screening.content.stock_table import StockTableScreeningContent
 from fincli.stock_screening.locators.stock_table_locators import StockTableLocators
 from fincli.utils.market_cap import convert_market_cap_to_numeric
+from fincli.utils.quary_builders import build_stock_screener_query
 from fincli.utils.web_scraper import fetch_page_sync
 from logger.logger import logger
 
@@ -119,7 +120,10 @@ def build_data_frame(data_rows, stream_to_stdout: bool = False):
         # the CSV in Excel / Google Sheets gives clickable tickers. Spec
         # §5.6 — preserved exception for `--output -` only.
         df["Ticker"] = '=HYPERLINK("' + df["Link"] + '", "' + df["Ticker"] + '")'
-    df.drop(columns=["Link"], axis=1, inplace=True)
+    # ``columns=`` already implies axis=1; pandas 2.x rejects the legacy
+    # ``axis=1`` co-spec with ``ValueError: Cannot specify both 'axis' and
+    # 'index'/'columns'``.
+    df.drop(columns=["Link"], inplace=True)
     return df
 
 
@@ -145,6 +149,96 @@ def _build_empty_data_frame(stream_to_stdout: bool = False):
     # Suppress the unused-arg warning while keeping the symmetric signature.
     del stream_to_stdout
     return pd.DataFrame({col: [] for col in _FINAL_COLUMNS})
+
+
+def _screen_from_query(quarry: str, *, hyperlink_wrap: bool) -> pd.DataFrame:
+    """Fetch + parse a Finviz screen URL into a DataFrame (shared core).
+
+    Internal extraction of the fetch -> paginate -> aggregate -> build_frame
+    pipeline that previously lived inline inside ``run_stock_screener``.
+    Hoisted so the CSV-write CLI path and the HTTP API adapter cannot drift
+    on the parser/coercion contract — both call this function. Zero-row
+    Finviz results return the header-only DataFrame from
+    ``_build_empty_data_frame``; happy-path results return the full frame
+    from ``build_data_frame``. The ``hyperlink_wrap`` toggle controls the
+    Excel ``=HYPERLINK(...)`` wrap on the ``Ticker`` column (spec §5.6 +
+    pipeline-mode-spec §5.6): CLI file destinations want it on, CLI stdout
+    streaming and the HTTP API want it off.
+    """
+    logger.info(f"Fetching HTML content from {quarry}", "Fetching HTML - Started")
+    html_content = fetch_page_sync(quarry)
+    logger.info(f"HTML content fetched from {quarry} successfully", "Fetching HTML - Completed")
+
+    stock_screener_page = StockTableScreeningContent(html_content)
+
+    pages = fetch_urls(quarry, stock_screener_page.page_count)
+    data_rows = aggregate_rows(pages)
+
+    # ``aggregate_rows`` returns a list-of-lists: one inner list per matched
+    # ``<table>``, each containing zero-or-more row tuples. Empty inner
+    # lists are legal (the screener table exists but its ``<tbody>`` is
+    # empty), so "zero rows" means *every* inner list is empty, not
+    # "data_rows itself is empty". This is the single source of truth for
+    # the zero-row branch selector (previously inline in
+    # ``run_stock_screener``).
+    flattened_row_count = sum(len(rows) for rows in data_rows)
+
+    if flattened_row_count == 0:
+        # Mode-neutral phrasing: this helper is shared by the CLI's
+        # CSV-write path and the HTTP API adapter, so the log line
+        # cannot assume a CSV destination. The CLI still writes a
+        # header-only CSV downstream; the API caller projects the empty
+        # frame into an empty ``stocks`` list.
+        logger.warn(
+            "No rows matched the given filters; returning header-only frame.",
+            title="Data Handling --->",
+        )
+        # ``stream_to_stdout`` here is a column-symmetry parameter only; the
+        # empty frame's column order is identical between modes. We pass the
+        # negation of ``hyperlink_wrap`` for callsite consistency.
+        return _build_empty_data_frame(stream_to_stdout=not hyperlink_wrap)
+
+    return build_data_frame(data_rows, stream_to_stdout=not hyperlink_wrap)
+
+
+def screen_to_dataframe(
+    filters: dict[str, str] | tuple[tuple[str, str], ...] | list[tuple[str, str]],
+    *,
+    hyperlink_wrap: bool = False,
+) -> pd.DataFrame:
+    """Run a Finviz screen for ``filters`` and return the DataFrame in memory.
+
+    Public shared entry point for callers that want the DataFrame without
+    side effects (no CSV write, no stdout streaming, no exit-code emission).
+    The HTTP API adapter (``fincli_api/adapters/fincli.py``) calls this;
+    the CLI's ``run_stock_screener`` builds its query through the
+    interactive picker (which has a history-writeback side effect) then
+    calls the same underlying ``_screen_from_query`` core so the two paths
+    cannot drift on parser/coercion behavior.
+
+    Args:
+        filters: Validated Finviz filter set. ``dict[str, str]`` is the
+            natural shape for HTTP callers (matches the ``ScreenRequest``
+            wire format); the sequence-of-pairs shapes are accepted for
+            symmetry with the CLI's ``Config.filters`` tuple. Callers are
+            responsible for validating against
+            ``fincli.resource.params.validators.validate_filter_pairs``
+            BEFORE calling — this helper does not re-validate.
+        hyperlink_wrap: When ``True``, wrap the ``Ticker`` column as an
+            Excel ``=HYPERLINK(...)`` formula (CLI file-destination
+            behavior). Defaults to ``False`` so API consumers get raw
+            ticker symbols, matching the spec §4.3 ``Stock.ticker`` shape.
+
+    Returns:
+        The screener DataFrame (header-only on zero-row Finviz results).
+        Column order matches ``_FINAL_COLUMNS``.
+    """
+    # Normalize all accepted input shapes to the iterable-of-pairs form that
+    # ``build_stock_screener_query`` consumes. ``dict.items()`` is the
+    # zero-copy path for the dict case; the sequence shapes pass through.
+    filter_pairs = filters.items() if isinstance(filters, dict) else filters
+    quarry = build_stock_screener_query(filter_pairs)
+    return _screen_from_query(quarry, hyperlink_wrap=hyperlink_wrap)
 
 
 def _resolve_output_path_label(output_path: str, resolved_file_path: str | None) -> str:
@@ -350,51 +444,35 @@ def run_stock_screener(
         resolved_file_path = config.file_path("stock_screener")
 
     try:
-        logger.info(f"Fetching HTML content from {quarry}", "Fetching HTML - Started")
-        html_content = fetch_page_sync(quarry)
-        logger.info(f"HTML content fetched from {quarry} successfully", "Fetching HTML - Completed")
+        # Fetch + parse + frame build happens inside ``_screen_from_query``
+        # so the CLI and the HTTP API share one source of truth for the
+        # parser/coercion contract. The frame is header-only when Finviz
+        # returned zero rows — both branches share the same CSV-write
+        # dispatch below. Spec §5.6 + pipeline-mode-spec §5.4 + §5.6.
+        final_df = _screen_from_query(quarry, hyperlink_wrap=not csv_on_stdout)
+        # ``row_count`` excludes the header — ``len(final_df) == 0`` is the
+        # zero-row success path (which still writes the header-only CSV
+        # below to honor the §5.4 "every successful run = discoverable
+        # output" invariant). Spec §5.3.4 row 4.
+        row_count = len(final_df)
 
-        stock_screener_page = StockTableScreeningContent(html_content)
-
-        pages = fetch_urls(quarry, stock_screener_page.page_count)
-        data_rows = aggregate_rows(pages)
-
-        # ``aggregate_rows`` returns a list-of-lists: one inner list per
-        # matched ``<table>``, each containing zero-or-more row tuples.
-        # Empty inner lists are legal (the screener table exists but its
-        # ``<tbody>`` is empty), so "zero rows" means *every* inner list
-        # is empty, not "data_rows itself is empty". The flatten + len
-        # check is the single source of truth for the zero-row branch
-        # selector.
-        flattened_row_count = sum(len(rows) for rows in data_rows)
-
-        if flattened_row_count == 0:
-            # Zero-row success path (spec §5.4 last two bullets). Every
-            # successful run must produce a discoverable output, so write a
-            # header-only CSV (or stream the header line) and exit 0. This
-            # closes the Pillar-4 honesty gap where today's silent return
-            # left ``OUTPUT_PATH=`` empty even though exit was 0.
-            logger.warn(
-                "No data was found for the given filters; writing header-only CSV.",
-                title="Data Handling --->",
-            )
-            empty_df = _build_empty_data_frame(stream_to_stdout=csv_on_stdout)
+        if row_count == 0:
+            # Zero-row branch logging mirrors the pre-refactor text so the
+            # human-readable console output is byte-equivalent.
             if csv_on_stdout:
-                empty_df.to_csv(sys.stdout, index=False)
+                final_df.to_csv(sys.stdout, index=False)
                 logger.info("Header-only CSV streamed to stdout", "Data Handling --->")
             else:
-                empty_df.to_csv(resolved_file_path, index=False)
+                final_df.to_csv(resolved_file_path, index=False)
                 logger.info(
                     f"Header-only CSV saved to {resolved_file_path}",
                     "Data Handling --->",
                 )
-            # row_count stays 0 — summary will reflect the zero-row result.
         else:
-            # Happy path — at least one ticker row. The `stream_to_stdout`
-            # toggle controls the `Ticker` carve-out: stdout writes raw
-            # symbol; file destinations keep the Excel `=HYPERLINK(...)`
-            # wrap. Spec §5.6.
-            final_df = build_data_frame(data_rows, stream_to_stdout=csv_on_stdout)
+            # Happy path — at least one ticker row. The `hyperlink_wrap`
+            # toggle inside ``_screen_from_query`` controls the `Ticker`
+            # carve-out: stdout writes raw symbol; file destinations keep
+            # the Excel `=HYPERLINK(...)` wrap. Spec §5.6.
             logger.info("Data frame created successfully", "Data Handling --->")
             logger.info("Saving data frame to csv file", "Data Handling --->")
             if csv_on_stdout:
@@ -403,9 +481,6 @@ def run_stock_screener(
             else:
                 final_df.to_csv(resolved_file_path, index=False)
                 logger.info(f"File saved to {resolved_file_path}", "Data Handling --->")
-            # Row count excludes the header. ``len(final_df)`` is the number
-            # of data rows in the written CSV. Spec §5.3.4 row 4.
-            row_count = len(final_df)
     except Exception as exc:
         # Pillar 4 classifier. Map the exception to a documented exit code
         # so a downstream pipeline can branch on the cause without
