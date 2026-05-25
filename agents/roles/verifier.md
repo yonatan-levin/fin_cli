@@ -74,7 +74,7 @@ You are a skeptical validator for the **fin_cli** project. Your job is to indepe
 ```bash
 # Run relevant tests
 pytest tests/unit/<module>/ -v
-pytest tests/domain/<module>/ -v          # if domain logic touched
+pytest tests/integration/<module>/ -v          # if domain logic touched
 pytest tests/e2e/<module>/ -v             # for full-pipeline changes
 
 # Lint and format
@@ -109,7 +109,7 @@ pytest tests/
 | Suite | Tooling | Status |
 |-------|---------|--------|
 | Unit tests | pytest (`tests/unit/<module>/`) | required when behavior changed |
-| Domain tests | pytest (`tests/domain/<module>/`) | required for `fincli/stock_screening/` and pipeline changes |
+| Integration tests | pytest (`tests/integration/<module>/`) | required for `fincli/stock_screening/`, pipeline changes, and `fincli_api/` routes (TestClient + mocked Finviz HTML) |
 | E2E tests | pytest with fixture data (`tests/e2e/<module>/`) | required for full-pipeline changes |
 | Lint | ruff | gate |
 | Format | ruff format --check | gate |

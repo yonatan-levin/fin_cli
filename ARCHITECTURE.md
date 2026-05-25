@@ -4,57 +4,72 @@ This document is the source of truth for Fin CLI's system architecture.
 
 ## System Overview
 
-**Fin CLI** is a single-mode Python command-line application that screens stocks from Finviz.com. It is built as one importable package (`fincli`) with a Click entry point under `app/`, plus a small set of shared cross-cutting packages (`core`, `config`, `logger`). There is no server, no database, no network listener — outputs land as timestamped CSVs in `workspace_output/` by default, or wherever pipeline-mode CLI flags (`--output PATH`, `--output -` for stdout streaming, or `FINCLI_OUTPUT_DIR=<dir>`) redirect them.
+**Fin CLI** is a Python package that screens stocks from Finviz.com through two co-equal entry points: a CLI (`fincli/`) and an HTTP API (`fincli_api/`). Both consume the same orchestrator (`fincli.app.main.screen_to_dataframe`) and the same filter inventory (`fincli.resource.params.validators.list_valid_filters_with_labels`), so the contract cannot drift across surfaces. There is no database; CLI outputs land as timestamped CSVs in `workspace_output/` by default (or wherever pipeline-mode flags redirect), and HTTP API outputs are typed JSON envelopes returned per-request.
 
-The CLI has two distinct usage shapes that share the same orchestrator:
+The CLI has two usage shapes that share the same orchestrator:
 
 1. **Interactive** — bare `fincli` prompts the user through the three-section filter picker, writes a timestamped CSV under `workspace_output/`. The historical shape; unchanged.
 2. **Pipeline** — `fincli --filter/--filters-json/--filters-file ... --output PATH-or-` is consumable by another program. Reads structured input, writes to an exact destination (or streams CSV on stdout), emits a `OUTPUT_PATH=<value>` discovery line on stderr, optionally emits a single-line JSON summary, and exits with one of five classified codes (0/1/2/3/4 — see CONTRACTS §1 exit-codes table).
 
+The HTTP API exposes three first-class endpoints (`GET /filters`, `POST /screens`, `GET /healthz`) via FastAPI, with the contract pinned by a committed OpenAPI 3.1.0 snapshot at `docs/api/openapi.{yaml,json}`. Polyglot consumers codegen typed clients from the snapshot. See CONTRACTS §8 + `docs/api/openapi.yaml` for the wire contract; `fincli_api/` for the package; `INTEGRATION.md` "HTTP API mode" for the consumer-facing guide.
+
 ```
-                    +---------------------------+
-                    |        End User           |
-                    | (terminal / shell / CI)   |
-                    +-------------+-------------+
-                                  |
-                                  v
-                    +---------------------------+
-                    |      Click CLI Layer      |
-                    |  fincli/app/cli.py        |
-                    +-------------+-------------+
-                                  |
-                                  v
-                    +---------------------------+
-                    |    Orchestration Layer    |
-                    |    fincli/app/main.py     |
-                    +-------------+-------------+
-                                  |
-                                  v
-                    +---------------------------+
-                    |   Screener pipeline       |
-                    |   (Finviz HTML scrape)    |
-                    |   cfscrape + BS4          |
-                    +-------------+-------------+
-                                  |
-                                  v
-                       Finviz.com (Cloudflare-protected HTML)
+   +---------------------------+        +---------------------------+
+   |        End User           |        |    Polyglot Consumer      |
+   | (terminal / shell / CI)   |        |   (Go / TS / Rust / ...)  |
+   +-------------+-------------+        +-------------+-------------+
+                 |                                    |
+                 v                                    v
+   +---------------------------+        +---------------------------+
+   |      Click CLI Layer      |        |    FastAPI Layer          |
+   |  fincli/app/cli.py        |        |    fincli_api/main.py     |
+   |                           |        |    + routes/* + handlers  |
+   +-------------+-------------+        +-------------+-------------+
+                 |                                    |
+                 |                                    v
+                 |                      +---------------------------+
+                 |                      |   Adapter (boundary)      |
+                 |                      | fincli_api/adapters/      |
+                 |                      |   fincli.py               |
+                 |                      +-------------+-------------+
+                 |                                    |
+                 +------------+ same orchestrator +---+
+                              v
+                +---------------------------+
+                |    Orchestration Layer    |
+                |  fincli/app/main.py       |
+                |  screen_to_dataframe()    |
+                +-------------+-------------+
+                              |
+                              v
+                +---------------------------+
+                |   Screener pipeline       |
+                |   (Finviz HTML scrape)    |
+                |   cfscrape + BS4          |
+                +-------------+-------------+
+                              |
+                              v
+                  Finviz.com (Cloudflare-protected HTML)
 ```
+
+**Adapter-boundary rule (spec §3.2):** `fincli_api/adapters/fincli.py` is the ONLY file in `fincli_api/` allowed to import from `fincli/`. Every other API module imports through the adapter. This isolates the API package from fincli internals and makes the contract enforceable mechanically.
 
 ## Module Map
 
 | Module | Purpose | Key Files |
 |---|---|---|
-| `fincli/` | Stock screener — builds a Finviz query URL, fetches all paginated pages, parses the HTML stock table, writes CSV. | `fincli/app/cli.py`, `fincli/app/main.py`, `fincli/cli/cli_stock_screener.py` (section-by-section filter UI via `prompt_section`), `fincli/utils/web_scraper.py`, `fincli/utils/quary_builders.py`, `fincli/stock_screening/{content,parsers,locators}/stock_table*.py`, `fincli/resource/params/` |
+| `fincli/` | Stock screener — builds a Finviz query URL, fetches all paginated pages, parses the HTML stock table, writes CSV or returns a DataFrame. | `fincli/app/cli.py`, `fincli/app/main.py` (`screen_to_dataframe`, `run_stock_screener`), `fincli/cli/cli_stock_screener.py` (section-by-section filter UI via `prompt_section`), `fincli/utils/web_scraper.py`, `fincli/utils/quary_builders.py`, `fincli/stock_screening/{content,parsers,locators}/stock_table*.py`, `fincli/resource/params/`, `fincli/app/exit_codes.py` (classifier shared with HTTP API exception handler) |
+| `fincli_api/` | FastAPI HTTP service exposing the screener over REST+JSON. Adapter-boundary rule: only `adapters/fincli.py` may import from `fincli/`. | `fincli_api/main.py` (FastAPI app + uvicorn entry), `fincli_api/config.py` (`ApiConfig` via pydantic-settings), `fincli_api/routes/{filters,screens,meta}.py`, `fincli_api/adapters/fincli.py` (boundary), `fincli_api/models/{filters,screens,errors}.py` (Pydantic shapes), `fincli_api/exception_handlers.py` (classifier-driven envelope) |
 | `core/` | Pure Python configuration framework — Pydantic base classes (`SystemSettings`), JSON-to-tuple conversion, Configurator builder. Has no external service dependencies. | `core/configuration/config_base.py`, `core/configuration/configurator.py`, `core/converters/json.py` |
 | `config/` | Concrete `Config` instance for the application — extends `SystemSettings`, exposes `use_history`, `filters`, `scrape_link`, and `file_path(name)` for timestamped CSV destinations. | `config/config.py` |
 | `logger/` | Singleton logger with three named handlers: a typing-effect console handler, plain console handler, and a JSON file handler. Imported as `from logger import logger`. | `logger/logger.py`, `logger/handlers/`, `logger/formatters/` |
 
-Supporting (not part of the active runtime path):
+Supporting:
 
 | Module | Status |
 |---|---|
-| `scripts/` | Dependency-checking utilities. |
-| `tests/` | Folder layout exists (`tests/unit`, `tests/domain`, `tests/e2e`); test bodies will land in Phase 2 (see `CLAUDE.md`). |
+| `scripts/` | Dev tooling: `scripts/dump_openapi.py` regenerates `docs/api/openapi.{yaml,json}` from the FastAPI app (with `--check` mode for drift detection); `scripts/check_requirements.py` validates dep manifest. |
+| `tests/` | Three-tier pyramid in active use: `tests/unit/` (mocked adapters), `tests/integration/` (real fincli + mocked Finviz HTML), `tests/e2e/` (live Finviz, opt-in via `pytest -m live`). `tests/unit/api/`, `tests/integration/api/`, `tests/e2e/api/` mirror the same tiers for `fincli_api/`. |
 
 ## Data Flow
 
@@ -121,14 +136,24 @@ Supporting (not part of the active runtime path):
 
 ```
 +------------------------------------------------------------+
-|                     Click CLI Layer                        |
-|   fincli/app/cli.py                                        |
-|   (option parsing, --help text, logger level toggling)     |
-+------------------------------------------------------------+
+|        Click CLI Layer       |       FastAPI Layer         |
+|  fincli/app/cli.py           |  fincli_api/main.py         |
+|  (option parsing, --help,    |  (FastAPI app + routes/* +  |
+|   logger level toggling)     |   exception_handlers.py)    |
++------------------------------+-----------------------------+
+|                          |                                 |
+|                          v                                 |
+|                  +------------------------+                |
+|                  |  Adapter (boundary)    |                |
+|                  | fincli_api/adapters/   |                |
+|                  |   fincli.py            |                |
+|                  +-----------+------------+                |
+|                              |                             |
++------------------------------+-----------------------------+
 |                    Orchestration Layer                     |
 |   fincli/app/main.py                                       |
 |   (pipeline composition: build query -> fetch -> parse     |
-|    -> DataFrame -> write CSV)                              |
+|    -> DataFrame -> write CSV / return to caller)           |
 +------------------------------------------------------------+
 |                Domain / UI Layer                           |
 |   fincli/cli/cli_stock_screener.py       (filter UI)       |
@@ -147,13 +172,15 @@ Supporting (not part of the active runtime path):
 
 **Layering rule:** orchestration calls down into the filter UI and utility/I/O, never the reverse. Utility/I/O modules receive primitive inputs (a URL, raw HTML bytes) and have no awareness of how they will be assembled into a DataFrame. Cross-cutting modules are imported anywhere they are needed.
 
+**Adapter-boundary rule (spec §3.2):** the FastAPI layer imports ONLY through `fincli_api/adapters/fincli.py`. Routes / models / exception handlers in `fincli_api/` may NOT `import fincli.<anything>` directly. This isolates the API package from fincli internals so the contract surface is enforceable via a single file's diff.
+
 There is no formal dependency-injection container. Wiring is done by direct import and function call in the orchestration layer. The Singleton logger is the only globally-visible runtime object.
 
 ### Side effects
 
 Every successful run produces three observable side effects beyond the CSV write itself; pipeline integrators rely on this trio to discover the result without screen-scraping log lines:
 
-1. **`OUTPUT_PATH=<value>` discovery line** — written to **stderr** exactly once, immediately before exit, on every run (regardless of success/failure or any other flag). `<value>` is either the absolute path the CSV was written to, or the literal `-` sentinel for `--output -` streaming, or the empty string if an exception fired before the destination was resolved. Format pinned by CONTRACTS §1 + §7.
+1. **`OUTPUT_PATH=<value>` discovery line** — written to **stderr** exactly once, immediately before exit, on every run (regardless of success/failure or any other flag). `<value>` is either the absolute path the CSV was written to, or the literal `-` sentinel for `--output -` streaming. The destination is resolved before the orchestrator's try-block opens, so the line is populated on every exit code (0/1/3/4) for any `--output PATH` invocation — never empty. Format pinned by CONTRACTS §1 + §7.
 2. **`--json-summary` line** (optional) — when `--json-summary` is set, a single-line JSON object matching the schema in CONTRACTS §5.5 is written immediately after the `OUTPUT_PATH=` line. Routes to **stdout** by default and to **stderr** when `--output -` claims stdout for CSV bytes.
 3. **Exit code** — one of five classified values (CONTRACTS §1 exit-codes table). `0` SUCCESS / `1` INTERNAL / `2` USAGE (Click) / `3` UPSTREAM / `4` DATA. The orchestrator's try/except wrapper around the pipeline runs every uncaught exception through `fincli.app.exit_codes.classify` before threading the code into both the JSON summary and `sys.exit`.
 
@@ -177,10 +204,12 @@ Every successful run produces three observable side effects beyond the CSV write
 
 ```
 fin_cli/
-  fincli/                      # Stock screener
+  fincli/                      # Stock screener CLI
     app/
       cli.py                   # Click entry point
-      main.py                  # Pipeline orchestrator
+      main.py                  # Pipeline orchestrator + screen_to_dataframe helper
+      exit_codes.py            # classify() — single source of truth for failure
+                               #             classification (CLI + HTTP API consume it)
     cli/
       cli_stock_screener.py    # Section-by-section interactive filter UI
     resource/
@@ -201,6 +230,21 @@ fin_cli/
       quary_builders.py        # Finviz URL construction
       user_agent_rotator.py
 
+  fincli_api/                  # HTTP API (FastAPI) — sibling of fincli/
+    main.py                    # FastAPI app + uvicorn entry (bound to fincli-api script)
+    config.py                  # ApiConfig via pydantic-settings (host/port/log_level)
+    routes/
+      filters.py               # GET /filters
+      screens.py               # POST /screens (with validate_filter_pairs gate)
+      meta.py                  # GET /healthz
+    adapters/
+      fincli.py                # Boundary layer — only file allowed to import from fincli/
+    models/
+      filters.py               # FilterInventory + FilterEntry
+      screens.py               # ScreenRequest + ScreenResult + Stock
+      errors.py                # ErrorResponse (Literal discriminator on error_class)
+    exception_handlers.py      # register_exception_handlers(app) via exit_codes.classify
+
   core/                        # Pure Python configuration framework
     configuration/
       config_base.py           # SystemSettings, Configurable[S]
@@ -216,10 +260,19 @@ fin_cli/
     handlers/
     formatters/
 
-  tests/                       # Phase 2 work — empty bodies today
+  tests/                       # 3-tier pyramid (live tier opt-in via -m live)
     unit/
-    domain/
+      api/                     # FastAPI TestClient + mocked adapter
+      ...                      # mocked-dep tests for fincli/
+    integration/
+      api/                     # TestClient + real fincli + mocked Finviz HTML
+      fixtures/                # 5 Finviz HTML fixtures (happy/one_page/empty/no_table/malformed_row)
     e2e/
+      api/                     # TestClient + live Finviz (3 tests, @pytest.mark.live)
+
+  scripts/
+    dump_openapi.py            # Regenerate docs/api/openapi.{yaml,json} (with --check)
+    check_requirements.py
 
   workspace_output/            # CSV results (gitignored)
   workspace_materials/         # Working notes (gitignored)
@@ -229,8 +282,12 @@ fin_cli/
     THESIS.md
     MODULE_REFERENCE.md
     FEEDBACK-LOG.md
+    api/                       # Committed OpenAPI 3.1.0 snapshot
+      openapi.yaml
+      openapi.json
     bugs/, refactoring/, reviewer/
-    superpowers/specs/
+    features/                  # Feature specs (archive/ = shipped)
+    superpowers/specs/         # Brainstorming-derived design specs (archive/ = shipped)
 
   agents/                      # AI-agent rules + role files
     rules/
@@ -243,13 +300,15 @@ fin_cli/
 
   ARCHITECTURE.md              # this file
   CLAUDE.md
-  CONTRACTS.md
+  CONTRACTS.md                 # §1 CLI surface; §8 HTTP API surface
+  INTEGRATION.md               # Polyglot-consumer guide (CLI mode + HTTP API mode)
   README.md
   TESTING.md
   TOOLS_REFERENCE.md
   AGENTS.md
 
   pyproject.toml
+  pytest.ini                   # Canonical pytest config (pytest.ini > pyproject)
   requirements.txt
   run.sh / run.bat             # Convenience launchers
   singleton.py                 # Standalone metaclass utility
@@ -261,7 +320,7 @@ The screener pipeline is fully synchronous. Pages from Finviz are fetched one at
 
 The Singleton `Logger` is constructed once at import time. Its underlying `logging.Logger` handlers are Python's stdlib `logging` handlers, which are thread-safe by design. The typing-animation console handler serializes its writes to stdout under the same lock, so any future fan-out work (none today) would be safe to log freely.
 
-There is no `asyncio` and no `ThreadPoolExecutor` in the active runtime path. Adding async I/O is on the long-term roadmap (`docs/THESIS.md`) but not in active scope.
+The HTTP API's route handlers are sync (`def`, not `async def`) — fincli is fully sync, so FastAPI runs the handlers in its default thread pool. At single-user load (the spec's scope), the thread pool is fine; the bottleneck is Finviz's per-IP rate ceiling, not concurrency. No `asyncio` is used in `fincli_api/` either. Adding true async I/O would require porting the scraper off cfscrape and is on the long-term roadmap (`docs/THESIS.md`) but not in active scope.
 
 ## Configuration Shape
 

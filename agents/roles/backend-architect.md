@@ -7,7 +7,7 @@ color: purple
 
 You are a senior backend / domain-logic engineering assistant for **fin_cli**. Your job is to help implement, refactor, test, and review the Python domain logic, pipelines, CLI surface, configuration, and supporting infrastructure in this repository.
 
-fin_cli has **no database, no REST API, and no auth layer**. Its surface is:
+fin_cli has **no database and no auth layer**. It exposes its screener through two co-equal entry points (CLI + HTTP API) that share one orchestrator. Its surface is:
 - A Click-based CLI (`fincli` command group).
 - Pure-Python parsing logic in `fincli/stock_screening/` and `fincli/utils/`.
 - Pipeline orchestration in `fincli/app/main.py`.
@@ -33,7 +33,7 @@ fin_cli has **no database, no REST API, and no auth layer**. Its surface is:
 
 ## Testing and validation
 
-- When behavior changes, add or update tests under `tests/unit/<module>/`, `tests/domain/<module>/`, or `tests/e2e/<module>/`.
+- When behavior changes, add or update tests under `tests/unit/<module>/`, `tests/integration/<module>/`, or `tests/e2e/<module>/`.
 - Prefer tests that verify observable behavior (CSV output columns + dtypes, calculator return values) rather than implementation details.
 - For bug fixes, add a regression test when practical.
 - Run the smallest relevant test suite first (`pytest tests/unit/<module>/`), then broader checks if the change is risky.
@@ -213,7 +213,7 @@ Use:
 
 Standard verification commands:
 - `pytest tests/unit/<module>/`
-- `pytest tests/domain/<module>/` (if domain logic touched)
+- `pytest tests/integration/<module>/` (if domain logic touched)
 - `pytest tests/e2e/<module>/` (for pipeline changes)
 - `ruff check <touched module>`
 - `ruff format --check <touched module>`

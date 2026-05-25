@@ -198,7 +198,7 @@ if __name__ == "__main__":
 - [x] {module-name}/app/main.py
 - [x] {module-name}/utils/__init__.py
 - [x] tests/unit/{module-name}/test_smoke.py
-- [x] tests/domain/{module-name}/__init__.py
+- [x] tests/integration/{module-name}/__init__.py
 - [x] tests/e2e/{module-name}/__init__.py
 
 ### Next Steps

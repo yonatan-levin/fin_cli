@@ -2,13 +2,14 @@
 
 This document defines the **stable surfaces** that other code (downstream automation, Phase 2 tests, future modules) and end users rely on. A contract here is a promise: changing it is a breaking change, governed by the stability policy at the bottom of this file.
 
-Fin CLI has **no REST API, no HTTP listener, no broker integration, no database**. It is a CLI plus a set of importable Python packages, plus the CSV it writes. The contracts therefore live in five places:
+Fin CLI exposes its screener through two co-equal entry points (CLI + HTTP API) — both have stable contracts here. There is no broker integration and no database. The contracts live in six places:
 
 1. The **CLI command surface** — every Click command, every option, every exit code.
 2. The **Finviz query parameter contract** — the `[query_key, {value_code: display_name}]` filter shape under `fincli/resource/params/`.
 3. The **CSV output schema** — column names, dtypes, sort order, file naming.
 4. The **Configuration shape** — the Pydantic-validated `Config` produced by `core/configuration/configurator.py`.
 5. The **logger contract** — what `from logger import logger` returns and what its methods promise.
+6. The **HTTP API surface (§8)** — endpoints (`GET /filters`, `POST /screens`, `GET /healthz`), request/response schemas, `ErrorResponse` envelope, OpenAPI snapshot. Machine-readable contract at `docs/api/openapi.yaml`.
 
 ---
 
