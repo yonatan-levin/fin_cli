@@ -6,7 +6,7 @@ This document defines the testing strategy, conventions, and follow-up roadmap f
 
 Tests verify **behavior**, not implementation. A test that locks in the current implementation of a function (mocking out internals, asserting call counts on private helpers) becomes a tax to pay every time the function is refactored, even when behavior is unchanged. A test that asserts what the function *does* — input goes in, output comes out, side effect happens — survives refactors and earns its keep.
 
-This codebase currently has **zero test bodies**. The `tests/` folder structure (`tests/unit/`, `tests/domain/`, `tests/e2e/`) exists from a prior reorganization, but `__pycache__` is the only surviving artifact of the old test files. **Phase 2** of the agent-harness rollout (`docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md`, §8.1) is the work item that introduces real tests. Until that ships, `pytest tests/` runs cleanly because there is nothing to fail — and that is the intentional starting state, not a gap to backfill in Phase 1.
+The test suite uses a three-tier pyramid: `tests/unit/` (mocked at boundaries), `tests/integration/` (real fincli + mocked Finviz HTML fixtures), `tests/e2e/` (live Finviz HTTP, opt-in via `pytest -m live`). Each tier has a `tests/<tier>/api/` sub-directory mirroring the layout for `fincli_api/`. Current state: 279 passed / 1 skipped / 3 deselected (live tier) / 1 xfailed (MAJOR #4 deferred) on the default `pytest tests/` invocation; `pytest -m live tests/e2e/api/` runs the 3 live-Finviz API smoke tests (~3s, network-dependent).
 
 When tests do land, they should:
 
@@ -82,7 +82,7 @@ pytest tests/
 
 # Layer-scoped
 pytest tests/unit/
-pytest tests/domain/
+pytest tests/integration/
 pytest tests/e2e/
 
 # Pattern match by name
@@ -291,7 +291,7 @@ This section is the source of truth for *when* the deferred test work happens. A
 
 **Scope:**
 
-- Real `pytest` tests under `tests/unit/`, `tests/domain/`, `tests/e2e/`.
+- Real `pytest` tests under `tests/unit/`, `tests/integration/`, `tests/e2e/`.
 - One test file per module listed in `tests/` layout above.
 - HTML fixture for the Finviz parser.
 - Add type hints incrementally to the modules being tested — this is the natural moment to drive the mypy advisory count down.

@@ -8,15 +8,20 @@ A single-page reference for every command, skill, MCP tool, and Claude Code hook
 
 | Command | What it does |
 |---|---|
-| `pip install -e ".[dev]"` | Editable install with the `dev` extra (ruff, mypy, pytest, pytest-cov, types-beautifulsoup4, pip-audit). |
+| `pip install -e ".[dev]"` | Editable install with the `dev` extra (ruff, mypy, pytest, pytest-cov, types-beautifulsoup4, pip-audit, fastapi/uvicorn/pydantic-settings runtime, httpx/pyyaml dev for the API tier). |
 | `pip install -r requirements.txt` | Install runtime deps only (no dev tooling). |
-| `fincli` | Run the screener (preferred). Equivalent to `python -m fincli`; requires `pip install -e ".[dev]"` to register the entry point on PATH. |
-| `python -m fincli` | Run the screener (interactive). |
-| `python -m fincli --history` | Run the screener with the last filter selection. |
-| `python -m fincli --debug` | Run the screener with `DEBUG`-level logging. |
-| `./run.sh` | Linux / macOS launcher: install requirements, then `python -m fincli "$@"`. |
-| `run.bat` | Windows launcher: install requirements, then `python -m fincli %*`. |
-| `python -c "import fincli"` | Smoke-import test (Python has no separate build step). |
+| `fincli` | Run the CLI screener (preferred). Equivalent to `python -m fincli`. Requires `pip install -e ".[dev]"` to register the entry point on PATH. |
+| `python -m fincli` | Run the CLI screener (interactive). |
+| `python -m fincli --history` | Run the CLI with the last filter selection. |
+| `python -m fincli --debug` | Run the CLI with `DEBUG`-level logging. |
+| `python -m fincli --list-filters --json` | Dump the full Finviz filter inventory as JSON (polyglot-consumer bootstrap path; no HTTP). |
+| `./run.sh` | Linux / macOS CLI launcher: install requirements, then `python -m fincli "$@"`. |
+| `run.bat` | Windows CLI launcher: install requirements, then `python -m fincli %*`. |
+| `uvicorn fincli_api.main:app --reload` | Run the HTTP API in dev mode (auto-reload on code change). Binds `127.0.0.1:8000`. |
+| `fincli-api` | Run the HTTP API via the console-script entry. Equivalent to uvicorn invocation above. |
+| `python scripts/dump_openapi.py` | Regenerate the committed OpenAPI snapshot at `docs/api/openapi.{yaml,json}` from the live FastAPI app. |
+| `python scripts/dump_openapi.py --check` | Drift detection: exit 1 if committed snapshot ≠ live `app.openapi()`. CI / pre-commit-suitable. |
+| `python -c "import fincli, fincli_api"` | Smoke-import test (Python has no separate build step). |
 
 ---
 
@@ -24,17 +29,20 @@ A single-page reference for every command, skill, MCP tool, and Claude Code hook
 
 | Command | What it does |
 |---|---|
-| `pytest tests/` | Run all tests. |
-| `pytest tests/unit/` | Run unit-layer tests only. |
-| `pytest tests/domain/` | Run domain-layer tests only. |
-| `pytest tests/e2e/` | Run end-to-end tests only. |
+| `pytest tests/` | Run all tests (default excludes live-Finviz tier via `pytest.ini` addopts). |
+| `pytest tests/unit/` | Run unit-tier only (mocked adapters; fastest). |
+| `pytest tests/unit/api/` | Run API unit tests only (FastAPI TestClient + mocked adapter). |
+| `pytest tests/integration/` | Run integration-tier (real fincli + mocked Finviz HTML fixtures). |
+| `pytest tests/integration/api/` | Run API integration tests only. |
+| `pytest tests/e2e/` | Run e2e-tier (still requires `-m live` opt-in for the live-Finviz subset). |
+| `pytest -m live tests/e2e/api/` | Run the 3 live-Finviz API smoke tests (opt-in; ~3s, requires network). |
 | `pytest -k <pattern>` | Run tests whose name matches a substring/expression. |
 | `pytest -x` | Stop at first failure. |
 | `pytest -v` | Verbose output (one line per test). |
-| `pytest --cov=fincli --cov=core --cov=config --cov-report=term-missing` | Coverage report (informational; gate deferred to Phase 3). |
-| `pytest -ra` | Short summary of skipped/xfailed/errored tests (default via `pyproject.toml`). |
+| `pytest --cov=fincli --cov=fincli_api --cov=core --cov=config --cov-report=term-missing` | Coverage report (informational; gate deferred to Phase 3). |
+| `pytest -ra` | Short summary of skipped/xfailed/errored tests (default via `pytest.ini`). |
 
-> Test bodies land in Phase 2 of the agent-harness rollout (`docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md` §8.1). Until then `pytest tests/` collects nothing.
+> Current state: 279 passed / 1 skipped / 3 deselected (live tier) / 1 xfailed in the default invocation. The live-tier gate (`pytest -m live tests/e2e/api/`) is **mandatory before HUMAN approval** on any change to `fincli_api/` or `fincli/stock_screening/` per FEEDBACK-LOG.md 2026-05-22 entry.
 
 ---
 
@@ -63,7 +71,7 @@ A single-page reference for every command, skill, MCP tool, and Claude Code hook
 
 | Command | What it does |
 |---|---|
-| `mypy fincli core config logger` | Type-check the active modules in strict mode (Phase 1: advisory; Phase 4: blocking). |
+| `mypy fincli fincli_api core config logger` | Type-check the active modules in strict mode (Phase 1: advisory; Phase 4: blocking). `fincli_api/` is 0 errors today; legacy `fincli/` baseline ~49 errors per CLAUDE.md Phase status. |
 | `mypy <file>` | Check one file (used by `post-edit.js`). |
 | `mypy --no-incremental` | Bypass mypy's cache when diagnosing weirdness. |
 
@@ -264,8 +272,10 @@ Without this, the sub-agent literally cannot make the call.
 ## Cross-reference
 
 - Build/run conventions, file map, phase status: [`CLAUDE.md`](CLAUDE.md)
-- System architecture, layering, threading: [`ARCHITECTURE.md`](ARCHITECTURE.md)
-- CLI surface, CSV schema, stability policy: [`CONTRACTS.md`](CONTRACTS.md)
-- Test layout, mocking strategy, Phase 2/3/4 roadmap: [`TESTING.md`](TESTING.md)
+- System architecture, layering, threading, adapter-boundary rule: [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- CLI surface, CSV schema, HTTP API surface (§8), stability policy: [`CONTRACTS.md`](CONTRACTS.md)
+- Polyglot-consumer integration guide (CLI subprocess mode + HTTP API mode): [`INTEGRATION.md`](INTEGRATION.md)
+- Committed OpenAPI 3.1.0 snapshot for HTTP API codegen: [`docs/api/openapi.yaml`](docs/api/openapi.yaml) (+ `.json` sibling)
+- Test layout, 3-tier pyramid, mocking strategy, Phase 2/3/4 roadmap: [`TESTING.md`](TESTING.md)
 - Master agent index (Tier 1–4 reading order, sub-agent context diet): [`AGENTS.md`](AGENTS.md)
 - Project vision and roadmap: [`docs/THESIS.md`](docs/THESIS.md)

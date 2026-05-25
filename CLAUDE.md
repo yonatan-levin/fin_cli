@@ -162,8 +162,8 @@ Full diagram + per-section detail in `ARCHITECTURE.md`.
 - The `Ticker` column in the screener CSV is wrapped as an Excel `=HYPERLINK(...)` formula. Preserve that when adding new columns adjacent to it.
 
 ### Testing
-- Test layout (Phase 2 work): `tests/unit/`, `tests/domain/`, `tests/e2e/`.
-- See `TESTING.md` for fixtures, mocking strategy, and which dependencies are mockable vs. real.
+- Test layout: `tests/unit/`, `tests/integration/`, `tests/e2e/`. Each tier has a `tests/<tier>/api/` sub-directory for `fincli_api/` tests. Live-Finviz e2e is opt-in via `pytest -m live`.
+- See `TESTING.md` for fixtures, mocking strategy (the local-binding rule for `fincli.app.main.fetch_page_sync`), and which dependencies are mockable vs. real.
 
 ## MCP Tool Usage
 

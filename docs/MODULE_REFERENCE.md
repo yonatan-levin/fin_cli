@@ -1,6 +1,6 @@
 # MODULE_REFERENCE.md — Fin CLI Internal Module Reference
 
-This file documents the internal modules of Fin CLI. There is no REST API to document — the public surface is a CLI, and the internal boundaries are importable Python packages. Each section follows a fixed structure: Purpose / Key files / Public surface / Data shapes / Error modes / Integration.
+This file documents the internal modules of Fin CLI. The public surface is two-fold: a CLI (`fincli/`) and an HTTP API (`fincli_api/`); both share one orchestrator. The HTTP API wire-contract details live in `CONTRACTS.md` §8 + the OpenAPI snapshot at `docs/api/openapi.yaml` — this file covers the Python-internal boundaries on both sides. Each section follows a fixed structure: Purpose / Key files / Public surface / Data shapes / Error modes / Integration.
 
 See `ARCHITECTURE.md` for the system-level diagram and data-flow narrative. See `docs/THESIS.md` for vision and roadmap.
 

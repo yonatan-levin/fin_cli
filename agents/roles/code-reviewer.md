@@ -40,7 +40,7 @@ If a fix is needed, describe the smallest safe fix and hand off to the appropria
    - Ask for simplification when code is harder to understand than the problem requires.
 
 3. **Review Tests and Validation**
-   - Verify behavior changes include meaningful tests under `tests/unit/`, `tests/domain/`, or `tests/e2e/`.
+   - Verify behavior changes include meaningful tests under `tests/unit/`, `tests/integration/`, or `tests/e2e/`.
    - Prefer behavior-focused tests over implementation-detail tests.
    - Check that tests would fail if the implementation were broken.
    - Coverage gate is **deferred to Phase 3 (target 90%)** — do not invent a coverage requirement before that phase.
