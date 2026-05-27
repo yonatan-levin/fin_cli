@@ -1,0 +1,253 @@
+{
+  "info": {
+    "name": "Fin CLI HTTP API",
+    "_postman_id": "fincli-api-0001-0001-0001-000000000001",
+    "description": "Postman collection for the Fin CLI HTTP API (fincli_api/) — a FastAPI service exposing the Finviz stock screener over REST+JSON.\n\n## Setup\n\n1. Start the API locally:\n   ```bash\n   pip install -e \".[dev]\"\n   uvicorn fincli_api.main:app --reload    # or: fincli-api\n   ```\n2. The collection variable `baseUrl` defaults to `http://localhost:8000`. Override it per-environment if you run on a different host/port.\n3. Run requests individually, or run the whole collection via the Collection Runner / Newman — each request carries test scripts that assert the documented contract.\n\n## Contract sources\n\n- Machine-readable: `docs/api/openapi.yaml` (+ `.json`) — committed OpenAPI 3.1.0 snapshot.\n- Human-readable: `CONTRACTS.md` §8 (endpoints, schemas, ErrorResponse envelope, stability policy).\n- Integration guide: `INTEGRATION.md` \"HTTP API mode\".\n- Live interactive docs: `{{baseUrl}}/docs` (Swagger UI) when the server is running.\n\n## Error envelope\n\nAll non-2xx responses share a flat `ErrorResponse` envelope with an `error_class` discriminator (`validation` / `upstream` / `parsing` / `internal`) mapped to HTTP 422 / 502 / 502 / 500. Consumers `switch` on `error_class` to choose a recovery strategy. See CONTRACTS §8.4.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string",
+      "description": "Base URL of the running fincli_api server. Default matches `uvicorn fincli_api.main:app` on localhost."
+    }
+  ],
+  "item": [
+    {
+      "name": "Liveness — GET /healthz",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/healthz",
+          "host": ["{{baseUrl}}"],
+          "path": ["healthz"]
+        },
+        "description": "Process-up liveness probe. Returns 200 + `{\"status\": \"ok\"}`. No dependencies are checked (does NOT exercise fincli or Finviz), so a 200 here means \"the server is running\", not \"the screener works\"."
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/healthz",
+              "host": ["{{baseUrl}}"],
+              "path": ["healthz"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "content-type", "value": "application/json" }],
+          "body": "{\n  \"status\": \"ok\"\n}"
+        }
+      ],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('body is {status: ok}', () => {",
+              "    const body = pm.response.json();",
+              "    pm.expect(body).to.eql({ status: 'ok' });",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List filters — GET /filters",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/filters",
+          "host": ["{{baseUrl}}"],
+          "path": ["filters"]
+        },
+        "description": "Dump the full Finviz filter inventory. Byte-equivalent (modulo HTTP framing) to `fincli --list-filters --json`.\n\nResponse shape: `{schema_version, keys, filters}`.\n- `keys` is the CANONICAL ordering (Fundamental → Descriptive → Technical). Iterate THIS array, not `filters` directly — Go's `encoding/json` decode-into-map randomizes key order.\n- `filters[key]` = `{label, values}` where `values` is a `{value_code: value_label}` map. The empty-string value code is the Finviz \"Any\" sentinel and is a legal key — do not filter it out blindly.\n\nUse the value codes from this endpoint to build the `filters` map for `POST /screens`."
+      },
+      "response": [
+        {
+          "name": "200 OK (trimmed)",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/filters",
+              "host": ["{{baseUrl}}"],
+              "path": ["filters"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "content-type", "value": "application/json" }],
+          "body": "{\n  \"schema_version\": 1,\n  \"keys\": [\"fa_pe\", \"fa_fpe\", \"sec\", \"geo\", \"ta_rsi\"],\n  \"filters\": {\n    \"fa_pe\": {\n      \"label\": \"PE\",\n      \"values\": { \"\": \"Any\", \"u5\": \"Under 5\", \"u20\": \"Under 20\" }\n    },\n    \"sec\": {\n      \"label\": \"Sector\",\n      \"values\": { \"\": \"Any\", \"energy\": \"Energy\", \"basicmaterials\": \"Basic Materials\" }\n    }\n  }\n}"
+        }
+      ],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('has schema_version, keys, filters', () => {",
+              "    pm.expect(body).to.have.property('schema_version');",
+              "    pm.expect(body).to.have.property('keys');",
+              "    pm.expect(body).to.have.property('filters');",
+              "});",
+              "pm.test('keys is a non-empty array of strings', () => {",
+              "    pm.expect(body.keys).to.be.an('array').that.is.not.empty;",
+              "    body.keys.forEach(k => pm.expect(k).to.be.a('string'));",
+              "});",
+              "pm.test('keys and filters have matching membership', () => {",
+              "    pm.expect(body.keys.slice().sort()).to.eql(Object.keys(body.filters).sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Run screen — POST /screens (happy path)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"filters\": {\n    \"fa_pe\": \"u5\",\n    \"sec\": \"energy\"\n  }\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/screens",
+          "host": ["{{baseUrl}}"],
+          "path": ["screens"]
+        },
+        "description": "Run a Finviz screen with the given filter map. The body is `{\"filters\": {<key>: <value_code>, ...}}` — keys + value codes come from `GET /filters`.\n\nUnknown keys/values are rejected up front by fincli's validator and return HTTP 422 (`error_class: validation`) — they do NOT silently produce an empty result. A zero-row match is still a 200 success with `row_count: 0` and `stocks: []`.\n\nResponse `ScreenResult`: `{schema_version, row_count, duration_ms, started_at, finished_at, stocks[]}`. Each `Stock` is snake_case with `market_cap` numeric (nullable), `pe`/`price`/`change`/`volume` as Finviz-formatted strings, `rank` int, and `finviz_url` (`https://finviz.com/quote.ashx?t={ticker}`)."
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filters\": {\n    \"fa_pe\": \"u5\",\n    \"sec\": \"energy\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/screens",
+              "host": ["{{baseUrl}}"],
+              "path": ["screens"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "content-type", "value": "application/json" }],
+          "body": "{\n  \"schema_version\": 1,\n  \"row_count\": 1,\n  \"duration_ms\": 1843,\n  \"started_at\": \"2026-05-25T15:23:01.234Z\",\n  \"finished_at\": \"2026-05-25T15:23:03.077Z\",\n  \"stocks\": [\n    {\n      \"ticker\": \"CNX\",\n      \"company\": \"CNX Resources Corporation\",\n      \"sector\": \"Energy\",\n      \"industry\": \"Oil & Gas E&P\",\n      \"country\": \"USA\",\n      \"market_cap\": 5234000000.0,\n      \"pe\": \"4.2\",\n      \"price\": \"$34.55\",\n      \"change\": \"+1.23%\",\n      \"volume\": \"1.2M\",\n      \"rank\": 1,\n      \"finviz_url\": \"https://finviz.com/quote.ashx?t=CNX\"\n    }\n  ]\n}"
+        }
+      ],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('ScreenResult has the 6 top-level fields', () => {",
+              "    ['schema_version', 'row_count', 'duration_ms', 'started_at', 'finished_at', 'stocks']",
+              "        .forEach(f => pm.expect(body).to.have.property(f));",
+              "});",
+              "pm.test('row_count matches stocks length', () => {",
+              "    pm.expect(body.row_count).to.eql(body.stocks.length);",
+              "});",
+              "pm.test('timestamps are ISO-8601 Z-suffixed', () => {",
+              "    pm.expect(body.started_at).to.match(/Z$/);",
+              "    pm.expect(body.finished_at).to.match(/Z$/);",
+              "});",
+              "pm.test('each stock has the contract fields + clean finviz_url', () => {",
+              "    body.stocks.forEach(s => {",
+              "        ['ticker', 'company', 'sector', 'industry', 'country', 'market_cap',",
+              "         'pe', 'price', 'change', 'volume', 'rank', 'finviz_url']",
+              "            .forEach(f => pm.expect(s).to.have.property(f));",
+              "        pm.expect(s.finviz_url).to.match(/^https:\\/\\/finviz\\.com\\/quote\\.ashx\\?t=/);",
+              "    });",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Run screen — POST /screens (validation error)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"filters\": {\n    \"fa_bogus_key\": \"u5\"\n  }\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/screens",
+          "host": ["{{baseUrl}}"],
+          "path": ["screens"]
+        },
+        "description": "Demonstrates the validation-error path. An unknown filter key is rejected by fincli's `validate_filter_pairs` chokepoint BEFORE any Finviz fetch, returning HTTP 422 with `error_class: validation`. This closes the silent-drop hazard — a typo'd key never produces a deceptive 200/empty result.\n\nNote `request_id` is absent on 4xx (caller's own fault — no server log to cross-reference). It IS present on 5xx (`upstream`/`parsing`/`internal`)."
+      },
+      "response": [
+        {
+          "name": "422 Unprocessable Entity",
+          "originalRequest": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filters\": {\n    \"fa_bogus_key\": \"u5\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/screens",
+              "host": ["{{baseUrl}}"],
+              "path": ["screens"]
+            }
+          },
+          "status": "Unprocessable Entity",
+          "code": 422,
+          "header": [{ "key": "content-type", "value": "application/json" }],
+          "body": "{\n  \"schema_version\": 1,\n  \"error_class\": \"validation\",\n  \"message\": \"Unknown filter key 'fa_bogus_key'. Valid keys include: fa_pe, fa_fpe, fa_peg, ...\",\n  \"details\": {\n    \"exception_type\": \"UsageError\"\n  }\n}"
+        }
+      ],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 422', () => pm.response.to.have.status(422));",
+              "const body = pm.response.json();",
+              "pm.test('error_class is validation', () => {",
+              "    pm.expect(body.error_class).to.eql('validation');",
+              "});",
+              "pm.test('has a human-readable message', () => {",
+              "    pm.expect(body.message).to.be.a('string').that.is.not.empty;",
+              "});",
+              "pm.test('request_id absent on 4xx', () => {",
+              "    pm.expect(body.request_id == null).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

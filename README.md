@@ -151,6 +151,7 @@ your language's preferred tooling:
 - Go: `oapi-codegen -config codegen.yaml docs/api/openapi.yaml`
 - TypeScript: `openapi-typescript docs/api/openapi.yaml > api.d.ts`
 - Rust: `openapi-generator-cli generate -i docs/api/openapi.yaml -g rust`
+- Postman: import the ready-made collection at [`docs/api/postman_collection.json`](docs/api/postman_collection.json) (all three endpoints + sample bodies + Newman-runnable test scripts; set the `baseUrl` variable to your server).
 
 The snapshot is regeneratable and drift-checkable via:
 

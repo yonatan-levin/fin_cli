@@ -201,7 +201,7 @@ The `docs/api/openapi.yaml` snapshot is consumable by every mainstream OpenAPI 3
 - **TypeScript**: [`openapi-typescript`](https://github.com/openapi-ts/openapi-typescript) for types only, or [`openapi-fetch`](https://github.com/openapi-ts/openapi-fetch) for a typed runtime client.
 - **Rust**: `openapi-generator-cli generate -g rust -i docs/api/openapi.yaml -o ./gen`.
 - **Java / Kotlin / C# / Ruby / PHP**: any other generator supported by `openapi-generator-cli`.
-- **Postman**: Import → Link/File → point at `docs/api/openapi.yaml` (or the live `/openapi.json`) to materialize a collection.
+- **Postman**: a ready-made collection is committed at `docs/api/postman_collection.json` — Import → File → select it to get all three endpoints with sample request bodies, saved example responses, and Newman-runnable test scripts (set the `baseUrl` collection variable to your server). Alternatively Import → Link/File → point at `docs/api/openapi.yaml` (or the live `/openapi.json`) to materialize a fresh collection from the OpenAPI spec.
 - **Insomnia / Bruno / Hoppscotch**: same OpenAPI-import flow.
 
 Pin your codegen to a specific snapshot commit so you can review API changes deliberately rather than absorbing them silently on the next pull.
