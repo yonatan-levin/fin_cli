@@ -68,7 +68,7 @@ Supporting:
 
 | Module | Status |
 |---|---|
-| `scripts/` | Dev tooling: `scripts/dump_openapi.py` regenerates `docs/api/openapi.{yaml,json}` from the FastAPI app (with `--check` mode for drift detection); `scripts/check_requirements.py` validates dep manifest. |
+| `scripts/` | Dev tooling: `scripts/dump_openapi.py` regenerates `docs/api/openapi.{yaml,json}` from the FastAPI app (with `--check` mode for drift detection). |
 | `tests/` | Three-tier pyramid in active use: `tests/unit/` (mocked adapters), `tests/integration/` (real fincli + mocked Finviz HTML), `tests/e2e/` (live Finviz, opt-in via `pytest -m live`). `tests/unit/api/`, `tests/integration/api/`, `tests/e2e/api/` mirror the same tiers for `fincli_api/`. |
 
 ## Data Flow
@@ -272,7 +272,6 @@ fin_cli/
 
   scripts/
     dump_openapi.py            # Regenerate docs/api/openapi.{yaml,json} (with --check)
-    check_requirements.py
 
   workspace_output/            # CSV results (gitignored)
   workspace_materials/         # Working notes (gitignored)
@@ -310,7 +309,6 @@ fin_cli/
   pyproject.toml
   pytest.ini                   # Canonical pytest config (pytest.ini > pyproject)
   requirements.txt
-  run.sh / run.bat             # Convenience launchers
   singleton.py                 # Standalone metaclass utility
 ```
 

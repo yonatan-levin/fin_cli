@@ -142,7 +142,7 @@ It is **not**:
 ## Infrastructure Constraints
 
 - **Local-only project** — no remote issue tracker. Work is tracked in `docs/reviewer/`, `docs/bugs/`, `docs/refactoring/`, and session notes.
-- **Windows dev environment** — Yonatan works on Windows 11. Path separators, batch launchers (`run.bat`), and WSL-awareness matter.
+- **Windows dev environment** — Yonatan works on Windows 11. Path separators, shell quoting (PowerShell vs cmd — e.g. `&` in Finviz URLs needs `python -m fincli "--scrape-link=…"` or the `--%` stop-parsing token), and WSL-awareness matter.
 - **Finviz rate limits** — `cfscrape` handles Cloudflare but the screener still rate-limits. `fetch_page_sync` uses exponential backoff; do not remove it.
 
 ---

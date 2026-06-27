@@ -30,10 +30,6 @@ python -m fincli --history              # reuse last filter selection
 python -m fincli --debug                # verbose logging
 python -m fincli --list-filters --json  # dump filter inventory
 
-# Or use the convenience launchers
-./run.sh                        # Linux / macOS
-run.bat                         # Windows
-
 # Run the HTTP API
 uvicorn fincli_api.main:app --reload    # dev: auto-reload on code changes
 fincli-api                              # via console-script entry (binds 0.0.0.0:8000 by default)

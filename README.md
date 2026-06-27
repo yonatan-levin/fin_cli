@@ -47,13 +47,9 @@ fincli --history
 
 # Verbose logging
 fincli --debug
-
-# Convenience launchers (install requirements then run python -m fincli)
-./run.sh        # Linux / macOS
-run.bat         # Windows
 ```
 
-> If you installed the project before the `[project.scripts]` entry point was added, re-run `pip install -e ".[dev]"` once so the bare `fincli` command lands on PATH. The launchers (`./run.sh`, `run.bat`) keep working unchanged because they invoke `python -m fincli` internally.
+> If you installed the project before the `[project.scripts]` entry point was added, re-run `pip install -e ".[dev]"` once so the bare `fincli` command lands on PATH. Prefer `python -m fincli` when the venv's `Scripts/` directory is not on PATH — it works regardless.
 
 ### Pipeline mode
 

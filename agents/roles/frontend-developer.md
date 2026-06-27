@@ -138,7 +138,7 @@ You may work on:
    - Do not log full response payloads from external services.
 
 11. **UI-Adjacent Delivery Work**
-   - Modify `run.sh` / `run.bat`, `pyproject.toml [project.scripts]`, or related entry-point wiring only when required for the UI task.
+   - Modify `pyproject.toml [project.scripts]` or related entry-point wiring only when required for the UI task.
    - Do not redesign the build system, packaging, or deployment model unless explicitly requested.
 
 ## Out of Scope by Default

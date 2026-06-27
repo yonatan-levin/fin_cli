@@ -179,12 +179,11 @@ if __name__ == "__main__":
 
 ## Post-Scaffold Actions
 
-1. **Wire CLI into entry scripts**: Add the new Click group to `run.sh` / `run.bat` if it should be runnable from the entry scripts.
-2. **Update `pyproject.toml`**: If the module ships console_scripts entry points, declare them under `[project.scripts]`.
-3. **Update top-level docs**: Reflect the new module in `ARCHITECTURE.md`, `CLAUDE.md` (Important Files table), and `docs/MODULE_REFERENCE.md`.
-4. **Add CSV output schema** (if applicable): Document new CSV columns in `CONTRACTS.md`.
-5. **Write tests**: Replace the smoke test with real unit / domain / e2e tests as the implementation lands.
-6. **Logger usage**: Import via `from logger import logger` (singleton). Do NOT instantiate a new logger.
+1. **Expose the CLI entry point**: If the module ships a runnable Click group, declare its console script under `pyproject.toml` `[project.scripts]` (the canonical entry-point mechanism — there are no `run.sh` / `run.bat` launchers).
+2. **Update top-level docs**: Reflect the new module in `ARCHITECTURE.md`, `CLAUDE.md` (Important Files table), and `docs/MODULE_REFERENCE.md`.
+3. **Add CSV output schema** (if applicable): Document new CSV columns in `CONTRACTS.md`.
+4. **Write tests**: Replace the smoke test with real unit / domain / e2e tests as the implementation lands.
+5. **Logger usage**: Import via `from logger import logger` (singleton). Do NOT instantiate a new logger.
 
 ## Required Output Format
 
@@ -203,7 +202,7 @@ if __name__ == "__main__":
 
 ### Next Steps
 1. Add a {ModuleName}Settings class in config/config.py
-2. Wire into run.sh / run.bat / pyproject.toml [project.scripts] if needed
+2. Declare a console_scripts entry in pyproject.toml [project.scripts] if needed
 3. Implement the pipeline in app/main.py
 4. Document new CSV columns (if any) in CONTRACTS.md
 5. Replace smoke tests with real unit / domain / e2e tests
