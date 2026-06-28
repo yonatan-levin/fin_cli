@@ -15,8 +15,6 @@ A single-page reference for every command, skill, MCP tool, and Claude Code hook
 | `python -m fincli --history` | Run the CLI with the last filter selection. |
 | `python -m fincli --debug` | Run the CLI with `DEBUG`-level logging. |
 | `python -m fincli --list-filters --json` | Dump the full Finviz filter inventory as JSON (polyglot-consumer bootstrap path; no HTTP). |
-| `./run.sh` | Linux / macOS CLI launcher: install requirements, then `python -m fincli "$@"`. |
-| `run.bat` | Windows CLI launcher: install requirements, then `python -m fincli %*`. |
 | `uvicorn fincli_api.main:app --reload` | Run the HTTP API in dev mode (auto-reload on code change). Binds `127.0.0.1:8000`. |
 | `fincli-api` | Run the HTTP API via the console-script entry. Equivalent to uvicorn invocation above. |
 | `python scripts/dump_openapi.py` | Regenerate the committed OpenAPI snapshot at `docs/api/openapi.{yaml,json}` from the live FastAPI app. |

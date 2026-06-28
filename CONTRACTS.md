@@ -76,14 +76,14 @@ Classifier source-of-truth is `fincli/app/exit_codes.py`; downstream pipelines s
 - `<Config.history_dir>/filter_history.json` is overwritten with the current filter selection on a successful run. (See §4.1 for the default value and `HISTORY_DIR` env-var override.)
 - `logs/activity.log` (DEBUG+) and `logs/error.log` (ERROR+) appended.
 
-### 1.1 Convenience launchers
+### 1.1 Invocation forms
 
-| File | Behavior |
-|---|---|
-| `run.sh` | Linux / macOS Bash launcher; checks the requirements then invokes `python -m fincli "$@"`. |
-| `run.bat` | Windows batch equivalent. |
-
-These are not contractually distinct from the `python -m fincli` invocation. The launchers intentionally retain `python -m fincli` (rather than the bare `fincli` shell command) for portability — the module-execution form works whether or not the editable install's `Scripts/` directory is on `PATH`.
+The screener is invoked as either the bare console script `fincli` (installed by
+`[project.scripts]` on `pip install -e ".[dev]"`) or, equivalently and
+portably, `python -m fincli`. The module-execution form works whether or not the
+editable install's `Scripts/` directory is on `PATH`; both are contractually
+identical. (The former `run.sh` / `run.bat` convenience launchers were removed —
+their requirements bootstrap had bit-rotted and no consumer depended on them.)
 
 ---
 

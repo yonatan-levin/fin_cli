@@ -30,10 +30,6 @@ python -m fincli --history              # reuse last filter selection
 python -m fincli --debug                # verbose logging
 python -m fincli --list-filters --json  # dump filter inventory
 
-# Or use the convenience launchers
-./run.sh                        # Linux / macOS
-run.bat                         # Windows
-
 # Run the HTTP API
 uvicorn fincli_api.main:app --reload    # dev: auto-reload on code changes
 fincli-api                              # via console-script entry (binds 0.0.0.0:8000 by default)
@@ -165,7 +161,10 @@ Full diagram + per-section detail in `ARCHITECTURE.md`.
 - Test layout: `tests/unit/`, `tests/integration/`, `tests/e2e/`. Each tier has a `tests/<tier>/api/` sub-directory for `fincli_api/` tests. Live-Finviz e2e is opt-in via `pytest -m live`.
 - See `TESTING.md` for fixtures, mocking strategy (the local-binding rule for `fincli.app.main.fetch_page_sync`), and which dependencies are mockable vs. real.
 
-## MCP Tool Usage
+### Git Workflow
+- **Always work in a dedicated git worktree, never directly on the checked-out branch.** Before starting any change, create a feature branch in its own worktree (e.g. `git worktree add ../algo_beta-<topic> -b <type>/<topic>`) and do all edits, commits, and test runs there. Decision recorded 2026-06-27 — see `docs/FEEDBACK-LOG.md`.
+- Rationale: the working tree carries pre-existing untracked artifacts (`.codex/`, `docs/pendingwork/`, `uv.lock`, `workspace_output/`) and an editable install; a worktree isolates each task's changes, keeps `master` clean, and prevents an in-flight change from contaminating an unrelated run.
+- Never commit directly to `master`. Branch first, commit in the worktree, then open a PR. Scope every commit to only the files the task touched — never `git add -A` over the dirty tree.
 
 These MCP servers are wired in this repo. One-line "when to use" guidance:
 
