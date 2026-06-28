@@ -6,6 +6,7 @@ workspace_materials/
 *.mpeg
 .env
 .vscode
+.codex
 *.pstat
 .idea/*
 venv/*
