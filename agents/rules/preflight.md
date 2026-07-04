@@ -11,6 +11,15 @@ Ensures all required context is loaded, the task is properly broken down, and MC
 
 ## Automatic Actions
 
+### Step 0: Isolate the working tree — MANDATORY (workspace-wide git rule)
+
+**Before ANY edit (feature, fix, refactor, docs, closeout), work in a dedicated git worktree — never a bare branch in the main checkout, and never edit `master`'s working tree.**
+
+- **Create it with portable git:** `git worktree add ../algo_beta-<task-slug> -b <type>/<slug> master`; do ALL edits/tests/commits there, then `git worktree remove` once the user has chosen an integration path. (Prefer `git worktree add` over any framework-specific tool — it works for every agent/CLI.)
+- **Why:** the workspace runs multiple concurrent sessions over a shared checkout; a parallel `git checkout` swaps the branch underneath you and contaminates merges/verification. A worktree isolates the *working tree*, not just the branch pointer.
+- **Integration is NOT automatic:** finishing in the worktree does NOT imply merging. A local fast-forward of `master` happens **only when the user asks**. **Pushing to `origin` and opening a PR are SEPARATE, explicitly user-initiated steps — never do them on your own initiative.** Default completion = leave the reviewed, green branch in its worktree and report the options (local fast-forward / push+PR / leave on branch).
+- Authority: parent `../CLAUDE.md` "Git workflow (workspace-wide)", this repo's `docs/FEEDBACK-LOG.md`, and the global "commit or push only when the user asks" rule. If already inside a linked worktree (`git rev-parse --git-dir` ≠ `--git-common-dir`), you're isolated — proceed.
+
 ### Step 1: Break Down the Task
 
 Use `sequential-thinking` MCP tool to:
