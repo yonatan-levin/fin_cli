@@ -24,6 +24,7 @@ from pathlib import Path
 import click
 
 from config.config import STDOUT_SENTINEL
+from observability import coerce_id, set_request_id
 
 # Canonical mutex message — change this and tests/unit/app/test_cli_pipeline.py
 # may need updating in parallel. Kept as a module constant so it is trivially
@@ -232,6 +233,13 @@ def run_main(
     """
     Welcome to the Stock Screener CLI!
     """
+    # Bind a run_id (the CLI's request_id analogue) on the shared correlation
+    # contextvar so it is available to resolve_request_id and any stdlib logging.
+    # The bespoke Singleton logger is intentionally left untouched here, so visible
+    # CLI log correlation lands with the deferred Singleton-JSON follow-up; root
+    # logging is NOT reconfigured to avoid double-emitting the Singleton's console
+    # output as JSON on stderr.
+    set_request_id(coerce_id(None))
     # Count the active input modes; mutual exclusion is "at most one set".
     # An empty `filter_pairs` tuple counts as unset; a non-empty one counts
     # as one input mode regardless of how many --filter flags were repeated.

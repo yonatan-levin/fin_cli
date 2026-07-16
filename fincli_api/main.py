@@ -10,12 +10,17 @@ self-contained; this module owns only the wiring.
 
 from __future__ import annotations
 
+import logging
+import os
+import sys
+
 import uvicorn
 from fastapi import FastAPI
 
 from fincli_api.config import ApiConfig
 from fincli_api.exception_handlers import register_exception_handlers
 from fincli_api.routes import filters_router, meta_router, screens_router
+from observability import configure_logging, install_observability
 
 # Constants kept module-level so the OpenAPI dump script and tests can
 # reference the same source of truth without instantiating the app.
@@ -23,6 +28,24 @@ API_TITLE = "Fin CLI HTTP API"
 API_VERSION = "0.1.0"
 
 app = FastAPI(title=API_TITLE, version=API_VERSION)
+
+# Observability (workspace standard): JSON logs on stderr (stdout stays clean for
+# the CLI's --json output), request-id correlation, and the health triad +
+# Prometheus /metrics. The existing `/healthz` liveness route (meta_router) is
+# kept alongside the standard `/health`.
+configure_logging(
+    level=os.getenv("FINCLI_API_LOG_LEVEL", "info"),
+    fmt=os.getenv("FINCLI_API_LOG_FORMAT", "json"),
+    stream=sys.stderr,
+)
+# The bespoke Singleton logger (logger/logger.py) attaches its own console/file
+# handlers to these named loggers with propagate=True. Stop them propagating to
+# the root JSON handler so a screener log line reached via the API is not ALSO
+# re-emitted as JSON on stderr (it keeps its own console/file output). The CLI
+# path avoids this by not reconfiguring root at all.
+for _singleton_logger in ("TYPER", "LOGGER", "JSON_LOGGER"):
+    logging.getLogger(_singleton_logger).propagate = False
+install_observability(app, service="fincli_api", version=API_VERSION, namespace="fincli")
 
 # Routers are mounted at the app root (no prefix). Each router declares
 # its own path (`/filters`, `/screens`, `/healthz`); main.py owns only

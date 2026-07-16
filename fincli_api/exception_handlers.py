@@ -34,7 +34,6 @@ for the T4 wave — tracked for a follow-up spec.
 from __future__ import annotations
 
 import logging
-import uuid
 from typing import Literal, cast
 
 from fastapi import FastAPI, Request
@@ -42,6 +41,7 @@ from fastapi.responses import JSONResponse
 
 from fincli.app import exit_codes
 from fincli_api.models import ErrorResponse
+from observability import resolve_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -69,37 +69,32 @@ _EXIT_TO_HTTP: dict[int, tuple[int, str]] = {
 # return surface ever grows without a corresponding mapping update.
 _FALLBACK_HTTP: tuple[int, str] = (500, "internal")
 
-# UUIDs are truncated to 12 hex chars for log-grep friendliness; full
-# 36-char UUID is overkill for in-memory log correlation and clutters
-# error responses surfaced in operator dashboards.
-_REQUEST_ID_LEN = 12
 
-
-def _classify_to_envelope(exc: Exception) -> tuple[int, ErrorResponse]:
+def _classify_to_envelope(request: Request, exc: Exception) -> tuple[int, ErrorResponse]:
     """Translate an exception to ``(http_status, ErrorResponse)`` per spec §5.1.
 
     The classifier (``fincli.app.exit_codes.classify``) is the single
     source of truth for *what kind of failure occurred*; this function
     only adds the HTTP-specific layer (status code, response envelope,
-    optional request_id for 5xx log cross-reference).
+    request_id for log cross-reference).
 
     Args:
+        request: The request being handled — its scope carries the
+            correlation id stashed by the observability middleware.
         exc: The exception caught by the registered handler.
 
     Returns:
         A 2-tuple ``(http_status, envelope)`` ready to be serialised by
-        ``JSONResponse``. ``request_id`` is populated on 5xx envelopes
-        only — 4xx is the caller's fault, so no server log lookup is
-        needed.
+        ``JSONResponse``. ``request_id`` is the correlation id resolved
+        from the request scope, so it matches the echoed ``X-Request-ID``
+        header for every failed request (the catch-all handler runs in
+        Starlette's ServerErrorMiddleware, after the request-id contextvar
+        is reset, so it is read from the scope state, not the contextvar).
     """
     exit_code = exit_codes.classify(exc)
     http_status, error_class = _EXIT_TO_HTTP.get(exit_code, _FALLBACK_HTTP)
 
-    # 5xx-only request_id: 4xx means the caller's input was bad, so they
-    # already have everything needed to fix it; correlating to a server
-    # log is unnecessary noise. 5xx means we have something in
-    # ``logs/error.log`` worth grepping for.
-    request_id = str(uuid.uuid4())[:_REQUEST_ID_LEN] if http_status >= 500 else None
+    request_id = resolve_request_id(request.scope)
 
     # Preserve ``str(exc)`` for human-readable context; fall back to the
     # exception's type name when ``str(exc)`` is empty (some exceptions
@@ -143,7 +138,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     # itself is sync; FastAPI awaits the return value uniformly.
     @app.exception_handler(Exception)
     async def _classify_handler(request: Request, exc: Exception) -> JSONResponse:
-        http_status, envelope = _classify_to_envelope(exc)
+        http_status, envelope = _classify_to_envelope(request, exc)
 
         # 5xx -> error log (operator action required); 4xx -> warning
         # log (caller-fixable, not a server fault). ``exc_info=exc``

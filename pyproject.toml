@@ -20,6 +20,7 @@ dependencies = [
     "platformdirs",
     "fastapi",
     "uvicorn[standard]",
+    "prometheus-client>=0.20",  # observability: /metrics exposition
 ]
 
 [project.optional-dependencies]
@@ -74,7 +75,7 @@ indent-style = "space"
 
 [tool.mypy]
 python_version = "3.12"
-files = ["fincli", "core", "config", "logger"]
+files = ["fincli", "core", "config", "logger", "observability"]
 strict = true
 warn_unused_ignores = true
 show_error_codes = true
@@ -92,4 +93,4 @@ ignore_missing_imports = true
 py-modules = ["singleton"]
 
 [tool.setuptools.packages.find]
-include = ["fincli*", "core*", "config*", "logger*", "fincli_api*"]
+include = ["fincli*", "core*", "config*", "logger*", "fincli_api*", "observability*"]
