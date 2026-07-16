@@ -14,7 +14,16 @@ from __future__ import annotations
 
 import time
 
-from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, make_asgi_app
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
+from starlette.requests import Request
+from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 
@@ -49,8 +58,15 @@ class Metrics:
             registry=self.registry,
         )
 
-    def asgi_app(self) -> ASGIApp:
-        return make_asgi_app(registry=self.registry)
+    def render(self, request: Request) -> Response:
+        """Prometheus exposition as a Starlette Response.
+
+        Wire as a route — ``app.add_route("/metrics", metrics.render, methods=["GET"])``
+        — NOT ``app.mount("/metrics", ...)``. A mount makes ``/metrics`` 307-redirect
+        to ``/metrics/``, which most Prometheus scrapers do not follow; a route serves
+        ``/metrics`` at 200 directly (matching midas).
+        """
+        return Response(generate_latest(self.registry), media_type=CONTENT_TYPE_LATEST)
 
 
 def _endpoint(scope: Scope) -> str:

@@ -94,7 +94,9 @@ def install_observability(
     metrics = Metrics(namespace=namespace) if metrics_enabled else None
 
     if metrics is not None:
-        app.mount("/metrics", metrics.asgi_app())
+        # A route (not app.mount) so GET /metrics serves 200 directly instead of
+        # 307-redirecting to /metrics/ (which Prometheus scrapers don't follow).
+        app.add_route("/metrics", metrics.render, methods=["GET"], include_in_schema=False)
         app.add_middleware(MetricsMiddleware, metrics=metrics, skip_paths=skip_paths)
     app.add_middleware(AccessLogMiddleware, skip_paths=skip_paths)
     app.add_middleware(

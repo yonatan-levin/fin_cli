@@ -50,6 +50,7 @@ def test_invalid_request_id_replaced() -> None:
 
 def test_metrics_exposes_http_family() -> None:
     client.get("/healthz")  # a counted request (not a skip path)
-    m = client.get("/metrics")
+    # follow_redirects=False: /metrics must serve 200 directly, not 307 -> /metrics/.
+    m = client.get("/metrics", follow_redirects=False)
     assert m.status_code == 200
     assert "fincli_http_requests_total" in m.text
