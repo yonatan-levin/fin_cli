@@ -20,7 +20,7 @@ from fastapi import FastAPI
 from fincli_api.config import ApiConfig
 from fincli_api.exception_handlers import register_exception_handlers
 from fincli_api.routes import filters_router, meta_router, screens_router
-from observability import configure_logging, install_observability
+from observability import ArtifactStore, configure_logging, install_observability
 
 # Constants kept module-level so the OpenAPI dump script and tests can
 # reference the same source of truth without instantiating the app.
@@ -45,7 +45,16 @@ configure_logging(
 # path avoids this by not reconfiguring root at all.
 for _singleton_logger in ("TYPER", "LOGGER", "JSON_LOGGER"):
     logging.getLogger(_singleton_logger).propagate = False
-install_observability(app, service="fincli_api", version=API_VERSION, namespace="fincli")
+# Artifact capture (?trace=1 / X-Strade-Trace / on-error per FINCLI_API_ARTIFACTS_*).
+# Module-level so tests can repoint `artifact_store.root` at a tmp dir.
+artifact_store = ArtifactStore.from_env("FINCLI_API_")
+install_observability(
+    app,
+    service="fincli_api",
+    version=API_VERSION,
+    namespace="fincli",
+    artifacts=artifact_store,
+)
 
 # Routers are mounted at the app root (no prefix). Each router declares
 # its own path (`/filters`, `/screens`, `/healthz`); main.py owns only

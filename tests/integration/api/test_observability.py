@@ -6,6 +6,7 @@ probe. No adapters are exercised (these endpoints are dependency-free).
 
 from __future__ import annotations
 
+import json
 import re
 
 from fastapi.testclient import TestClient
@@ -54,3 +55,36 @@ def test_metrics_exposes_http_family() -> None:
     m = client.get("/metrics", follow_redirects=False)
     assert m.status_code == 200
     assert "fincli_http_requests_total" in m.text
+
+
+def test_trace_query_writes_redacted_bundle(tmp_path) -> None:
+    # Repoint the module-level store at a tmp dir for the duration of the test.
+    from fincli_api.main import artifact_store
+
+    original_root = artifact_store.root
+    artifact_store.root = tmp_path
+    try:
+        r = client.get("/healthz?trace=1", headers={"X-Request-ID": "art-a1"})
+        assert r.status_code == 200
+    finally:
+        artifact_store.root = original_root
+    bundles = list(tmp_path.glob("*/req_art-a1"))
+    assert len(bundles) == 1
+    manifest = json.loads((bundles[0] / "00-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["trigger"] == "manual"
+    assert manifest["status"] == 200
+    assert (bundles[0] / "01-request.json").exists()
+    assert (bundles[0] / "02-response.json").exists()
+    assert (bundles[0] / "99-logs.jsonl").exists()
+
+
+def test_untraced_request_writes_no_bundle(tmp_path) -> None:
+    from fincli_api.main import artifact_store
+
+    original_root = artifact_store.root
+    artifact_store.root = tmp_path
+    try:
+        assert client.get("/healthz").status_code == 200
+    finally:
+        artifact_store.root = original_root
+    assert list(tmp_path.glob("*/req_*")) == []

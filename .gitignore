@@ -185,3 +185,4 @@ package.json
 # Debugging scratchwork (session-local, not for the repo)
 scratch/
 e2e_*.txt
+artifacts/

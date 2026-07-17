@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
+from .artifact import ArtifactMiddleware, ArtifactStore, BundleLogHandler
 from .context import (
     bind,
     coerce_id,
@@ -40,6 +41,9 @@ from .middleware import REQUEST_ID_HEADER, AccessLogMiddleware, RequestContextMi
 DEFAULT_SKIP_PATHS = frozenset({"/metrics", "/health", "/ready"})
 
 __all__ = [
+    "ArtifactMiddleware",
+    "ArtifactStore",
+    "BundleLogHandler",
     "bind",
     "coerce_id",
     "get_extra",
@@ -76,6 +80,7 @@ def install_observability(
     readiness_checks: dict[str, HealthCheck] | None = None,
     detailed_checks: dict[str, HealthCheck] | None = None,
     include_liveness: bool = True,
+    artifacts: ArtifactStore | None = None,
     skip_paths: frozenset[str] = DEFAULT_SKIP_PATHS,
     extra_read_headers: tuple[bytes, ...] = (),
     echo_headers: tuple[bytes, ...] = (REQUEST_ID_HEADER,),
@@ -99,6 +104,11 @@ def install_observability(
         app.add_route("/metrics", metrics.render, methods=["GET"], include_in_schema=False)
         app.add_middleware(MetricsMiddleware, metrics=metrics, skip_paths=skip_paths)
     app.add_middleware(AccessLogMiddleware, skip_paths=skip_paths)
+    if artifacts is not None:
+        # Just inside RequestContextMiddleware (added before it => inner), so the
+        # correlation id is already bound when a bundle opens; wraps the access
+        # log so its line lands in the bundle's 99-logs.jsonl too.
+        app.add_middleware(ArtifactMiddleware, store=artifacts, service=service)
     app.add_middleware(
         RequestContextMiddleware,
         extra_read_headers=extra_read_headers,
