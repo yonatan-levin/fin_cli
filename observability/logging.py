@@ -122,7 +122,10 @@ def configure_logging(
 
     if file_path:
         file_handler = logging.handlers.RotatingFileHandler(
-            file_path, maxBytes=file_max_bytes, backupCount=file_backups, encoding="utf-8"
+            file_path,
+            maxBytes=file_max_bytes,
+            backupCount=file_backups,
+            encoding="utf-8",
         )
         file_handler.setFormatter(JsonFormatter())  # file sink is always JSON
         file_handler.addFilter(ctx)

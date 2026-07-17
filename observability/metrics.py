@@ -80,7 +80,11 @@ def _endpoint(scope: Scope) -> str:
 
 class MetricsMiddleware:
     def __init__(
-        self, app: ASGIApp, metrics: Metrics, *, skip_paths: frozenset[str] = frozenset()
+        self,
+        app: ASGIApp,
+        metrics: Metrics,
+        *,
+        skip_paths: frozenset[str] = frozenset(),
     ) -> None:
         self.app = app
         self.metrics = metrics

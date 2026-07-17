@@ -30,7 +30,7 @@ from typing import Any
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .context import get_request_id, resolve_request_id
+from .context import get_request_id, reset_traced, resolve_request_id, set_traced
 from .logging import JsonFormatter
 
 TRACE_HEADER = b"x-strade-trace"
@@ -231,15 +231,24 @@ class ArtifactMiddleware:
             target.addHandler(BundleLogHandler(request_id_getter))
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or not self.store.enabled:
+        if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
+        # Bind the trace intent for the whole request — even when the local store
+        # is disabled — so outbound tool clients (is_traced()) still propagate
+        # X-Strade-Trace downstream and the rest of the chain writes bundles.
         manual = _is_traced(scope)
-        if not manual and not self.store.on_error:
-            await self.app(scope, receive, send)
-            return
+        traced_token = set_traced(manual)
+        try:
+            if not self.store.enabled or (not manual and not self.store.on_error):
+                await self.app(scope, receive, send)
+                return
+            await self._captured(scope, receive, send, manual)
+        finally:
+            reset_traced(traced_token)
 
+    async def _captured(self, scope: Scope, receive: Receive, send: Send, manual: bool) -> None:
         rid = resolve_request_id(scope) or self._getter() or "unknown"
         # This request's OWN log buffer — concurrent requests sharing an id each
         # register one, so bundles never merge (see the _active comment).

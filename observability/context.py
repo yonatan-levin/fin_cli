@@ -30,6 +30,12 @@ _request_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
 _extra: contextvars.ContextVar[dict[str, str] | None] = contextvars.ContextVar(
     "observability_extra", default=None
 )
+# Whether the CURRENT request was explicitly traced (?trace=1 / X-Strade-Trace).
+# Set by ArtifactMiddleware; outbound HTTP clients read it via is_traced() to
+# propagate the trace flag downstream so the whole chain writes bundles.
+_traced: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "observability_traced", default=False
+)
 
 
 def new_id() -> str:
@@ -71,6 +77,21 @@ def bind(**fields: str | None) -> None:
 
 def get_extra() -> dict[str, str]:
     return dict(_extra.get() or {})
+
+
+def set_traced(value: bool) -> contextvars.Token[bool]:
+    return _traced.set(value)
+
+
+def reset_traced(token: contextvars.Token[bool]) -> None:
+    _traced.reset(token)
+
+
+def is_traced() -> bool:
+    """True while handling a request that was explicitly traced. Outbound tool
+    clients use this to forward ``X-Strade-Trace: 1`` so downstream services
+    write their own bundles for the same correlated run."""
+    return _traced.get()
 
 
 def resolve_request_id(scope: Mapping[str, Any] | None = None) -> str | None:
