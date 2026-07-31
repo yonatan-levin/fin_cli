@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import click
 
@@ -35,6 +36,9 @@ from ..utils.quary_builders import build_stock_screener_query
 # produced filters. Kept as a module constant so the read and write paths
 # share one source of truth.
 _HISTORY_FILENAME = "filter_history.json"
+FilterOptions = dict[str, dict[str, str]]
+QueryOptions = dict[str, str]
+SelectedFilter = dict[str, dict[str, str]]
 
 
 def _write_history(config: Config, selected_values: dict[str, str]) -> None:
@@ -53,7 +57,7 @@ def _write_history(config: Config, selected_values: dict[str, str]) -> None:
         json.dump(selected_values, outfile)
 
 
-def select_filters_and_values(config: Config):
+def select_filters_and_values(config: Config) -> str:
     # Early-return path for structured input (--filter / --filters-json /
     # --filters-file). The configurator has already populated and validated
     # `config.filters`; build the query and persist the selection so a
@@ -70,7 +74,7 @@ def select_filters_and_values(config: Config):
         click.echo(f"Fetching user history from filter_history.json {filepath}")
 
         with open(filepath, encoding="utf-8") as f:
-            selected_values_and_filters = json.load(f)
+            selected_values_and_filters = cast(dict[str, str], json.load(f))
 
         query = build_stock_screener_query(selected_values_and_filters.items())
         return query
@@ -99,18 +103,26 @@ def select_filters_and_values(config: Config):
     return query
 
 
-def extract_dict_options(classes):
-    options, query_options = {}, {}
+def extract_dict_options(
+    classes: list[type[Any]],
+) -> tuple[FilterOptions, QueryOptions]:
+    options: FilterOptions = {}
+    query_options: QueryOptions = {}
 
     for cls in classes:
         for attr_name, attr_value in vars(cls).items():
             if isinstance(attr_value, list) and not attr_name.startswith("__"):
-                query_options[attr_name] = attr_value[0]
-                options[attr_name] = attr_value[1]
+                query_options[attr_name] = cast(str, attr_value[0])
+                options[attr_name] = cast(dict[str, str], attr_value[1])
     return options, query_options
 
 
-def prompt_section(options_group, options, title, color="blue"):
+def prompt_section(
+    options_group: type[Any],
+    options: FilterOptions,
+    title: str,
+    color: str = "blue",
+) -> list[SelectedFilter]:
     click.echo(click.style(f"\nAvailable filters for {title}:"))
 
     grouped_keys = [filter_key for filter_key in options if filter_key in vars(options_group)]
@@ -161,8 +173,11 @@ def prompt_section(options_group, options, title, color="blue"):
         return [{grouped_keys[n - 1]: options[grouped_keys[n - 1]]} for n in parsed]
 
 
-def select_values(selected_filters, query_options):
-    selected_values = {}
+def select_values(
+    selected_filters: list[SelectedFilter],
+    query_options: QueryOptions,
+) -> dict[str, str]:
+    selected_values: dict[str, str] = {}
 
     for filter_dict in selected_filters:
         for filter_outer_key, filter_inner_dict in filter_dict.items():

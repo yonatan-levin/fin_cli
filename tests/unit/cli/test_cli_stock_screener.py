@@ -19,12 +19,18 @@ Pillar 1 adds two changes to this function (spec §5.1 steps 4 + 6):
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
+import click
 import pytest
 
 from config.config import Config
-from fincli.cli.cli_stock_screener import select_filters_and_values
+from fincli.cli.cli_stock_screener import (
+    _write_history,
+    prompt_section,
+    select_filters_and_values,
+)
 
 # ---------------------------------------------------------------------------
 # Early-return path — config.filters preloaded by structured input.
@@ -117,17 +123,70 @@ def test_scrape_link_does_not_trigger_early_return(tmp_path: Path) -> None:
     NOT fire because ``--scrape-link`` semantics say 'use the URL verbatim,
     ignore everything else'.
 
-    We cannot actually invoke ``select_filters_and_values`` here — it would
-    drop into the interactive picker and hang. The guard's correctness is
-    pinned at code-review time and by the spec; this placeholder documents
-    the missing test seam (interactive picker has no current mock surface,
-    tracked in Phase 2 testing roadmap) so the guard is not silently dropped
-    in a future refactor.
+    Patch the section prompts to represent an interactive user who skips every
+    section. This proves the preloaded filters are ignored on the defensive
+    scrape-link combination and that no history is written.
     """
-    pytest.skip(
-        "Interactive path cannot be unit-tested without a picker mock seam; "
-        "guard documented in spec §5.1 step 4. Structural guarantee: "
-        "fincli/app/main.py:59 `config.scrape_link or select_filters_and_values(config)` "
-        "short-circuits via Python `or` semantics, so this function is never invoked "
-        "when config.scrape_link is truthy."
+    config = Config(
+        filters=(("fa_pe", "u20"),),
+        scrape_link="https://finviz.com/screener.ashx?v=111",
+        history_dir=tmp_path,
     )
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(
+            "fincli.cli.cli_stock_screener.prompt_section",
+            lambda *_args, **_kwargs: [],
+        )
+        query = select_filters_and_values(config)
+
+    assert "fa_pe_u20" not in query
+    assert not (tmp_path / "filter_history.json").exists()
+
+
+def test_interactive_picker_builds_query_and_writes_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real interactive selection traverses all sections and persists it."""
+    responses: Iterator[str | int] = iter(("1", "", "", 2))
+    monkeypatch.setattr(click, "prompt", lambda *_args, **_kwargs: next(responses))
+    config = Config(history_dir=tmp_path)
+
+    query = select_filters_and_values(config)
+
+    assert "fa_pe_low" in query
+    assert json.loads((tmp_path / "filter_history.json").read_text(encoding="utf-8")) == {
+        "fa_pe": "low"
+    }
+
+
+def test_prompt_section_reprompts_for_invalid_and_out_of_range_input(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Invalid text and an out-of-range index are rejected before acceptance."""
+
+    class OneFilter:
+        ONLY = ["fa_pe", {"u5": "Under 5"}]
+
+    responses = iter(("not-a-number", "2", "1"))
+    monkeypatch.setattr(click, "prompt", lambda *_args, **_kwargs: next(responses))
+
+    selected = prompt_section(
+        OneFilter,
+        {"ONLY": {"u5": "Under 5"}},
+        "Test Params",
+    )
+
+    assert selected == [{"ONLY": {"u5": "Under 5"}}]
+    output = capsys.readouterr().out
+    assert "expected comma-separated integers" in output
+    assert "out of range" in output
+
+
+def test_empty_history_selection_does_not_create_file(tmp_path: Path) -> None:
+    """Skipping every filter is not recorded as a reusable history entry."""
+    _write_history(Config(history_dir=tmp_path), {})
+
+    assert not (tmp_path / "filter_history.json").exists()

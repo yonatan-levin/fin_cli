@@ -53,7 +53,7 @@ This file captures user corrections and validations not yet promoted to durable 
 
 **Why:** The user (Yonatan) explicitly chose to reduce scope to the screener only. The fundainsight pipeline carried known correctness bugs (`equity_calc.adjust_assets` `not int` truthy-check, hardcoded country/sector exclusions in `picker.py`) and depended on Yahoo Finance data quality that varied widely across international tickers. Continuing to maintain it alongside the harness rollout was higher cost than benefit. Removing it leaves a sharper, smaller surface for Phase 2 testing to target.
 
-**How to apply:** Anyone resuming work should treat the codebase as a single-mode CLI. `python -m fundainsight` is gone permanently — no deprecation alias, no migration path. Anyone needing the analysis pipeline should fork the pre-refactor git history. The full refactor design lives at `docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md` (v1.1). Two stub follow-up specs (`docs/refactoring/cli-entry-point-spec.md`, `docs/refactoring/history-path-config-spec.md`) capture deferred work; their detailed design happens later when the user is ready to action them.
+**How to apply:** Anyone resuming work should treat the codebase as a single-mode CLI. `python -m fundainsight` is gone permanently — no deprecation alias, no migration path. Anyone needing the analysis pipeline should fork the pre-refactor git history. The full refactor design lives at `docs/superpowers/specs/archive/2026-05-04-fincli-only-refactor-design.md` (v1.1). The completed follow-up specs live at `docs/refactoring/archive/cli-entry-point-spec.md` and `docs/refactoring/archive/history-path-config-spec.md`.
 
 ### 2026-05-06 — Console-script entry point (`fincli`)
 
@@ -185,3 +185,24 @@ This file captures user corrections and validations not yet promoted to durable 
 **How to apply:** commit in the worktree branch, then STOP and report `local fast-forward` / `push + PR` / `leave on branch`. Act on origin/PR only after an explicit instruction.
 
 **Source:** Recurring user callouts ("I don't want PR"); propagated across Strade projects 2026-07-05.
+
+---
+
+### 2026-07-30 — `CLAUDE.md` is operational context, not history or feedback
+
+**What:** Keep `CLAUDE.md` limited to project identity, commands, active
+conventions, and concise still-active traps. It must not accumulate phase
+history, shipped-stream narratives, commit/merge provenance, or
+interaction-derived corrections.
+
+**Why:** `CLAUDE.md` is loaded into every agent session. Using it as a duplicate
+changelog or feedback log wastes context and creates multiple copies of facts
+that silently drift. The stale harness Phase Status table demonstrated the
+failure: Phase 1 and Phase 2 remained labelled open after both had shipped.
+This follows the established Midas document-role correction.
+
+**How to apply:** Put canonical phase/milestone status in `docs/THESIS.md`,
+detailed evidence in the subject spec/closeout, one-line shipped-stream entries
+in `docs/CHANGELOG.md`, and user corrections/validated ways of working in this
+file. `CLAUDE.md` may link to those homes but keeps only the present-tense rule
+an editor must know before acting.

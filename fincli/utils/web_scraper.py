@@ -1,5 +1,6 @@
 import time
 from random import choice
+from typing import cast
 
 import cfscrape
 import requests
@@ -22,7 +23,7 @@ user_agents = [
 ]
 
 
-def scrape(url: str):
+def scrape(url: str) -> bytes:
     try:
         headers = {
             "user-agent": choice(user_agents),
@@ -34,10 +35,10 @@ def scrape(url: str):
     return response
 
 
-def fetch_page_sync(url):
+def fetch_page_sync(url: str) -> bytes:
     page_start = time.time()
     scraper = cfscrape.create_scraper()
-    content = scraper.get(url).content
+    content = cast(bytes, scraper.get(url).content)
 
     logger.info(f"{url} took {time.time() - page_start}", "Page fetched successfully")
     return content

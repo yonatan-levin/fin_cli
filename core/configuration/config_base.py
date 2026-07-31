@@ -28,9 +28,9 @@ class Configurable[S: SystemSettings](abc.ABC):
     """A base class for all configurable objects."""
 
     prefix: str = ""
-    default_settings: typing.ClassVar[S]
+    default_settings: typing.ClassVar[SystemSettings]
 
     @classmethod
     def get_user_config(cls) -> S:
         """Get the user configuration."""
-        return cls.default_settings.__class__(**cls.default_settings.dict())
+        return typing.cast(S, cls.default_settings.model_copy(deep=True))

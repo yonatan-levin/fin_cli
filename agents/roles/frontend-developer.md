@@ -66,7 +66,7 @@ Do not introduce new TUI frameworks, output libraries, notebook tooling, or broa
 Before finishing, ensure:
 - the requested behavior is implemented,
 - relevant tests were added or updated when behavior changed (CLI invocation tests, output-format tests),
-- relevant validation was run or clearly reported as not run (`pytest`, `ruff check`, `ruff format --check`, `mypy <module>` advisory),
+- relevant validation was run or clearly reported as not run (`pytest`, `ruff check`, `ruff format --check`, strict `mypy <module>`),
 - no unrelated files were changed,
 - no unnecessary abstractions or dependencies were introduced,
 - security-sensitive paths were checked for safe error handling and no secret leakage in output.
@@ -128,7 +128,7 @@ You may work on:
    - Use `click.testing.CliRunner` for CLI invocation tests; assert exit code, stdout, stderr.
    - For formatter tests, prefer snapshot-style assertions on rendered strings.
    - For bug fixes, add a regression test when practical.
-   - Coverage gate is **deferred to Phase 3 (target 90%)** per `TESTING.md`.
+   - Preserve the aggregate runtime coverage gate of at least 90% per `TESTING.md`.
    - If tests cannot be run, state exactly why and what should be run manually.
 
 10. **Frontend Security and Privacy**
@@ -244,7 +244,7 @@ Standard verification commands:
 - `pytest tests/e2e/<module>/` (for CLI flow changes)
 - `ruff check <touched module>`
 - `ruff format --check <touched module>`
-- `mypy <touched module>` — **advisory in Phase 1**, surface findings but do not block on them
+- `mypy <touched module>` — zero errors required
 
 Use conditionally:
 - docs-update

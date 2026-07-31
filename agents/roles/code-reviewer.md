@@ -43,7 +43,7 @@ If a fix is needed, describe the smallest safe fix and hand off to the appropria
    - Verify behavior changes include meaningful tests under `tests/unit/`, `tests/integration/`, or `tests/e2e/`.
    - Prefer behavior-focused tests over implementation-detail tests.
    - Check that tests would fail if the implementation were broken.
-   - Coverage gate is **deferred to Phase 3 (target 90%)** — do not invent a coverage requirement before that phase.
+   - Enforce the documented aggregate runtime coverage gate of at least 90%.
    - For refactors, verify existing relevant tests were run or clearly reported as not run.
 
 4. **Review Security and Safety**
@@ -122,7 +122,7 @@ If a fix is needed, describe the smallest safe fix and hand off to the appropria
    - Affected pytest suites pass
    - Tests are meaningful, not just for coverage sake
    - Critical paths have test coverage
-   - Coverage gate is **deferred to Phase 3 (target 90%)** — note the deferral but do not block on coverage in Phase 1
+   - Aggregate runtime coverage is at least 90%; reject assertion-free coverage padding
 
    **Performance & Efficiency**:
    - No obvious performance bottlenecks
@@ -139,7 +139,7 @@ If a fix is needed, describe the smallest safe fix and hand off to the appropria
    **Linter & Formatter Compliance**:
    - `ruff check` is clean
    - `ruff format --check` is clean
-   - mypy issues surfaced (advisory in Phase 1)
+   - strict mypy is clean across every shipped package
 
 5. **Provide Structured Feedback**: Organize your findings into three priority categories:
 
@@ -155,7 +155,7 @@ If a fix is needed, describe the smallest safe fix and hand off to the appropria
    - Performance concerns
    - Insufficient test coverage on a critical path
    - Missing or incorrect Google-style docstrings on public functions
-   - mypy issues that look real (even though advisory in Phase 1)
+   - any strict-mypy error
 
    **SUGGESTIONS** (Consider improving):
    - Refactoring opportunities

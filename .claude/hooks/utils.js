@@ -13,6 +13,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 // ──────────────────────────────────────────────
 // Project root detection
@@ -59,6 +60,15 @@ const SERVICES = {
     hasTests: true,
     testableExtensions: ['.py'],
   },
+  fincli_api: {
+    path: 'fincli_api/',
+    runtime: 'python',
+    testCommand: 'pytest tests/',
+    lintCommand: 'ruff check fincli_api/',
+    buildCommand: 'python -c "import fincli_api"',
+    hasTests: true,
+    testableExtensions: ['.py'],
+  },
   core: {
     path: 'core/',
     runtime: 'python',
@@ -86,6 +96,15 @@ const SERVICES = {
     hasTests: true,
     testableExtensions: ['.py'],
   },
+  singleton: {
+    path: 'singleton.py',
+    runtime: 'python',
+    testCommand: 'pytest tests/',
+    lintCommand: 'ruff check singleton.py',
+    buildCommand: 'python -c "import singleton"',
+    hasTests: true,
+    testableExtensions: ['.py'],
+  },
 };
 
 /**
@@ -93,9 +112,11 @@ const SERVICES = {
  * When a module is affected, its dependents should also be tested.
  */
 const SERVICE_DEPENDENCIES = {
-  core: ['fincli'],
-  config: ['fincli'],
-  logger: ['fincli'],
+  fincli: ['fincli_api'],
+  core: ['fincli', 'fincli_api'],
+  config: ['fincli', 'fincli_api'],
+  logger: ['fincli', 'fincli_api'],
+  singleton: ['fincli', 'fincli_api'],
 };
 
 /**
@@ -259,6 +280,91 @@ function getServiceConfig(serviceName) {
 }
 
 // ──────────────────────────────────────────────
+// Process execution
+// ──────────────────────────────────────────────
+
+/**
+ * Run a command with an argument array and return a bounded, structured result.
+ *
+ * Windows uses its command shell only to resolve Python's generated `.cmd`
+ * launchers; callers still pass arguments separately rather than interpolating
+ * edited paths into a command string.
+ */
+function runCommand(name, command, args, options = {}) {
+  const cwd = options.cwd || PROJECT_ROOT;
+  const timeout = options.timeout || 300000;
+  const commandText = [command, ...args].join(' ');
+
+  if (!fs.existsSync(cwd)) {
+    return {
+      success: false,
+      name,
+      command: commandText,
+      kind: 'infrastructure',
+      output: `Working directory does not exist: ${cwd}`,
+    };
+  }
+
+  let executable = command;
+  let executableArgs = args;
+  let windowsVerbatimArguments = false;
+
+  if (process.platform === 'win32') {
+    const lookup = spawnSync('where.exe', [command], {
+      encoding: 'utf8',
+      windowsHide: true,
+      shell: false,
+    });
+    const resolved = (lookup.stdout || '').split(/\r?\n/).find(Boolean);
+    if (resolved) {
+      if (/\.(cmd|bat)$/i.test(resolved)) {
+        const quote = value => `"${String(value).replace(/%/g, '%%').replace(/"/g, '""')}"`;
+        const commandLine = `${quote(resolved)} ${args.map(quote).join(' ')}`;
+        executable = process.env.COMSPEC || 'cmd.exe';
+        executableArgs = ['/d', '/s', '/c', `"${commandLine}"`];
+        windowsVerbatimArguments = true;
+      } else {
+        executable = resolved;
+      }
+    }
+  }
+
+  const result = spawnSync(executable, executableArgs, {
+    cwd,
+    encoding: 'utf8',
+    timeout,
+    windowsHide: true,
+    shell: false,
+    windowsVerbatimArguments,
+  });
+  const output = `${result.stdout || ''}${result.stderr || ''}`.trim().substring(0, 1200);
+
+  if (result.error) {
+    const timedOut = result.error.code === 'ETIMEDOUT';
+    return {
+      success: false,
+      name,
+      command: commandText,
+      kind: timedOut ? 'timeout' : 'unavailable',
+      output: (output || result.error.message).substring(0, 1200),
+    };
+  }
+
+  return {
+    success: result.status === 0,
+    name,
+    command: commandText,
+    kind: result.status === 0 ? 'success' : 'non-zero',
+    output,
+  };
+}
+
+function formatCommandFailure(result) {
+  const detail = result.output ? `\n${result.output}` : '';
+  return `${result.name} failed (${result.command}; ${result.kind})${detail}`;
+}
+
+// ──────────────────────────────────────────────
 // Session tracking
 // ──────────────────────────────────────────────
 
@@ -394,6 +500,8 @@ module.exports = {
   isSecurityFile,
   getDocUpdateNeeded,
   getServiceConfig,
+  runCommand,
+  formatCommandFailure,
   expandWithDependents,
   loadSession,
   saveSession,

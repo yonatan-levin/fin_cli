@@ -1,8 +1,12 @@
 # Fincli-Only Refactor — Design Specification
 
+> **ARCHIVED — SHIPPED:** The single-mode reduction and its follow-through
+> items are complete. This document is retained as historical design evidence;
+> its implementation status is not a live work queue.
+
 **Version:** 1.3
 **Date:** 2026-05-04
-**Status:** APPROVED FOR IMPLEMENTATION
+**Status:** ARCHIVED — SHIPPED
 **Author:** yonatan (decisions); ARCH (formalization)
 **Mode:** REFACTOR (scope reduction; deletion-heavy with one one-line code fix plus two follow-through commits authorized in v1.2 plus one CLI bug-fix commit authorized in v1.3)
 **Amendments:**
@@ -10,7 +14,7 @@
 - v1.2 (2026-05-04): Commits 10–11 added (R3 hook retargeting, setuptools auto-discovery fix). A2 dropped; R3 closed.
 - v1.3 (2026-05-04): Commit 13 added (CLI section-prompt + bounds-checked input fix, post-validation scope expansion). §2.2 N4 narrowed to acknowledge the exception. §3.2 edit table extended. §10 Behavior criterion appended with the section-by-section sub-bullet.
 **Companion specs:**
-- `docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md` (Phase 1 harness — historical)
+- `docs/superpowers/specs/archive/2026-05-02-agent-harness-replication-design.md` (Phase 1 harness — historical)
 - `docs/refactoring/cli-entry-point-spec.md` (deliverable of this refactor — future work)
 - `docs/refactoring/history-path-config-spec.md` (deliverable of this refactor — future work)
 

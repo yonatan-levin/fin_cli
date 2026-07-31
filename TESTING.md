@@ -6,7 +6,7 @@ This document defines the testing strategy, conventions, and follow-up roadmap f
 
 Tests verify **behavior**, not implementation. A test that locks in the current implementation of a function (mocking out internals, asserting call counts on private helpers) becomes a tax to pay every time the function is refactored, even when behavior is unchanged. A test that asserts what the function *does* — input goes in, output comes out, side effect happens — survives refactors and earns its keep.
 
-The test suite uses a three-tier pyramid: `tests/unit/` (mocked at boundaries), `tests/integration/` (real fincli + mocked Finviz HTML fixtures), `tests/e2e/` (live Finviz HTTP, opt-in via `pytest -m live`). Each tier has a `tests/<tier>/api/` sub-directory mirroring the layout for `fincli_api/`. Current state: 279 passed / 1 skipped / 3 deselected (live tier) / 1 xfailed (MAJOR #4 deferred) on the default `pytest tests/` invocation; `pytest -m live tests/e2e/api/` runs the 3 live-Finviz API smoke tests (~3s, network-dependent).
+The test suite uses a three-tier pyramid: `tests/unit/` (mocked at boundaries), `tests/integration/` (real fincli + mocked Finviz HTML fixtures), `tests/e2e/` (live Finviz HTTP, opt-in via `pytest -m live`). Each tier has a `tests/<tier>/api/` sub-directory mirroring the layout for `fincli_api/`. Current state: 302 passed / 3 deselected (live tier) / 1 xfailed (MAJOR #4 deferred) on the default `pytest tests/` invocation. The config-driven aggregate run reports 94% coverage. `pytest -m live tests/e2e/api/` runs the 3 live-Finviz API smoke tests (~3s, network-dependent).
 
 When tests do land, they should:
 
@@ -95,17 +95,18 @@ pytest -x
 # Verbose
 pytest -v
 
-# Coverage (informational — not enforced in Phase 1)
-pytest --cov=fincli --cov=core --cov=config --cov-report=term-missing
+# Blocking aggregate coverage gate (same command used by the Stop hook)
+pytest tests/ --cov --cov-report=term-missing
 ```
 
-The `-ra` default in `[tool.pytest.ini_options]` (see `pyproject.toml`) ensures a short summary of skipped, xfailed, and errored tests prints at the end of every run.
+The `-ra` default in `pytest.ini` ensures a short summary of skipped, xfailed,
+and errored tests prints at the end of every run.
 
 ## Fixture Conventions
 
 Each test layer has its own `conftest.py`. Shared cross-layer fixtures live in the top-level `tests/conftest.py`.
 
-**Recommended fixtures (Phase 2 scope):**
+**Recommended fixtures:**
 
 ```python
 # tests/conftest.py
@@ -216,147 +217,62 @@ The API has a 3-tier test pyramid mirroring the spec §6 structure (`docs/superp
 
 Per FEEDBACK-LOG.md 2026-05-22 + 2026-05-24 entries, `pytest -m live tests/e2e/api/` is MANDATORY before HUMAN approval on any change to `fincli_api/` or `fincli/stock_screening/`. The umbrella's near-miss (1-page IndexError that shipped because mocked tests didn't exercise the live path) is the durable rationale.
 
-## Coverage
+## Blocking quality gates
 
-**Coverage is deferred to Phase 3** of the harness rollout (`docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md`, §8.2).
+The Stop hook enforces all four code-quality gates:
 
-In Phase 1 (now):
+| Gate | Command / policy |
+|---|---|
+| Lint | `ruff check .` |
+| Format | `ruff format --check .` |
+| Types | Bare `mypy`, with the complete shipped scope configured in `pyproject.toml` and `strict = true` |
+| Coverage | Aggregate runtime coverage at least 90% across `fincli`, `fincli_api`, `core`, `config`, `logger`, and `singleton` |
 
-- `pytest-cov` is installed in dev dependencies so the tooling is ready.
-- `pytest --cov=fincli ...` runs and produces a report — but the value is informational only. There is no threshold, and `.claude/hooks/on-stop.js` does not enforce one.
+The default pytest suite is also blocking. Coverage runs separately so a test
+failure and a threshold regression remain distinguishable in hook output.
 
-In Phase 3 (after Phase 2 establishes a real test suite):
+### Coverage
 
-- The target coverage threshold is **90%**, matching the Midas reference harness.
-- `.claude/hooks/on-stop.js` will block the `Stop` event when coverage drops below 90%.
-- Per-module thresholds may be tuned during ramp-up (e.g., `logger/` is hard to test usefully, so a lower per-module threshold is plausible there).
+Coverage is aggregate, not per-package. Every shipped runtime module is named in
+the command; no low-coverage package is silently excluded. Tests must validate
+behavior at a boundary—adding execution-only padding to satisfy the percentage
+is not acceptable.
 
-The reason Phase 3 is its own work item, not folded into Phase 2, is straightforward: a coverage gate against zero tests is meaningless, and a coverage gate enabled before tests have substance creates pressure to write low-quality tests just to hit the metric. The correct sequence is: **write tests first, enable coverage gate second**.
+### Type checking
 
-## Type Checking
+Mypy is strict and blocking. The `cfscrape` override remains because that
+library publishes no usable type information; BeautifulSoup, pandas, and
+colorama use installed stubs. `fincli_api` is part of the same gate as the CLI.
 
-`mypy` runs on every save (via `.claude/hooks/post-edit.js`) and on every `Stop` event (via `.claude/hooks/on-stop.js`). The `pyproject.toml` config is **`strict = true` from day one**, deliberately:
+The post-edit hook surfaces a per-file mypy failure immediately. Because
+PostToolUse runs after an edit, the Stop hook is the authoritative blocker that
+prevents an unresolved type regression from completing the session.
 
-```toml
-[tool.mypy]
-python_version = "3.12"
-files = ["fincli", "core", "config", "logger"]
-strict = true
-
-[[tool.mypy.overrides]]
-module = ["cfscrape", "cfscrape.*"]
-ignore_missing_imports = true
-```
-
-`bs4` is typed via the `types-beautifulsoup4` dev dep, which is cleaner than an override.
-
-The codebase has very few type hints today, so `strict = true` produces dozens of errors. **In Phase 1, mypy results surface through the `warnings` channel of `on-stop.js`, NOT the `issues` channel.** That means:
-
-- The user sees the running error count after every Stop event.
-- The user is not blocked from finishing a session by mypy errors.
-- The advisory pressure encourages adding type hints to whatever module is being touched, without forcing a giant up-front type-hint sprint.
-
-**Phase 4** of the harness rollout (`docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md`, §8.3) flips mypy from advisory `warnings` to a hard `issues` gate once `mypy fincli core config logger` reports zero errors. The trigger condition is concrete: zero errors. Until then, the gap is visible but does not block work.
-
-This phased approach exists because:
-
-- A blocking mypy gate against an unannotated codebase forces an immediate massive type-hint sprint, which is out of Phase 1 scope.
-- An optional or weakened mypy config (e.g., `strict = false`) hides the actual gap behind a friendlier number.
-- The `warnings` channel is the honest middle ground: real numbers, advisory pressure, no blocked sessions.
-
-## Lint and Format
+### Lint and format
 
 ```bash
-ruff check .          # lint (pyflakes + pycodestyle + isort + bugbear + pyupgrade + naming + simplify)
-ruff check --fix .    # auto-fix the mechanical issues
-ruff format .         # format (black-compatible)
-ruff format --check . # verify formatting without writing
+ruff check .
+ruff check --fix .
+ruff format .
+ruff format --check .
 ```
 
-Both are run automatically by `.claude/hooks/post-edit.js` on every saved `.py` file. The Stop hook also runs `ruff check .` and `ruff format --check .` against the whole repo. Configuration sits in `pyproject.toml` under `[tool.ruff]`, `[tool.ruff.lint]`, and `[tool.ruff.format]`.
+The lint family remains `["E", "F", "W", "I", "B", "UP", "N", "SIM"]`.
+Pydocstyle (`D`) is deliberately not enabled by the quality-gate burn-down; it
+would require a separate migration decision.
 
-The lint rule set is the conservative `["E", "F", "W", "I", "B", "UP", "N", "SIM"]`. The `D` (pydocstyle / Google docstrings) rule family is **not** enabled in Phase 1 to avoid drowning in style violations before type-hint adoption stabilizes; Phase 4 may enable `D` rules at the same time mypy promotes to a hard gate.
+## Test authoring conventions
 
-### First-run ruff baseline
+- Name tests `test_<unit_under_test>_<scenario>`.
+- Use classes only when cases genuinely share setup.
+- Prefer plain `assert`; use `pytest.approx` for floating-point behavior.
+- Use `pytest.mark.parametrize` for table-shaped behavior with readable IDs.
+- Keep mocks at I/O boundaries; do not mock pandas or Pydantic.
 
-The Phase 1 harness lands against pre-existing source code that has not been linted before. The first `on-stop.js` run will surface a backlog of ruff findings and mypy errors across `fincli/`, `core/`, `config/`, `logger/`. Both totals will appear in the Stop hook's `systemMessage` — ruff under `issues`, mypy under `warnings` (advisory until Phase 4). This is expected and is the calibration baseline for Phase 2 cleanup; it does not block work. Sweeping the backlog down is opportunistic — fix what you touch, defer the rest.
+## Known limitations
 
-## Phased Roadmap
-
-This section is the source of truth for *when* the deferred test work happens. All three phases are tracked, not informal — this is by design (the user explicitly flagged the risk of "deferred test work" silently disappearing).
-
-### Phase 2 — Introduce pytest test suite
-
-**Trigger:** after Phase 1 (this commit's harness) ships and stabilizes.
-
-**Scope:**
-
-- Real `pytest` tests under `tests/unit/`, `tests/integration/`, `tests/e2e/`.
-- One test file per module listed in `tests/` layout above.
-- HTML fixture for the Finviz parser.
-- Add type hints incrementally to the modules being tested — this is the natural moment to drive the mypy advisory count down.
-
-**Out of scope for Phase 2:**
-
-- `logger/` (Singleton plumbing; low value, hard to test).
-- Live E2E tests against real Finviz (gated behind an env var when added).
-
-**Definition of Done:**
-
-- `pytest tests/` passes locally and inside `on-stop.js`.
-- At least one test exists per module listed in the layout.
-- Tracking issue or follow-up spec at `docs/superpowers/specs/<future-date>-pytest-suite-bootstrap-spec.md`.
-
-### Phase 3 — Enable coverage gate
-
-**Trigger:** after Phase 2 establishes a meaningful baseline test suite.
-
-**Scope:**
-
-- In `.claude/hooks/on-stop.js`, change `runCoverageCheck` from the Phase 1 stub (`{skipped: true, reason: "Phase 3 deferred — no coverage threshold yet"}`) to an actual `pytest --cov=...` invocation that compares the result to the 90% threshold.
-- Update `TESTING.md` (this file's "Coverage" section) to document the enforced threshold.
-- Update `agents/roles/verifier.md` to flip the coverage row from "deferred" to **90%**.
-- Update `agents/rules/_shared-workflow.md` VERIFIER block similarly.
-
-**Definition of Done:**
-
-- `on-stop.js` blocks Stop when coverage drops below 90%.
-- `TESTING.md` lists the enforced threshold and rationale.
-- Tracking spec at `docs/superpowers/specs/<future-date>-coverage-gate-enable-spec.md`.
-
-### Phase 4 — Promote mypy from warning to gate
-
-**Trigger:** when `mypy fincli core config logger` returns zero errors.
-
-**Scope:**
-
-- In `.claude/hooks/on-stop.js`, move the mypy result from the `warnings` channel to the `issues` channel.
-- In `.claude/hooks/post-edit.js`, treat mypy errors on the just-edited file as blocking, not advisory.
-- Update `agents/roles/verifier.md` to list mypy as a hard gate.
-- Update `agents/rules/_shared-workflow.md` VERIFIER block similarly.
-- Update `TESTING.md` to document the new policy.
-- Decide whether to enable ruff `D` rules (Google docstring enforcement) at the same time.
-
-**Definition of Done:**
-
-- `mypy fincli core config logger` returns zero errors.
-- `on-stop.js` and `post-edit.js` treat mypy as blocking.
-- A new session running `on-stop.js` against a deliberately-mistyped local edit fails the gate.
-- Tracking spec at `docs/superpowers/specs/<future-date>-mypy-promote-to-gate-spec.md`.
-
-The phases are sequenced because Phase 4's trigger condition (zero mypy errors) is achieved naturally by the type-hint adoption that Phase 2 produces; promoting mypy to a gate on its own merit is cleaner than smuggling the flip into a test-introduction PR.
-
-## When Tests Land — Useful Conventions
-
-When Phase 2 starts, the following conventions are recommended (matching the broader "tests verify behavior, not implementation" stance above):
-
-- **Test name pattern**: `test_<unit_under_test>_<scenario>` — e.g., `test_convert_market_cap_billions_returns_float`, `test_build_query_handles_empty_filter_tuple`, `test_json_to_tuples_raises_on_malformed_input`.
-- **Class grouping**: optional. Use `class TestConvertMarketCap:` only when several tests share fixtures or setup, not as default.
-- **Assertions**: prefer plain `assert` over an assertion library. Use `pytest.approx` for floating-point comparisons. Default tolerance for ratio math: `rel=1e-6`.
-- **Parametrization**: `@pytest.mark.parametrize` for table-style cases. Each row is a `pytest.param(input, expected, id="<short label>")` so the test ID is human-readable.
-
-## Known Gaps
-
-- **No tests today.** Phase 2 lands them. Don't write tests in Phase 1 unless you are also writing the test infrastructure (fixtures, conftest, recorded HTML) — half a test suite is worse than none.
-- **External services drift.** Finviz HTML can change without notice. The mocking strategy isolates unit/domain tests from drift, but E2E tests against recorded fixtures will need refreshing periodically. When a fixture goes stale, replace it with a fresh recording.
-- **Singleton logger pollution.** When tests start running in parallel, the Singleton may leak handlers between tests. The fix is a `tests/conftest.py` autouse fixture that resets the Singleton between tests; add this when it actually causes a flake, not preemptively.
+- Finviz HTML can change without notice. Recorded fixtures isolate the default
+  suite; refresh them deliberately when the upstream contract changes.
+- The malformed-HTML no-table case remains the documented MAJOR #4 xfail pair.
+- The Singleton logger can leak handler state if future parallel tests stop
+  restoring it; add a reset fixture only if that failure materializes.

@@ -5,7 +5,7 @@
 # CLI Entry Point — Refactor Spec (Stub)
 
 **Status:** STUB — design deferred until the user is ready to action this work.
-**Parent:** `docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md` (v1.1, §6.6)
+**Parent:** `docs/superpowers/specs/archive/2026-05-04-fincli-only-refactor-design.md` (v1.1, §6.6)
 **Date opened:** 2026-05-04
 
 ---
@@ -39,4 +39,4 @@ This was explicitly deferred during the 2026-05-04 single-mode reduction (Q2 = O
 
 ## Next step
 
-When the user is ready to action this work, expand this stub into a full design spec following the structure of `docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md` (Summary / Requirements / Architecture / Tasks / Verification / Acceptance).
+This work followed the structure of `docs/superpowers/specs/archive/2026-05-04-fincli-only-refactor-design.md` (Summary / Requirements / Architecture / Tasks / Verification / Acceptance).

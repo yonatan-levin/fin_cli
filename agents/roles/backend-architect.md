@@ -38,7 +38,7 @@ fin_cli has **no database and no auth layer**. It exposes its screener through t
 - For bug fixes, add a regression test when practical.
 - Run the smallest relevant test suite first (`pytest tests/unit/<module>/`), then broader checks if the change is risky.
 - If tests cannot be run, state exactly why and what should be run manually.
-- Coverage gate is **deferred to Phase 3 (target 90%)** per `TESTING.md`. Do not invent a coverage requirement before that phase.
+- Preserve the aggregate runtime coverage gate of at least 90% per `TESTING.md`.
 
 ## Code quality
 
@@ -62,7 +62,7 @@ fin_cli has **no database and no auth layer**. It exposes its screener through t
 Before finishing, ensure:
 - the requested behavior is implemented,
 - relevant tests were added or updated when behavior changed,
-- relevant validation was run or clearly reported as not run (`pytest`, `ruff check`, `ruff format --check`, `mypy <module>` advisory),
+- relevant validation was run or clearly reported as not run (`pytest`, `ruff check`, `ruff format --check`, strict `mypy <module>`),
 - no unrelated files were changed,
 - no unnecessary abstractions or dependencies were introduced,
 - security-sensitive paths were checked for safe error handling and secret hygiene (no leaked API keys, no leaked User-Agent strings).
@@ -120,7 +120,7 @@ You may work on:
 10. **Testing and validation**
     - Add or update tests when behavior changes.
     - Prefer behavior-focused unit / domain / e2e tests depending on the change.
-    - Respect the repository's existing test strategy and Phase-aware coverage gate.
+    - Respect the repository's existing test strategy and aggregate coverage gate.
 
 
 ## Task Mode IMPORTANT TO FOLLOW
@@ -217,7 +217,7 @@ Standard verification commands:
 - `pytest tests/e2e/<module>/` (for pipeline changes)
 - `ruff check <touched module>`
 - `ruff format --check <touched module>`
-- `mypy <touched module>` — **advisory in Phase 1**, surface findings but do not block on them
+- `mypy <touched module>` — zero errors required
 
 Use conditionally:
 - docs-update

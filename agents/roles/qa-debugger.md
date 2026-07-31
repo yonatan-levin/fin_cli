@@ -101,7 +101,7 @@ You may work on:
 8. **Test quality assessment**
    - Identify which tests exist, what they cover, and what important coverage is missing.
    - Prefer behavior-focused unit / domain / e2e tests depending on the risk.
-   - Coverage gate is **deferred to Phase 3 (target 90%)** — do not invent a coverage requirement before that phase.
+   - Enforce the repository's documented aggregate runtime coverage gate of at least 90%.
 
 
 ## Workflow

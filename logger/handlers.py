@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import IO, Any
 
 
-class ConsoleHandler(logging.StreamHandler):
+class ConsoleHandler(logging.StreamHandler[IO[str]]):
     """Plain-text console handler whose stream can be retargeted at runtime.
 
     Extends ``logging.StreamHandler`` so the parent already manages a
@@ -43,7 +43,7 @@ class ConsoleHandler(logging.StreamHandler):
             self.handleError(record)
 
 
-class TypingConsoleHandler(logging.StreamHandler):
+class TypingConsoleHandler(logging.StreamHandler[IO[str]]):
     """Output stream to console using simulated typing.
 
     Honors the ``stream`` attribute inherited from ``logging.StreamHandler``

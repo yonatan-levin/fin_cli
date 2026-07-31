@@ -9,7 +9,7 @@ from typing import IO, TYPE_CHECKING, Any
 from colorama import Fore
 
 if TYPE_CHECKING:
-    from ..config.config import Config
+    from config.config import Config
 
 from singleton import Singleton
 
@@ -24,7 +24,7 @@ class Logger(metaclass=Singleton):
     For console handler: simulates typing
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # create log directory if it doesn't exist
         # TODO: use workdir from config
         self.log_dir = Path(__file__).parent.parent.parent / "logs"
@@ -79,14 +79,14 @@ class Logger(metaclass=Singleton):
         self.json_logger.setLevel(logging.DEBUG)
 
         self._config: Config | None = None
-        self.chat_plugins = []
+        self.chat_plugins: list[Any] = []
 
     @property
     def config(self) -> Config | None:
         return self._config
 
     @config.setter
-    def config(self, config: Config):
+    def config(self, config: Config) -> None:
         self._config = config
 
     def debug(

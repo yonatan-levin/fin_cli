@@ -1,3 +1,7 @@
+from typing import cast
+
+from bs4 import Tag
+
 from ...resource.params.const import BASE_URL
 
 
@@ -7,14 +11,14 @@ class StockTableScreenerParser:
     in it.
     """
 
-    def __init__(self, html_content):
+    def __init__(self, html_content: Tag) -> None:
         self.html_content = html_content
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"StockScreenerParser({self.html_content})"
 
     @property
-    def table_rows(self):
+    def table_rows(self) -> list[Tag]:
         """
         Returns the table rows with the class "table-light is-new".
         """
@@ -23,7 +27,7 @@ class StockTableScreenerParser:
         return data_rows
 
     @property
-    def table_data(self):
+    def table_data(self) -> list[list[str]]:
         """
         Returns the table data.
         """
@@ -36,10 +40,9 @@ class StockTableScreenerParser:
         return data
 
     @classmethod
-    def ticker_link(cls, cells):
+    def ticker_link(cls, cells: list[Tag]) -> str:
         """
         Returns the ticker link.
         """
-        link = cells[1].find("a").get("href")
-        link = BASE_URL + link  # type: ignore
-        return link
+        link = cast(str, cast(Tag, cells[1].find("a")).get("href"))
+        return BASE_URL + link

@@ -8,8 +8,8 @@ READING `AGENTS.md` IS MANDATORY.
 
 **Fin CLI** is a Python package exposing a Finviz.com stock screener through two co-equal entry points: a CLI (`fincli/`) and an HTTP API (`fincli_api/`). Both consume the same orchestrator (`fincli.app.main.screen_to_dataframe`) and the same filter inventory (`fincli.resource.params.validators.list_valid_filters_with_labels`), so the contract cannot drift across surfaces.
 
-- **CLI (`fincli/`)** has two usage shapes that share the same orchestrator — the original interactive picker (Fundamental / Descriptive / Technical filter selection) and a pipeline mode (structured `--filter`/`--filters-json`/`--filters-file` input, deterministic `--output`/`--output -` destination, stream discipline via `--quiet`/`--json-summary`, and differentiated exit codes 0/1/2/3/4). Pipeline mode shipped on 2026-05-16 — see `docs/features/archive/pipeline-mode-spec.md`.
-- **HTTP API (`fincli_api/`)** is a FastAPI surface exposing `GET /filters`, `POST /screens`, and `GET /healthz`, with an OpenAPI 3.1.0 snapshot committed at `docs/api/openapi.{yaml,json}`. Shipped 2026-05-24 — see `docs/superpowers/specs/archive/2026-05-22-fincli-api-design.md`.
+- **CLI (`fincli/`)** has two usage shapes that share the same orchestrator: the interactive Fundamental / Descriptive / Technical picker and pipeline mode with structured inputs, deterministic output, stream discipline, and classified exit codes.
+- **HTTP API (`fincli_api/`)** exposes `GET /filters`, `POST /screens`, and `GET /healthz`; its OpenAPI 3.1.0 contract is committed at `docs/api/openapi.{yaml,json}`.
 
 Both entry points build the corresponding Finviz URL, fetch every paginated result page through `cfscrape` (Cloudflare-bypassing HTTPS client), parse the HTML stock table with BeautifulSoup, and return the result as a DataFrame (CLI writes it to a timestamped CSV or stdout; API serializes it to JSON).
 
@@ -53,8 +53,8 @@ ruff check --fix .
 ruff format .
 ruff format --check .
 
-# Type-check (mypy strict)
-mypy fincli fincli_api core config logger
+# Type-check the configured shipped surface (mypy strict)
+mypy
 mypy --no-incremental         # bypass cache when diagnosing weirdness
 
 # Vulnerability audit (when pip-audit is on PATH; gracefully skipped otherwise)
@@ -112,16 +112,17 @@ Full diagram + per-section detail in `ARCHITECTURE.md`.
 | `agents/rules/_shared-workflow.md` | Master workflow rules for AI subagents |
 | `agents/roles/*.md` | Per-role context files (8 roles) |
 | `docs/THESIS.md` | Project vision, current phase, roadmap, scope boundaries |
+| `docs/CHANGELOG.md` | Thin shipped-stream index; links to authoritative specs/closeouts |
 | `docs/MODULE_REFERENCE.md` | Per-module reference (purpose, public surface, data shapes, error modes) |
 | `docs/FEEDBACK-LOG.md` | Append-only log of cross-cutting decisions |
 | `docs/superpowers/specs/` | Chronological per-feature design specs |
-| `docs/refactoring/` | Cross-cutting refactor specs (`<topic>-spec.md`); shipped specs move to `archive/` |
+| `docs/refactoring/` | Cross-cutting work: design under `spec/`, executable plans under `implementations/`, retired material under `archive/` |
 | `docs/features/` | Feature-restoration / feature-addition specs (`<topic>-spec.md`); shipped specs move to `archive/` |
 | `docs/pendingwork/` | Session handoff docs (`YYYY-MM-DD-session-handoff.md`); historical handoffs move to `archive/` |
 | `.claude/settings.json` | Hook wiring: `SessionStart` -> `load-rules.js`, `PostToolUse:Edit\|Write` -> `post-edit.js`, `Stop` -> `on-stop.js` |
 | `.claude/hooks/load-rules.js` | Auto-injects `_shared-workflow.md`, `preflight.md`, `orchestrator.md` at session start |
-| `.claude/hooks/post-edit.js` | Per-edit lint+format+mypy on the saved file; secret/OWASP scan; doc-update reminders |
-| `.claude/hooks/on-stop.js` | Repo-wide ruff + mypy + pytest at Stop event; coverage skipped (Phase 3); mypy via `warnings` channel (Phase 4 promotes to gate) |
+| `.claude/hooks/post-edit.js` | Per-edit lint+format plus visible mypy failures; secret/OWASP scan; doc-update reminders |
+| `.claude/hooks/on-stop.js` | Blocking repo-wide Ruff, strict mypy, pytest, and aggregate 90% coverage gates |
 
 ## Conventions
 
@@ -130,8 +131,8 @@ Full diagram + per-section detail in `ARCHITECTURE.md`.
 - **Line length**: 100 (configured in `[tool.ruff]`).
 - **Quotes**: double (`"foo"`); ruff format enforces this.
 - **Imports**: `ruff` rule `I` (import order) auto-fixes.
-- **Type hints**: encouraged; `[tool.mypy] strict = true` from day one. The codebase has very few hints today, so `strict` produces dozens of errors — this is expected and **advisory only in Phase 1** (see "Phase status" below). Adding hints is the natural way to drive that count down.
-- **Docstrings**: **Google style** (`Args:` / `Returns:` / `Raises:` blocks). Phase 1 does not enable ruff `D` rules; Phase 4 may enable them once the type-hint pass is far enough along.
+- **Type hints**: required; `[tool.mypy] strict = true` and the Stop hook blocks on errors across every shipped package.
+- **Docstrings**: **Google style** (`Args:` / `Returns:` / `Raises:` blocks). Ruff `D` rules remain disabled; changing docstring enforcement requires a separate scoped decision.
 
 ### Logging
 - **Always** import the Singleton: `from logger import logger`. Never construct your own `logging.Logger`. Never use `print` in non-CLI paths.
@@ -162,9 +163,8 @@ Full diagram + per-section detail in `ARCHITECTURE.md`.
 - See `TESTING.md` for fixtures, mocking strategy (the local-binding rule for `fincli.app.main.fetch_page_sync`), and which dependencies are mockable vs. real.
 
 ### Git Workflow
-- **Always work in a dedicated git worktree, never directly on the checked-out branch.** Before starting any change, create a feature branch in its own worktree (e.g. `git worktree add ../algo_beta-<topic> -b <type>/<topic>`) and do all edits, commits, and test runs there. Decision recorded 2026-06-27 — see `docs/FEEDBACK-LOG.md`.
-- Rationale: the working tree carries pre-existing untracked artifacts (`.codex/`, `docs/pendingwork/`, `uv.lock`, `workspace_output/`) and an editable install; a worktree isolates each task's changes, keeps `master` clean, and prevents an in-flight change from contaminating an unrelated run.
-- Never commit directly to `master`. Branch first, commit in the worktree, then open a PR. Scope every commit to only the files the task touched — never `git add -A` over the dirty tree.
+- **Always work in a dedicated git worktree, never directly on the primary checkout.** Create a task branch in its own worktree and keep staging scoped to the files that task owns.
+- Integration is a separate human decision: do not advance `master`, push, open a PR, or remove the worktree without explicit direction. Rationale and edge cases live in `docs/FEEDBACK-LOG.md`.
 
 These MCP servers are wired in this repo. One-line "when to use" guidance:
 
@@ -184,31 +184,14 @@ A full reference of all available skills, slash commands, and MCP tools (includi
 
 - `requirements.txt` pins `urllib3<2`. Do not bump it without testing `cfscrape` end-to-end against Finviz; cfscrape's transitive dependency expects the v1 API.
 - `cfscrape` ships no inline type info and no community stubs on PyPI. It is listed under `[[tool.mypy.overrides]]` with `ignore_missing_imports = true` in `pyproject.toml` to silence `import-untyped` errors. Do not remove that override.
-- `bs4` is typed via the `types-beautifulsoup4` dev dependency; mypy needs no override for it.
+- `bs4`, pandas, and colorama use installed stub packages; do not replace them with broad mypy import ignores.
 - `singleton.py` lives at the repo root, not under `core/`. The logger imports it as a top-level module.
-- The `tests/` folder has `__pycache__` content from previously-deleted test bodies. Phase 2 introduces real tests; do not remove the folder structure.
 - The package is installed as `fincli` (PEP 621 distribution name in `pyproject.toml`). It used to be `finscrape`; if pip is reusing a stale egg-info, `pip uninstall finscrape` then `pip install -e ".[dev]"` from a clean venv.
 - `pyproject.toml` declares `[tool.setuptools.packages.find]` with `include = ["fincli*", "fincli_api*", "core*", "config*", "logger*"]` plus `[tool.setuptools] py-modules = ["singleton"]`. Modern setuptools (>= 67) refuses to auto-discover when a flat-layout repo has more than one top-level package; this directive is what makes `pip install -e .` succeed. Don't remove it without restructuring the repo to a `src/` layout.
-- **`pytest.ini` is the canonical pytest config**, not `pyproject.toml`'s `[tool.pytest.ini_options]`. Pytest precedence picks `pytest.ini` first when both exist; the pyproject section was stripped to an explanatory comment in T5c. Don't reintroduce settings into pyproject — port to `pytest.ini`.
-- **Mock target for fincli HTTP in API tests must be `fincli.app.main.fetch_page_sync`**, NOT `fincli.utils.web_scraper.fetch_page_sync`. The former is the local-name binding via `from ... import fetch_page_sync` in `main.py`; patching the original location doesn't affect what `main.py` already imported. T5b's conftest documents the rule.
+- **`pytest.ini` is the canonical pytest config**, not `pyproject.toml`. Pytest gives it precedence; put markers and addopts there.
+- **Mock `fincli.app.main.fetch_page_sync` in pipeline/API integration tests**, not its definition in `fincli.utils.web_scraper`; the orchestrator holds a local imported binding.
 - **Malformed HTML may currently coerce to 200 empty** instead of spec §5.1's 502 parsing error (MAJOR #4 deferred). Future parser fix in `fincli/stock_screening/` will need to coordinate with the xfail-pair pattern at `tests/integration/api/test_screens_integration.py`.
+- **`Logger.error(title, message="")` has a flipped parameter order** relative to `debug` / `info` / `warn`. Use the documented shape in `docs/MODULE_REFERENCE.md`; changing it is a separate compatibility decision.
 
-## Known Issues / Tech Debt
-
-- **Phase-2 test seed shipped (2026-05-16) — 200+ tests across `tests/unit/` and `tests/integration/`.** Coverage gate (Phase 3) still deferred until the suite stabilizes and the gate's value vs. friction has been measured against the real cadence.
-- **`mypy strict = true` produces a non-zero day-one error count** because the codebase still has many untyped modules. This is intentional — see Phase 4 below. Do not weaken `strict` to silence the count; instead add hints to the file you are editing. The pipeline-mode rollout drove typing-coverage up across `fincli/app/`, `fincli/utils/market_cap.py`, `fincli/resource/params/validators.py`, `core/converters/json.py`, and `logger/`; legacy modules (BS4 parsers, web scraper, query builder) still lag.
-- **`Logger.error(title, message="")` parameter order is flipped** relative to `debug` / `info` / `warn` (which are `(message, title="")`). Pre-existing footgun documented in `docs/MODULE_REFERENCE.md`. Use the documented order; do not "fix" it because every existing caller relies on the flipped shape.
-
-## Phase Status
-
-This codebase is in the middle of an "agent harness" rollout that mirrors the Midas project's harness onto fin_cli. Tracked in `docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md`. Phase 2 scope was retargeted by the single-mode reduction (`docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md`).
-
-| Phase | What | Status |
-|---|---|---|
-| Phase 1 | Bootstrap Python tooling (Ruff, mypy strict, pytest config), rewrite top-level docs (`ARCHITECTURE.md`, `CLAUDE.md`, `CONTRACTS.md`, `README.md`, `TESTING.md`, plus new `TOOLS_REFERENCE.md` and `AGENTS.md`), scaffold `agents/` and `docs/` folders, install Claude Code hooks. **Phase 1 is in progress as of 2026-05-02.** | In progress |
-| Phase 2 | Introduce real `pytest` test suite for `fincli/stock_screening/` and the screener pipeline. Add HTML fixtures. Add type hints incrementally to the modules being tested — driving the mypy advisory count down. | Deferred |
-| Phase 3 | Enable the coverage gate in `.claude/hooks/on-stop.js` at **90%** (matching Midas). Update `TESTING.md`, `agents/roles/verifier.md`, and `agents/rules/_shared-workflow.md` to reflect the enforced threshold. | Deferred |
-| Phase 4 | Promote mypy from `warnings` channel to `issues` channel in `on-stop.js` (and from advisory to blocking in `post-edit.js`) once `mypy fincli core config logger` reports zero errors. Optionally enable ruff `D` rules (Google docstring enforcement) at the same time. | Deferred |
-| Phase 5 | HTTP API mode — Add `fincli_api/` sibling package exposing a FastAPI surface (`GET /filters`, `POST /screens`, `GET /healthz`). OpenAPI 3.1.0 auto-generated from Pydantic models and committed to `docs/api/openapi.{yaml,json}` via `scripts/dump_openapi.py`. 3-tier test pyramid (unit / integration with mocked Finviz / e2e with live Finviz behind `-m live`). Shipped 2026-05-24 — see `docs/superpowers/specs/archive/2026-05-22-fincli-api-design.md`. | **Shipped** |
-
-The deferral structure is intentional: a coverage gate against zero tests is meaningless, and a strict-mypy gate against an unannotated codebase trains people to ignore failing hooks. Phases are unlocked in order. Each has a concrete trigger condition documented in §8 of the harness rollout spec.
+Canonical phase status lives in `docs/THESIS.md`; shipped-stream history is
+indexed in `docs/CHANGELOG.md`.

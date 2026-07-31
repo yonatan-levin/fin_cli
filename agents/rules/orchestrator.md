@@ -24,7 +24,7 @@ You are the workflow orchestrator for the **fin_cli** project (Python CLI for Fi
 | `config/` | Pydantic-based configuration with history support |
 | `logger/` | Singleton logger (console with typing effect, file, JSON) |
 | `scripts/` | Dependency-checking utilities |
-| `tests/` | pytest suites — unit / domain / e2e (Phase 1 scaffolds) |
+| `tests/` | pytest suites — unit / integration / e2e |
 
 ## Workflow Modes
 
@@ -37,7 +37,7 @@ You are the workflow orchestrator for the **fin_cli** project (Python CLI for Fi
 4. Invoke `/arch` for requirements, design, and spec updates (ARCH updates issue with plan)
 5. **If UI involved** (TUI / dashboard / notebook output): invoke `/ux-ui` then `/frontend`. **Otherwise skip — fin_cli has no current frontend surface and BACKEND covers all 'implementation' routes.**
 6. Invoke `/backend` for the Python implementation
-7. Invoke `/verifier` to validate implementation works (pytest, ruff, mypy advisory, CSV output schema)
+7. Invoke `/verifier` to validate implementation works (pytest, Ruff, strict mypy, aggregate coverage, CSV output schema)
 8. Run validation cycle: `/reviewer` → `/qa` → HUMAN
 9. HUMAN closes the issue after final approval
 
@@ -124,8 +124,9 @@ Max 2-3 iterations before escalating to HUMAN with summary.
   - `pytest tests/`
   - `ruff check`
   - `ruff format --check`
-  - `mypy <touched module>` — **advisory only in Phase 1; promotes to gate in Phase 4**
-  - CSV-output schema validation (run the screener pipeline on fixture HTML, inspect column names + dtypes; manual in Phase 1, fixture-driven automation in Phase 2)
+  - `mypy` — zero errors across the shipped scope configured in `pyproject.toml`
+  - aggregate runtime coverage — at least 90% across every shipped package
+  - CSV-output schema validation (run the screener pipeline on fixture HTML and inspect column names + dtypes; prefer fixture-driven automation)
 
 ## Specialist Subagents
 
@@ -137,7 +138,7 @@ Max 2-3 iterations before escalating to HUMAN with summary.
 | `/ux-ui` | **Only when UI/TUI/dashboard/notebook explicitly requested.** Otherwise skip; CLI ergonomics still pass through this role when invoked. |
 | `/qa` | Bug triage, behavior verification, test validation |
 | `/reviewer` | Code quality, security, performance review |
-| `/verifier` | Post-implementation validation — runs pytest, ruff, mypy (advisory), inspects CSV outputs (mandatory for non-trivial) |
+| `/verifier` | Post-implementation validation — runs pytest, Ruff, strict mypy, aggregate coverage, and inspects CSV outputs (mandatory for non-trivial) |
 
 > **Routing reminder:** Routing logic includes FRONTEND/UX_UI **with explicit caveat — skipped by default unless the request explicitly mentions UI / TUI / dashboard / notebook output. Otherwise BACKEND covers all 'implementation' routes for fin_cli.** fin_cli has **no current frontend surface**.
 

@@ -85,7 +85,7 @@ Each role has a corresponding role file that defines its responsibilities and ho
 - **Implementation Exists**: Claimed files/code actually exist, no placeholders or TODOs
 - **Tests Pass**: All affected pytest suites pass
 - **Functionality Works**: Happy path, error cases, and edge cases work correctly
-- **Quality Standards**: ruff is clean, mypy issues are surfaced (advisory in Phase 1), code follows conventions
+- **Quality Standards**: Ruff and strict mypy are clean, aggregate runtime coverage is at least 90%, and code follows conventions
 - **CSV Output Schema**: When CSV-producing code is touched, run the screener pipeline on fixture data and inspect column names + dtypes
 - **No Regressions**: Existing functionality still works, no new issues introduced
 
@@ -98,8 +98,8 @@ Each role has a corresponding role file that defines its responsibilities and ho
 | E2E tests | pytest with fixture data | required for full-pipeline changes |
 | Lint | ruff | gate |
 | Format | ruff format --check | gate |
-| Types | mypy | **advisory only — Phase 4 promotes to gate** |
-| Coverage | pytest-cov | **deferred (Phase 3, target 90%)** |
+| Types | mypy | gate |
+| Coverage | pytest-cov | gate — at least 90% aggregate runtime coverage |
 | Dependency audit | pip-audit | advisory |
 
 **VERIFIER Output Format:**
@@ -116,8 +116,8 @@ Each role has a corresponding role file that defines its responsibilities and ho
 | Unit (pytest) | OK/FAIL | X passed, Y failed |
 | E2E (pytest) | OK/FAIL | X passed, Y failed |
 | Lint (ruff) | OK/FAIL | X errors |
-| Types (mypy) | advisory | X issues (non-blocking in Phase 1) |
-| Coverage | deferred | Phase 3 |
+| Types (mypy) | OK/FAIL | zero errors required |
+| Coverage | OK/FAIL | measured aggregate percentage; at least 90% required |
 
 # Issues Found (if any)
 | Severity | Description | Location |
@@ -136,7 +136,7 @@ HANDOFF_TO: <BACKEND | FRONTEND | REVIEWER | HUMAN>
 - **Maintainability**: Low complexity, no duplication, good cohesion, type hints where load-bearing
 - **Security**: Input validation, no secrets exposed, no CSV injection (`=`/`+`/`-`/`@` prefixes), cfscrape User-Agent leak check, no hardcoded API keys
 - **Performance**: No obvious bottlenecks in critical paths (sequential page fetch latency, pandas chained ops)
-- **Tests**: Adequate coverage (target 90%, deferred to Phase 3), clear test names
+- **Tests**: Meaningful behavior coverage with at least 90% aggregate runtime coverage, clear test names
 - **Documentation**: Updates to ARCHITECTURE.md, CONTRACTS.md, TESTING.md, CLAUDE.md if needed
 
 **REVIEWER Output Format:**

@@ -17,18 +17,20 @@
  *   other → non-blocking error (stderr shown in verbose mode)
  */
 
-const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const {
   PROJECT_ROOT,
   readStdin,
   respondOk,
+  respondBlock,
   trackEdit,
   detectService,
   isSecurityFile,
   getDocUpdateNeeded,
-  NON_TESTABLE_EXTENSIONS
+  NON_TESTABLE_EXTENSIONS,
+  runCommand,
+  formatCommandFailure
 } = require('./utils');
 
 // ──────────────────────────────────────────────
@@ -102,38 +104,40 @@ function runSecurityChecks(filePath) {
 }
 
 // ──────────────────────────────────────────────
-// Lint fix (ruff + mypy for Python files)
+// Lint fix (Ruff + mypy for Python files)
 // ──────────────────────────────────────────────
 
 function runLintFix(filePath) {
-  try {
-    const ext = path.extname(filePath).toLowerCase();
-
-    // Python files: ruff check --fix, ruff format, mypy (advisory in Phase 1)
-    if (ext === '.py') {
-      try {
-        execSync(`ruff check --fix "${filePath}"`, { stdio: 'pipe', timeout: 30000, cwd: PROJECT_ROOT });
-      } catch {
-        // swallow advisory output — ruff exits non-zero if findings remain after fix
-      }
-      try {
-        execSync(`ruff format "${filePath}"`, { stdio: 'pipe', timeout: 15000, cwd: PROJECT_ROOT });
-      } catch {
-        // swallow advisory output — formatting failure is rare; don't block
-      }
-      try {
-        execSync(`mypy "${filePath}"`, { stdio: 'pipe', timeout: 30000, cwd: PROJECT_ROOT });
-      } catch {
-        // swallow advisory output — mypy errors are advisory in Phase 1
-      }
-      return { success: true };
-    }
-
-    // Non-Python files: skip lint fix
-    return { success: true };
-  } catch (e) {
-    return { success: false, error: (e.message || '').substring(0, 200) };
+  if (path.extname(filePath).toLowerCase() !== '.py') {
+    return [];
   }
+
+  // Preserve the existing safe auto-fix/format behavior, then verify the
+  // saved file with non-mutating required checks.
+  runCommand('Ruff auto-fix', 'ruff', ['check', '--fix', filePath], {
+    timeout: 30000,
+    cwd: PROJECT_ROOT,
+  });
+  runCommand('Ruff format', 'ruff', ['format', filePath], {
+    timeout: 15000,
+    cwd: PROJECT_ROOT,
+  });
+
+  const requiredChecks = [
+    runCommand('Ruff final check', 'ruff', ['check', filePath], {
+      timeout: 30000,
+      cwd: PROJECT_ROOT,
+    }),
+    runCommand('Ruff final format check', 'ruff', ['format', '--check', filePath], {
+      timeout: 15000,
+      cwd: PROJECT_ROOT,
+    }),
+    runCommand('Strict mypy', 'mypy', [filePath], {
+      timeout: 30000,
+      cwd: PROJECT_ROOT,
+    }),
+  ];
+  return requiredChecks.filter(result => !result.success);
 }
 
 // ──────────────────────────────────────────────
@@ -180,7 +184,14 @@ async function main() {
 
     // 3. Lint auto-fix: ruff + mypy for Python files
     if (['.py'].includes(ext)) {
-      runLintFix(filePath);
+      const failures = runLintFix(filePath);
+      if (failures.length > 0) {
+        const details = failures.map(formatCommandFailure).join('\n\n');
+        respondBlock(
+          `REQUIRED ACTION: the saved edit remains and must be repaired.\n\n${details}\n`
+        );
+        return;
+      }
     }
 
     // 4. Documentation update reminder
@@ -204,9 +215,10 @@ async function main() {
     respondOk(response);
 
   } catch (error) {
-    process.stderr.write(`post-edit hook error: ${error.message}\n`);
-    process.exit(1);
+    respondBlock(`post-edit hook infrastructure failure: ${error.message}\n`);
   }
 }
 
-main();
+main().catch((error) => {
+  respondBlock(`post-edit hook infrastructure failure: ${error.message}\n`);
+});
