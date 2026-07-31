@@ -2,16 +2,13 @@
 /**
  * Stop hook — repo-level quality gates when Claude finishes responding.
  *
- * Phase 1 contract:
+ * Quality-gate contract:
  *  1. Lint (ruff check) — issues channel (blocking)
  *  2. Format (ruff format --check) — issues channel (blocking)
- *  3. Type check (mypy) — warnings channel (advisory; Phase 4 flips to issues)
- *  4. Tests (pytest) — issues channel (blocking)
- *  5. Coverage — STUBBED, Phase 3 deferred (no threshold yet)
- *  6. Dependency audit (pip-audit) — graceful skip if not installed
- *  7. Documentation sync reminder
- *
- * Per spec OQ7: mypy stays in `warnings` until Phase 4. Do not move it.
+ *  3. Type check (mypy) — issues channel (blocking)
+ *  4. Tests + aggregate coverage — issues channel (blocking at 90%)
+ *  5. Dependency audit (pip-audit) — advisory
+ *  6. Documentation sync reminder
  *
  * IMPORTANT: Must check `stop_hook_active` to prevent infinite loops.
  * When Claude is already responding to a Stop hook block, this field is true.
@@ -27,10 +24,13 @@ const {
   PROJECT_ROOT,
   readStdin,
   respondOk,
+  respondBlock,
   loadSession,
   clearSession,
   detectService,
-  expandWithDependents
+  expandWithDependents,
+  runCommand,
+  formatCommandFailure
 } = require('./utils');
 
 // ──────────────────────────────────────────────
@@ -38,67 +38,10 @@ const {
 // ──────────────────────────────────────────────
 
 const CONFIG = {
-  runQualityChecks: process.env.CLAUDE_HOOK_QUALITY_CHECKS !== 'false',
-  runCoverageCheck: process.env.CLAUDE_HOOK_COVERAGE_CHECK !== 'false',
   runDependencyAudit: process.env.CLAUDE_HOOK_DEPENDENCY_AUDIT !== 'false',
   qualityTimeout: parseInt(process.env.CLAUDE_HOOK_QUALITY_TIMEOUT) || 300000,
   auditTimeout: parseInt(process.env.CLAUDE_HOOK_AUDIT_TIMEOUT) || 60000,
 };
-
-// ──────────────────────────────────────────────
-// Command runner
-// ──────────────────────────────────────────────
-
-/**
- * Run a shell command safely, handling paths with spaces on Windows/Git Bash.
- *
- * @param {string} command  Shell command to execute
- * @param {object} [opts]   { timeout, cwd }
- */
-function runCommand(command, opts = {}) {
-  const fs = require('fs');
-  const timeout = opts.timeout || 300000;
-  const effectiveCwd = opts.cwd || PROJECT_ROOT;
-
-  if (!fs.existsSync(effectiveCwd)) {
-    return {
-      success: false,
-      error: `Working directory does not exist: ${effectiveCwd}`,
-      output: ''
-    };
-  }
-
-  try {
-    const output = execSync(command, {
-      cwd: effectiveCwd,
-      stdio: 'pipe',
-      timeout,
-      encoding: 'utf8',
-      windowsHide: true,
-      // Explicitly use cmd.exe on Windows to avoid Git Bash path splitting
-      // issues when the cwd contains spaces (e.g., "Yonatan Levin")
-      shell: process.platform === 'win32' ? process.env.COMSPEC || 'cmd.exe' : true
-    });
-    return { success: true, output: (output || '').substring(0, 500) };
-  } catch (e) {
-    return {
-      success: false,
-      error: (e.message || '').substring(0, 300),
-      output: ((e.stdout || '') + (e.stderr || '')).substring(0, 500)
-    };
-  }
-}
-
-// ──────────────────────────────────────────────
-// Coverage — Phase 3 deferred
-// ──────────────────────────────────────────────
-
-function runCoverageCheck() {
-  return {
-    skipped: true,
-    reason: 'Phase 3 deferred — no coverage threshold yet',
-  };
-}
 
 // ──────────────────────────────────────────────
 // Dependency audit (pip-audit)
@@ -139,7 +82,9 @@ function runDependencyAudit() {
 function getGitDiffAffectedServices() {
   try {
     const result = runCommand(
-      'git diff --name-only HEAD || git diff --name-only',
+      'Git diff detection',
+      'git',
+      ['diff', '--name-only', 'HEAD'],
       { timeout: 30000 }
     );
     if (!result.success || !result.output) return [];
@@ -249,49 +194,42 @@ async function main() {
     }
 
     // ── Run repo-level quality gates ──
-    const issues = [];
+    const failures = [];
     const warnings = [];
     const skipped = [];
 
     const qualityChecks = [
       {
         name: 'Lint (ruff)',
-        cmd: 'ruff check .',
-        channel: 'issues', // ruff failures block
+        command: 'ruff',
+        args: ['check', '.'],
       },
       {
         name: 'Format (ruff format --check)',
-        cmd: 'ruff format --check .',
-        channel: 'issues',
+        command: 'ruff',
+        args: ['format', '--check', '.'],
       },
       {
-        name: 'Type check (mypy)',
-        cmd: 'mypy fincli core config logger',
-        channel: 'warnings', // Phase 1: advisory only. Phase 4 flips to 'issues'.
+        name: 'Strict mypy',
+        command: 'mypy',
+        args: [],
       },
       {
-        name: 'Tests (pytest)',
-        cmd: 'pytest tests/',
-        channel: 'issues',
+        name: 'Tests and aggregate coverage',
+        command: 'pytest',
+        args: ['tests/', '--cov', '--cov-report=term-missing'],
       },
     ];
 
-    if (CONFIG.runQualityChecks) {
-      for (const check of qualityChecks) {
-        const result = runCommand(check.cmd, { timeout: CONFIG.qualityTimeout });
-        if (!result.success) {
-          const target = check.channel === 'issues' ? issues : warnings;
-          target.push({ name: check.name, output: result.output || result.error || '' });
-        }
-      }
-    }
-
-    // Coverage — Phase 3 deferred (stubbed)
-    let coverageResult = null;
-    if (CONFIG.runCoverageCheck) {
-      coverageResult = runCoverageCheck();
-      if (coverageResult.skipped) {
-        skipped.push({ name: 'Coverage', reason: coverageResult.reason });
+    for (const check of qualityChecks) {
+      const result = runCommand(
+        check.name,
+        check.command,
+        check.args,
+        { timeout: CONFIG.qualityTimeout }
+      );
+      if (!result.success) {
+        failures.push(result);
       }
     }
 
@@ -315,22 +253,21 @@ async function main() {
       d === 'contracts' ? 'CONTRACTS.md' : 'ARCHITECTURE.md'
     );
 
-    const allPassed = issues.length === 0;
-
     // ── Skill reminders (docs-update, github-tracking) ──
     const skillReminders = buildSkillReminders(session, editedFiles, affectedServices);
 
     // ── Normal completion ──
     clearSession();
 
+    if (failures.length > 0) {
+      const failureMessage = failures.map(formatCommandFailure).join('\n\n');
+      respondBlock(`Required quality gates failed:\n\n${failureMessage}\n`);
+      return;
+    }
+
     let message = '';
     const servicesLabel = affectedServices.length > 0 ? affectedServices.join(', ') : 'repo';
-    if (allPassed) {
-      message = `All quality gates passed for: ${servicesLabel}`;
-    } else {
-      const issueLines = issues.map(i => `  - ${i.name}`).join('\n');
-      message = `Quality gates completed with issues:\n${issueLines}`;
-    }
+    message = `All required quality gates passed for: ${servicesLabel}`;
     if (warnings.length > 0) {
       const warnLines = warnings.map(w => `  - ${w.name}`).join('\n');
       message += `\nWarnings (advisory):\n${warnLines}`;
@@ -350,17 +287,14 @@ async function main() {
     respondOk({ systemMessage: message });
 
   } catch (error) {
-    process.stderr.write(`on-stop hook error: ${error.message}\n`);
     clearSession();
-    process.exit(1);
+    respondBlock(`on-stop hook infrastructure failure: ${error.message}\n`);
   }
 }
 
 
-// Safety net: if anything escapes the try/catch in main(), exit cleanly
-// rather than crashing with a confusing bash error. The stop hook is a
-// quality gate, not a security gate — better to skip checks than block.
-main().catch(() => {
+// A hook infrastructure failure must not produce a false-green Stop result.
+main().catch((error) => {
   try { clearSession(); } catch { /* ignore */ }
-  respondOk({});
+  respondBlock(`on-stop hook infrastructure failure: ${error.message}\n`);
 });
