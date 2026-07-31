@@ -34,7 +34,7 @@ class Config(SystemSettings):
     # Application Settings #
     ########################
     use_history: bool = False
-    filters: tuple = ()
+    filters: tuple[tuple[str, str], ...] = ()
     scrape_link: str = ""
     history_dir: Path = Field(
         default_factory=lambda: Path(user_data_dir("fincli", appauthor=False)) / "local_history"

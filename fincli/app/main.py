@@ -59,12 +59,12 @@ JSON_SUMMARY_SCHEMA_VERSION = 1
 OUTPUT_PATH_LINE_PREFIX = "OUTPUT_PATH="
 
 
-def fetch_urls(quarry, page_count):
+def fetch_urls(quarry: str, page_count: int) -> list[bytes]:
     urls = [f"{quarry}&r={abs(20 * (i) + 1)}" for i in range(page_count + 1)]
     return [fetch_page_sync(url) for url in urls]
 
 
-def aggregate_rows(pages):
+def aggregate_rows(pages: list[bytes]) -> list[list[list[str]]]:
     rows = []
     for page_content in pages:
         tab = StockTableScreeningContent(page_content)
@@ -83,7 +83,10 @@ _FINAL_COLUMNS: tuple[str, ...] = tuple(
 ) + ("Symbol",)
 
 
-def build_data_frame(data_rows, stream_to_stdout: bool = False):
+def build_data_frame(
+    data_rows: list[list[list[str]]],
+    stream_to_stdout: bool = False,
+) -> pd.DataFrame:
     """Build the screener DataFrame from raw parsed rows.
 
     Args:
@@ -127,7 +130,7 @@ def build_data_frame(data_rows, stream_to_stdout: bool = False):
     return df
 
 
-def _build_empty_data_frame(stream_to_stdout: bool = False):
+def _build_empty_data_frame(stream_to_stdout: bool = False) -> pd.DataFrame:
     """Construct a header-only DataFrame for the zero-row success path.
 
     Spec §5.4 — every successful run produces a discoverable output, including
@@ -321,7 +324,7 @@ def _emit_run_tail(
 
 def _build_summary(
     *,
-    config_filters: tuple,
+    config_filters: tuple[tuple[str, str], ...],
     scrape_link: str,
     output_label: str,
     row_count: int,

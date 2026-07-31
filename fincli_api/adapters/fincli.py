@@ -30,12 +30,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-# pandas ships no inline type stubs and there is no project-wide mypy
-# override for it; the legacy fincli modules already eat the same
-# ``import-untyped`` error at baseline. Silence it locally so the new
-# adapter file passes ``mypy fincli_api`` cleanly without touching the
-# shared pyproject overrides (out of scope for this task).
-import pandas as pd  # type: ignore[import-untyped]
+import pandas as pd
 
 from fincli.app.main import screen_to_dataframe
 from fincli.resource.params.const import BASE_URL

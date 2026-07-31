@@ -5,7 +5,7 @@ from fincli.stock_screening.parsers.stock_table import StockTableScreenerParser
 
 
 class StockTableScreeningContent:
-    def __init__(self, html_content):
+    def __init__(self, html_content: str | bytes) -> None:
         self.soup = BeautifulSoup(html_content, "html.parser")
 
     @property

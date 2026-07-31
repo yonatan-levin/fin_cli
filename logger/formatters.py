@@ -32,5 +32,5 @@ def remove_color_codes(s: str) -> str:
 
 
 class JsonFormatter(logging.Formatter):
-    def format(self, record: logging.LogRecord):
-        return record.msg
+    def format(self, record: logging.LogRecord) -> str:
+        return str(record.msg)

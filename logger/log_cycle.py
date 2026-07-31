@@ -18,7 +18,7 @@ class LogCycleHandler:
     A class for logging cycle data.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.log_count_within_cycle = 0
 
     def create_outer_directory(self, ai_name: str, created_at: str) -> Path:
