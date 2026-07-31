@@ -5,7 +5,7 @@
 # History Path via Config — Refactor Spec (Stub)
 
 **Status:** STUB — design deferred until the user is ready to action this work.
-**Parent:** `docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md` (v1.1, §6.6)
+**Parent:** `docs/superpowers/specs/archive/2026-05-04-fincli-only-refactor-design.md` (v1.1, §6.6)
 **Date opened:** 2026-05-04
 
 ---
@@ -39,4 +39,4 @@ Move the `--history` filter-cache path out of `core/configuration/configurator.p
 
 ## Next step
 
-When the user is ready to action this work, expand this stub into a full design spec following the structure of `docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md` (Summary / Requirements / Architecture / Tasks / Verification / Acceptance). Coordinate with `docs/refactoring/archive/cli-entry-point-spec.md` (shipped 2026-05-06) if both ship close together — the two share `pyproject.toml` and `Config` surfaces.
+This work followed the structure of `docs/superpowers/specs/archive/2026-05-04-fincli-only-refactor-design.md` (Summary / Requirements / Architecture / Tasks / Verification / Acceptance). It shipped with `docs/refactoring/archive/cli-entry-point-spec.md`; the two share `pyproject.toml` and `Config` surfaces.

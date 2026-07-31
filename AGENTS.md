@@ -43,17 +43,21 @@ At the start of any work session, read these files in order. Stop at the first t
 
 ### Tier 4 — Task-Specific Deep Dive (Read Only When Relevant)
 
+> Each row is a one-line pointer, not a status board. Phase history lives in
+> `docs/THESIS.md`; shipped-stream history is indexed by `docs/CHANGELOG.md`.
+
 | # | File | Purpose |
 |---|------|---------|
 | 13 | `docs/MODULE_REFERENCE.md` | Full module reference: fincli, core, config, logger internals |
+| 13a | `docs/CHANGELOG.md` | Thin shipped-stream index pointing to authoritative specs and closeouts |
 | 14 | `CONTRACTS.md` | Data contracts, function signatures, input/output schemas |
 | 15 | `ARCHITECTURE.md` | System architecture, data flow diagrams, component relationships |
 | 16 | `TESTING.md` | Testing strategy, test layout, how to run, coverage targets |
 | 17 | `TOOLS_REFERENCE.md` | Tool reference: Click CLI patterns, pandas idioms, cfscrape usage |
-| 18 | `docs/superpowers/specs/` | Per-feature design specs (chronological by date) |
-| 19 | `docs/superpowers/plans/` | Per-feature implementation plans (chronological by date) |
+| 18 | `docs/superpowers/specs/` | Historical per-feature design specs; terminal work lives in `archive/` |
+| 19 | `docs/superpowers/plans/` | Historical per-feature implementation plans; terminal work lives in `archive/` |
 | 20 | `docs/bugs/` | Bug tracker and known-issue registry |
-| 21 | `docs/refactoring/` | Refactoring specs and upgrade design docs |
+| 21 | `docs/refactoring/` | Cross-cutting specs (`spec/`), plans (`implementations/`), and terminal work (`archive/`) |
 | 22 | `docs/reviewer/` | Review follow-up tracker |
 | 23 | `docs/features/` | Feature-restoration / feature-addition specs; shipped specs move to `archive/` |
 | 24 | `docs/pendingwork/` | Session handoff docs (dated); historical handoffs move to `archive/` |
@@ -61,13 +65,6 @@ At the start of any work session, read these files in order. Stop at the first t
 | 26 | `core/` | Base configuration and JSON converter utilities |
 | 27 | `config/` | Pydantic-based configuration with history support |
 | 28 | `logger/` | Singleton logger (console typing effect, file, JSON handlers) |
-
-> **API test paths** (subset of `TESTING.md` for quick orientation):
-> - `tests/unit/api/` — FastAPI `TestClient` + mocked adapter (~19 tests, <500ms)
-> - `tests/integration/api/` — `TestClient` + real fincli + mocked Finviz HTML (~11 tests, <3s; conftest patches `fincli.app.main.fetch_page_sync` per the local-binding rule)
-> - `tests/e2e/api/` — `TestClient` + live Finviz HTTP, opt-in via `pytest -m live` (~3 tests, ~3s)
->
-> Full testing strategy: see `TESTING.md` (API tests section).
 
 ---
 
@@ -77,6 +74,7 @@ At the start of any work session, read these files in order. Stop at the first t
 |------|-------|-----------|
 | **Identity** | `CLAUDE.md` | Rarely changes; updated when project scope shifts |
 | **Direction** | `docs/THESIS.md` | Changes per major phase or pivot |
+| **Shipped index** | `docs/CHANGELOG.md` | One line per shipped stream; links outward, never retells |
 | **Durable memory** | `memory/MEMORY.md` + linked files | Curated weekly; keep concise (~150 lines for index) |
 | **Volatile preferences** | `docs/FEEDBACK-LOG.md` | Append-only; pruned quarterly |
 | **Daily notes** | `memory/daily/YYYY-MM-DD.md` | Append during session; promoted to MEMORY weekly |
@@ -107,6 +105,10 @@ At the start of any work session, read these files in order. Stop at the first t
 - Scope addition or removal
 - Roadmap adjustment
 
+### Write to `docs/CHANGELOG.md` (shipped index)
+- A stream reaches HUMAN-accepted shipped/merged status
+- Add one newest-first line pointing to its spec or closeout; do not repeat the narrative
+
 ---
 
 ## Curation Rhythm
@@ -136,6 +138,7 @@ This keeps sub-agent context tight and avoids compaction pressure.
 
 - **Not a tutorial** — see `docs/MODULE_REFERENCE.md` for that
 - **Not a personality/tone guide** — fin_cli has no agent personality; `CLAUDE.md` defines project conventions
+- **Not a project-history log** — phase status belongs in `docs/THESIS.md`, detailed evidence in closeouts, and shipped one-liners in `docs/CHANGELOG.md`
 - **Not a replacement for `agents/rules/`** — those remain the authoritative mode/role rules; this file just tells you when to read them
 
 ---
@@ -163,7 +166,9 @@ Cursor auto-discovers rules from `.cursor/rules/` only. Since the canonical loca
 
 ## Change Log
 
+This table records changes to the loading contract itself, not product phases.
+
 | Date | Change |
 |------|--------|
-| 2026-05-04 | Single-mode reduction. Tier 4 module list trimmed to `fincli`, `core`, `config`, `logger` (the `fundainsight/` row was removed alongside the deletion of that package; see `docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md`). `TOOLS_REFERENCE.md` retargeted from `yahooquery` examples to `cfscrape` examples. `docs/MODULE_REFERENCE.md` description updated to single-mode. |
+| 2026-05-04 | Single-mode reduction. Tier 4 module list trimmed to `fincli`, `core`, `config`, `logger` (the `fundainsight/` row was removed alongside the deletion of that package; see `docs/superpowers/specs/archive/2026-05-04-fincli-only-refactor-design.md`). `TOOLS_REFERENCE.md` retargeted from `yahooquery` examples to `cfscrape` examples. `docs/MODULE_REFERENCE.md` description updated to single-mode. |
 | 2026-05-02 | Initial file. Adapted from upstream reference project. Retargeted Go→Python, REST→CLI. Tier 3 references `.md` (not `.mdc`) extensions matching fin_cli conventions. Tier 4 retargeted from upstream REST/API docs to fin_cli CLI module reference, CONTRACTS, ARCHITECTURE, TESTING, TOOLS_REFERENCE, and source packages. 8 roles catalogued (FRONTEND/UX_UI hedged for future UI surface). |

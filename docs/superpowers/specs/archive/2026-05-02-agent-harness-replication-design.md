@@ -1,10 +1,16 @@
 # Algo Beta Agent Harness Replication — Design Specification
 
-> **Note (2026-05-04):** Phase-2 scope in this spec referenced `fundainsight`. That module has since been removed. See `docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md`; future Phase-2 work targets `fincli`'s test suite only.
+> **ARCHIVED — SHIPPED:** The harness was implemented and its remaining
+> coverage/type-gate follow-through was completed by
+> `docs/refactoring/spec/harness-quality-gates-burndown-spec.md`. This document
+> is retained as historical design input; its phase status and module inventory
+> are not current policy.
+
+> **Note (2026-05-04):** Phase-2 scope in this spec referenced `fundainsight`. That module has since been removed. See `docs/superpowers/specs/archive/2026-05-04-fincli-only-refactor-design.md`; future work targets `fincli` and `fincli_api`.
 
 **Version:** 0.1 DRAFT
 **Date:** 2026-05-02
-**Status:** DESIGN
+**Status:** ARCHIVED — SHIPPED
 **Author:** yonatan
 **Mode:** REFACTOR (cross-cutting tooling/process change; zero source-code changes)
 **Builds on:** Midas DCF Valuation API agent harness (`C:\Users\Yonatan Levin\Documents\Programming\Projects\FinTech\Strade\midas\`)

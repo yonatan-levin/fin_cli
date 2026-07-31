@@ -35,59 +35,33 @@ Quality bar: personal use, but results must be trustworthy. A row that silently 
 
 ## Current Phase
 
-**MVP CLI working. Pipeline mode shipped (2026-05-16). Filter inventory dump + INTEGRATION.md shipped on top (2026-05-21). HTTP API mode shipped (2026-05-24). Agent harness in flight (Phase 1). 275+ tests.**
+**The CLI and HTTP API are operational, and the agent-harness rollout is
+complete through its quality-gate phases.**
 
-The screener (`fincli` / `python -m fincli`) is functional and has been used in production for real investment research. It is now also usable as a single-shot building block in a downstream automation pipeline (pipeline-mode-spec, archived at `docs/features/archive/pipeline-mode-spec.md`): structured filter input (`--filter`/`--filters-json`/`--filters-file`), deterministic output destination (`--output PATH`/`--output -`/`FINCLI_OUTPUT_DIR`), stream discipline (`--quiet`/`--json-summary` + the `OUTPUT_PATH=` discovery line), and differentiated exit codes (0/1/2/3/4) all landed in the umbrella feature commits running from `f775b7e` through the Task-6 close on 2026-05-16. The follow-on list-filters feature (archived at `docs/features/archive/list-filters-spec.md`) added `fincli --list-filters --json` for non-Python integrators to discover the Finviz filter vocabulary as machine-readable JSON, plus a new top-level `INTEGRATION.md` documenting the language-agnostic subprocess pattern — closing the polyglot-discoverability gap that pipeline mode intentionally deferred.
+The screener supports interactive and structured pipeline use, and the HTTP API
+exposes the same orchestrator and filter inventory over typed JSON. The default
+test suite covers unit, integration, and opt-in live boundaries. The harness now
+blocks completion on Ruff, strict mypy across both entry points, the default
+pytest suite, and at least 90% aggregate runtime coverage.
 
-The HTTP API mode (`fincli_api/`, shipped 2026-05-24) goes one step further: it exposes the same orchestrator over REST+JSON so polyglot consumers can integrate without the subprocess pattern at all. `POST /screens` accepts the same `{filters: {...}}` shape pipeline mode validates, returns typed JSON rows, and maps the CLI's exit-code classifier (0/1/2/3/4) onto HTTP status codes (200/500/422/502/500-with-zero-rows). `GET /filters` exposes the same inventory `--list-filters --json` emits. A committed OpenAPI 3.1.0 snapshot at `docs/api/openapi.{yaml,json}` lets downstream Go/TS/Rust callers generate typed clients with `oapi-codegen`, `openapi-generator`, etc.
-
-The harness rollout (Phase 1) continues: scaffolding tooling, documentation, and agent-workflow infrastructure to make the codebase safe for AI-assisted development.
-
-The single-mode reduction (`docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md`) removed the previously-bundled `fundainsight/` fundamental-analysis package and several abandoned scaffolds, retargeting the project to a single CLI: the Finviz screener. The companion entry-point follow-up shipped on 2026-05-06 — see `docs/refactoring/archive/cli-entry-point-spec.md` and `docs/FEEDBACK-LOG.md`.
-
-The Phase-2 test suite seed is now in place — unit tests under `tests/unit/{app,cli,configuration,converters,logger,resource,utils}/`, integration tests under `tests/integration/` (CliRunner-based, with mocked `fetch_page_sync` and canned HTML fixtures). Phase 3 (coverage gate at 90%) and Phase 4 (mypy promoted to a hard gate) remain deferred per their original trigger conditions.
+Detailed shipped-stream history is indexed in `docs/CHANGELOG.md`.
 
 ---
 
 ## Roadmap
 
-### Phase 1 — Agent harness + tooling (current)
+| Phase | Status | Outcome |
+|---|---|---|
+| Phase 1 — harness and tooling | **COMPLETE** | Documentation spine, roles/rules, hooks, Ruff, strict-mypy configuration, and pytest tooling installed. |
+| Phase 2 — behavior test suite | **COMPLETE** | Unit/integration/API suites and recorded Finviz fixtures cover both entry points. |
+| Phase 3 — coverage gate | **COMPLETE** | Stop hook enforces at least 90% aggregate coverage across the shipped runtime surface. |
+| Phase 4 — strict-mypy gate | **COMPLETE** | Strict mypy is zero-error and blocking for `fincli`, `fincli_api`, `core`, `config`, and `logger`. |
+| Phase 5 — HTTP API | **COMPLETE** | FastAPI surface and committed OpenAPI 3.1.0 contract share the CLI orchestrator. |
 
-Tracked in `docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md`.
-
-- Bootstrap Python tooling: `ruff` (lint/format), `mypy strict` (advisory), `pytest` config, `pip-audit` hook.
-- Rewrite top-level docs: `ARCHITECTURE.md`, `CLAUDE.md`, `CONTRACTS.md`, `README.md`, `TESTING.md`, plus new `TOOLS_REFERENCE.md` and `AGENTS.md`.
-- Scaffold `agents/` directory: shared workflow rules + per-role context files.
-- Scaffold `docs/` tree: this file, `FEEDBACK-LOG.md`, `MODULE_REFERENCE.md`, bug/refactoring/reviewer subfolders.
-- Install Claude Code hooks: `SessionStart` (load-rules), `PostToolUse:Edit|Write` (per-edit lint + mypy + secret scan), `Stop` (repo-wide ruff + mypy + pytest).
-- `mypy strict` runs in **advisory** mode throughout Phase 1 — errors are visible but do not block commits. The codebase has almost no type hints today; the count is expected to be high.
-
-**Completion trigger:** `AGENTS.md` merged to `master` with all hooks green.
-
-### Phase 2 — Test suite for the screener pipeline
-
-- Introduce real `pytest` tests for `fincli/stock_screening/` (the BeautifulSoup parser), `fincli/utils/quary_builders.py` (URL construction), `fincli/app/main.py` (`convert_market_cap_to_numeric`, the screener orchestrator), and `core/configuration/` (config_base, configurator, json converter).
-- Add an HTML fixture for the screener parser end-to-end test.
-- Add type hints incrementally to modules being tested — driving the mypy advisory count down.
-- Move the hard-coded history path string out of `core/configuration/configurator.py` into a `Config` field — design tracked at `docs/refactoring/history-path-config-spec.md`.
-
-**Completion trigger:** `pytest tests/` green with meaningful coverage across the screener pipeline and core.
-
-### Phase 3 — Coverage gate at 90%
-
-- Enable the coverage gate in `.claude/hooks/on-stop.js` at **90%**.
-- Update `TESTING.md`, `agents/roles/verifier.md`, and `agents/rules/_shared-workflow.md` to document the enforced threshold.
-- Coverage gate applies to `fincli/`, `core/`, and `config/` at minimum.
-
-**Completion trigger:** `pytest --cov` reports >= 90% on the gated modules; `on-stop.js` fails the session on regression.
-
-### Phase 4 — mypy hard gate
-
-- Promote mypy from the `warnings` channel to the `issues` channel in `on-stop.js` (blocking) and from advisory to blocking in `post-edit.js`.
-- Trigger: `mypy fincli core config logger` reports zero errors.
-- Optionally enable ruff `D` rules (Google docstring enforcement) at the same time.
-
-**Completion trigger:** Zero mypy strict errors across the four packages; hook wiring updated.
+The governing closeout for Phases 3–4 is
+`docs/refactoring/spec/harness-quality-gates-burndown-spec.md`. Ruff
+pydocstyle (`D`) enforcement was explicitly not folded into Phase 4; it would
+require its own scoped decision.
 
 ### Beyond Phase 4
 
@@ -98,7 +72,7 @@ Tracked in `docs/superpowers/specs/2026-05-02-agent-harness-replication-design.m
 
 ## Historical scope (no longer in this codebase)
 
-A previous version of fin_cli bundled a second mode — `fundainsight` — that ran the screener, then enriched each ticker with Yahoo Finance balance-sheet data via `yahooquery` and computed price-to-asset / price-to-current-asset ratios. That mode was removed on 2026-05-04 (see `docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md`). The git history retains it; anyone who wants to revive the analysis pipeline should fork from the pre-refactor SHA.
+A previous version of fin_cli bundled a second mode — `fundainsight` — that ran the screener, then enriched each ticker with Yahoo Finance balance-sheet data via `yahooquery` and computed price-to-asset / price-to-current-asset ratios. That mode was removed on 2026-05-04 (see `docs/superpowers/specs/archive/2026-05-04-fincli-only-refactor-design.md`). The git history retains it; anyone who wants to revive the analysis pipeline should fork from the pre-refactor SHA.
 
 ---
 
@@ -154,5 +128,5 @@ It is **not**:
 | 2026-05-24 | **fincli HTTP API mode shipped.** Added `fincli_api/` sibling package exposing the screener over REST+JSON. 9 commits per `docs/features/archive/fincli-api-plan.md`: skeleton + Pydantic models (3-way parallel) + adapter boundary + routes + classifier-driven exception handler (4-way parallel + fix-loop) + 30-test pyramid (unit + integration + 3 live Finviz smoke tests) + committed OpenAPI 3.1.0 snapshot at `docs/api/openapi.{yaml,json}` for polyglot codegen (oapi-codegen, openapi-generator, etc.). The umbrella validates the "fincli is consumable by a downstream pipeline" claim that pipeline-mode + list-filters established — Go/TS/Rust callers can now hit `POST /screens` with `{filters: {fa_pe: "u5", sec: "energy"}}` and receive typed JSON without touching Python. Design spec: `docs/superpowers/specs/archive/2026-05-22-fincli-api-design.md`. Implementation plan: `docs/features/archive/fincli-api-plan.md`. |
 | 2026-05-21 | **Filter inventory dump (`--list-filters --json`) shipped + INTEGRATION.md at root for non-Python integrators.** Closes the polyglot-discoverability gap deferred by pipeline mode (shipped 2026-05-16). Adds `fincli --list-filters --json` — emits a single-line JSON inventory of every Finviz filter (66 keys / ~46 KB) with the `{schema_version, keys, filters: {key: {label, values}}}` shape (CONTRACTS §5.6); the `keys` array is the canonical iteration order for consumers (Go's `encoding/json` randomizes map iteration). Mechanical label derivation in `fincli/resource/params/_label_format.attr_to_label` avoids touching params files' two-element-list contract. New top-level `INTEGRATION.md` covers bootstrap, per-screen call flow, exit-code routing, `OUTPUT_PATH=` recovery, concurrency, and caching for non-Python subprocess consumers. 16 new tests across `tests/unit/resource/params/test_label_format.py`, `tests/unit/app/test_cli_list_filters.py`, and `tests/integration/test_list_filters_output.py`; 0 regressions in the pre-existing 229 cases. Spec moved to `docs/features/archive/list-filters-spec.md` with SHIPPED banner. |
 | 2026-05-16 | **Pipeline mode shipped.** Four pillars + two adjacent fixes landed (`docs/features/archive/pipeline-mode-spec.md`): structured filter input (`--filter`/`--filters-json`/`--filters-file` + strict validator + `filter_history.json` writeback fix), deterministic output destination (`--output PATH`/`--output -` + `FINCLI_OUTPUT_DIR`), stream discipline (`--quiet`/`--json-summary` + `OUTPUT_PATH=` discovery line + logger console-stream reroute), differentiated exit codes (0 SUCCESS / 1 INTERNAL / 2 USAGE / 3 UPSTREAM / 4 DATA). Adjacent fixes: `convert_market_cap_to_numeric` rewritten as a nullable `Float64` parser; `Symbol` declared the canonical machine-readable ticker column with a `--output -` carve-out skipping the Excel `=HYPERLINK(...)` wrap. fincli is now usable as a single-shot building block in downstream automation. |
-| 2026-05-04 | Single-mode reduction. Removed `fundainsight/` and abandoned scaffolds; retargeted Phase 2 scope to the screener pipeline only. Roadmap "Beyond Phase 4" updated to drop fundamental-analysis aspirations and add the CLI entry-point and Config-driven history follow-ups (`docs/refactoring/`). See `docs/superpowers/specs/2026-05-04-fincli-only-refactor-design.md`. |
+| 2026-05-04 | Single-mode reduction. Removed `fundainsight/` and abandoned scaffolds; retargeted Phase 2 scope to the screener pipeline only. Roadmap "Beyond Phase 4" updated to drop fundamental-analysis aspirations and add the CLI entry-point and Config-driven history follow-ups (`docs/refactoring/`). See `docs/superpowers/specs/archive/2026-05-04-fincli-only-refactor-design.md`. |
 | 2026-05-02 | Initial file. Drafted from `CLAUDE.md`, `README.md`, `ARCHITECTURE.md`, and the agent-harness spec. |

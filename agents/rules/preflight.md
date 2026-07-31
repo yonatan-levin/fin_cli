@@ -47,12 +47,12 @@ Determine from context:
 - **Mode**: PLAN_AND_CREATE | EXECUTE | REFACTOR | DEBUG | CODE_REVIEW
 - **Role**: ARCH | BACKEND | FRONTEND | UX_UI | VERIFIER | QA | REVIEWER
 
-### Step 4: Run Local Quality Probes (advisory in Phase 1)
+### Step 4: Run Local Quality Gates
 
 For any source-code change, before writing implementation:
 - [ ] Ran `ruff check <touched module>` — note any pre-existing findings
 - [ ] Ran `ruff format --check <touched module>`
-- [ ] Ran `mypy <touched module>` — **results are advisory in Phase 1**, but capture the baseline
+- [ ] Ran `mypy <touched module>` — zero errors are required
 - [ ] Located the relevant Click command in `fincli/app/cli.py`
 - [ ] Located the relevant Pydantic config class in `config/config.py` or `core/configuration/configurator.py`
 - [ ] Identified affected modules across `fincli/`, `core/`, `config/`, `logger/`
@@ -107,7 +107,7 @@ Check for previous session data:
 ### Local Probes
 - ruff check: {clean | N findings}
 - ruff format --check: {clean | N findings}
-- mypy: {N issues — advisory in Phase 1}
+- mypy: {clean | N blocking issues}
 
 ### Affected Modules
 - {fincli | core | config | logger | scripts | tests}

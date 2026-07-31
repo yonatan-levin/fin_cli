@@ -69,7 +69,7 @@ A single-page reference for every command, skill, MCP tool, and Claude Code hook
 
 | Command | What it does |
 |---|---|
-| `mypy fincli fincli_api core config logger` | Type-check the active modules in strict mode (Phase 1: advisory; Phase 4: blocking). `fincli_api/` is 0 errors today; legacy `fincli/` baseline ~49 errors per CLAUDE.md Phase status. |
+| `mypy` | Blocking strict type-check over the complete shipped scope configured in `pyproject.toml`, including `fincli_api/` and `singleton.py`; zero errors required. |
 | `mypy <file>` | Check one file (used by `post-edit.js`). |
 | `mypy --no-incremental` | Bypass mypy's cache when diagnosing weirdness. |
 

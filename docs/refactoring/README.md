@@ -1,5 +1,13 @@
-# Refactoring Specs
+# Refactoring Work
 
-Cross-cutting refactor specs land here. Naming: `<topic>-spec.md`. Once shipped, move to `archive/`.
+Cross-cutting changes use three lifecycle directories:
 
-This is distinct from `docs/superpowers/specs/` which holds chronological per-feature design specs.
+- `spec/` — approved design and acceptance criteria.
+- `implementations/` — executable implementation plans and validation evidence.
+- `archive/` — shipped or intentionally retired historical material.
+
+Name new specs `<topic>-spec.md` and plans `<topic>-plan.md`. Move terminal work
+to `archive/` only after HUMAN acceptance and integration.
+
+`docs/superpowers/` is retained as a historical feature-design archive; new
+cross-cutting refactors belong here.

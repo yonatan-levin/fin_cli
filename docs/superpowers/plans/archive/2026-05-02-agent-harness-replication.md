@@ -1,5 +1,9 @@
 # Algo Beta Agent Harness Replication — Implementation Plan
 
+> **ARCHIVED — EXECUTED:** The harness and its planned quality-gate
+> follow-through are complete. This plan is historical evidence, not an active
+> checklist.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replicate the full Midas agent harness (AGENTS.md loading contract, `.claude/` hooks, `agents/` roles + rules, `docs/` tree) in algo_beta, retargeted from Go/REST to Python/CLI semantics, with ruff + mypy (strict, advisory) + pytest tooling. Zero source-code changes.
@@ -8,7 +12,7 @@
 
 **Tech Stack:** Python 3.12+, Click CLI, pandas, yahooquery, cfscrape, BeautifulSoup4, Pydantic, colorama. Tooling: ruff (lint+format), mypy (strict, advisory in Phase 1), pytest, pip-audit. Hook scripts: Node.js (the existing midas hook infrastructure).
 
-**Spec reference:** `docs/superpowers/specs/2026-05-02-agent-harness-replication-design.md` (rev 0.2, approved 2026-05-02).
+**Spec reference:** `docs/superpowers/specs/archive/2026-05-02-agent-harness-replication-design.md` (rev 0.2, approved 2026-05-02).
 
 **Source-of-truth Midas project:** `C:\Users\Yonatan Levin\Documents\Programming\Projects\FinTech\Strade\midas\`
 

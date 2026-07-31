@@ -74,7 +74,7 @@ Use pseudocode only when it clarifies a contract or algorithm. Do not write prod
    - Identify unit, domain, and e2e coverage needed (per `TESTING.md`).
    - Specify critical test cases and edge cases (empty Finviz response, Cloudflare 429/503 retries, malformed table cells, NaN handling).
    - Reference the repository's existing coverage threshold.
-   - Coverage gate is **deferred to Phase 3 (target 90%)** — do not invent a 90% target before that phase unless `TESTING.md` already requires it.
+   - Preserve the aggregate runtime coverage gate of at least 90% defined in `TESTING.md`.
 
 7. **Consider Non-Functional Requirements**:
    - **Scalability**: Throughput vs Cloudflare anti-bot pacing; pagination of Finviz results
@@ -280,7 +280,7 @@ ROLE: ARCH
 # Tests
 - High-level testing strategy (unit / domain / e2e per `TESTING.md`).
 - Critical edge cases that MUST have tests (empty Finviz response, Cloudflare 429/503 retries, malformed cells, NaN handling).
-- Coverage gate: **deferred to Phase 3 (target 90%)**. Do not invent a coverage requirement before that phase.
+- Coverage gate: at least 90% aggregate runtime coverage. Require behavior-focused tests rather than coverage padding.
 
 # Implementation Roadmap
 - Suggested order of implementation.
