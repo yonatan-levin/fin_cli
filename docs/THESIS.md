@@ -55,7 +55,7 @@ Detailed shipped-stream history is indexed in `docs/CHANGELOG.md`.
 | Phase 1 — harness and tooling | **COMPLETE** | Documentation spine, roles/rules, hooks, Ruff, strict-mypy configuration, and pytest tooling installed. |
 | Phase 2 — behavior test suite | **COMPLETE** | Unit/integration/API suites and recorded Finviz fixtures cover both entry points. |
 | Phase 3 — coverage gate | **COMPLETE** | Stop hook enforces at least 90% aggregate coverage across the shipped runtime surface. |
-| Phase 4 — strict-mypy gate | **COMPLETE** | Strict mypy is zero-error and blocking for `fincli`, `fincli_api`, `core`, `config`, and `logger`. |
+| Phase 4 — strict-mypy gate | **COMPLETE** | Strict mypy is zero-error and blocking for `fincli`, `fincli_api`, `core`, `config`, `logger`, and `singleton.py`. |
 | Phase 5 — HTTP API | **COMPLETE** | FastAPI surface and committed OpenAPI 3.1.0 contract share the CLI orchestrator. |
 
 The governing closeout for Phases 3–4 is

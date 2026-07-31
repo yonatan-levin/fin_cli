@@ -4,6 +4,7 @@ A thin, newest-first index of shipped streams. Phase status and direction live
 in `docs/THESIS.md`; implementation detail lives in the linked spec or closeout.
 Per-merge history does not belong in `CLAUDE.md`.
 
+- 2026-07-31 · Harness quality gates · promote aggregate coverage (90%) and strict mypy to blocking Stop-hook gates, reach strict-mypy zero with no suppressions, and correct the document-role split · `docs/refactoring/spec/harness-quality-gates-burndown-spec.md`
 - 2026-06-27 · Launcher cleanup · remove broken shell launchers and standardize installed entry points · `docs/FEEDBACK-LOG.md`
 - 2026-05-24 · HTTP API · add the FastAPI surface and committed OpenAPI contract · `docs/superpowers/specs/archive/2026-05-22-fincli-api-design.md`
 - 2026-05-21 · Filter inventory · add `--list-filters --json` and polyglot integration guidance · `docs/features/archive/list-filters-spec.md`
