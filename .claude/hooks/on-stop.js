@@ -10,6 +10,16 @@
  *  5. Dependency audit (pip-audit) — advisory
  *  6. Documentation sync reminder
  *
+ * Hardened (2026-08-02):
+ *  - Gate tools resolve from the gated tree's .venv (falling back to the main
+ *    checkout's venv, then PATH) — hooks inherit a PATH without ruff/mypy/pytest.
+ *  - Gates run once per GIT TREE that received testable edits — a session that
+ *    edited files in a worktree gates that worktree (cwd = tree root), not the
+ *    main checkout.
+ *  - A missing tool is a BLOCKING issue with a fix hint, not a silent skip —
+ *    a gate that cannot run must not report green.
+ *  - pytest "no tests collected" (exit 5) is tolerated as a skip.
+ *
  * IMPORTANT: Must check `stop_hook_active` to prevent infinite loops.
  * When Claude is already responding to a Stop hook block, this field is true.
  *
@@ -18,7 +28,6 @@
  *   2 → Blocks the stop, stderr fed back to Claude
  */
 
-const { execSync } = require('child_process');
 const path = require('path');
 const {
   PROJECT_ROOT,
@@ -29,6 +38,8 @@ const {
   clearSession,
   detectService,
   expandWithDependents,
+  findTreeRoot,
+  isTestable,
   runCommand,
   formatCommandFailure
 } = require('./utils');
@@ -48,24 +59,17 @@ const CONFIG = {
 // ──────────────────────────────────────────────
 
 function runDependencyAudit() {
-  try {
-    execSync('pip-audit -r requirements.txt', {
-      cwd: PROJECT_ROOT,
-      stdio: 'pipe',
-      timeout: CONFIG.auditTimeout,
-      windowsHide: true,
-      shell: process.platform === 'win32' ? process.env.COMSPEC || 'cmd.exe' : true
-    });
-    return { success: true };
-  } catch (e) {
-    if (e.code === 'ENOENT' || /not found|No such file/i.test(e.message)) {
-      return { success: true, note: 'pip-audit not installed, skipping vulnerability audit' };
-    }
-    return {
-      success: false,
-      output: (e.stdout?.toString() || '') + (e.stderr?.toString() || '') || e.message
-    };
+  const result = runCommand(
+    'Dependency audit (pip-audit)',
+    'pip-audit',
+    ['-r', 'requirements.txt'],
+    { timeout: CONFIG.auditTimeout }
+  );
+  if (result.success) return { success: true };
+  if (result.kind === 'unavailable') {
+    return { success: true, note: 'pip-audit not installed, skipping vulnerability audit' };
   }
+  return { success: false, output: result.output };
 }
 
 // ──────────────────────────────────────────────
@@ -140,6 +144,26 @@ function buildSkillReminders(session, editedFiles, affectedServices) {
   }
 
   return { mustRun, optional };
+}
+
+// ──────────────────────────────────────────────
+// Gate tree roots
+// ──────────────────────────────────────────────
+
+/**
+ * The git trees whose gates must run: every distinct tree root that received a
+ * testable edit this session (a worktree gates itself, with cwd = the worktree
+ * root), falling back to the project root.
+ */
+function gateTreeRoots(editedFiles) {
+  const roots = new Set();
+  for (const f of editedFiles) {
+    if (!isTestable(f)) continue;
+    const root = findTreeRoot(f);
+    if (root) roots.add(root);
+  }
+  if (roots.size === 0) roots.add(PROJECT_ROOT);
+  return [...roots];
 }
 
 // ──────────────────────────────────────────────
@@ -221,14 +245,32 @@ async function main() {
       },
     ];
 
-    for (const check of qualityChecks) {
-      const result = runCommand(
-        check.name,
-        check.command,
-        check.args,
-        { timeout: CONFIG.qualityTimeout }
-      );
-      if (!result.success) {
+    // Run the gates once per git tree that received testable edits, with
+    // cwd = that tree's root (a worktree session gates the worktree, not the
+    // main checkout). Tools resolve from the gated tree's venv (see utils).
+    const treeRoots = gateTreeRoots(editedFiles);
+    for (const treeRoot of treeRoots) {
+      const treeLabel = treeRoot === PROJECT_ROOT ? '' : `tree: ${treeRoot}\n`;
+      for (const check of qualityChecks) {
+        const result = runCommand(
+          check.name,
+          check.command,
+          check.args,
+          { timeout: CONFIG.qualityTimeout, cwd: treeRoot }
+        );
+        if (result.success) continue;
+        if (check.command === 'pytest' && result.status === 5) {
+          skipped.push({ name: check.name, reason: 'no tests collected' });
+          continue;
+        }
+        if (result.kind === 'unavailable') {
+          // A gate that cannot run must not report green — block with a fix hint.
+          result.output =
+            `tool '${check.command}' not found (checked ${treeRoot}/.venv and PATH) ` +
+            `— create the venv / pip install -e ".[dev]"` +
+            (result.output ? `\n${result.output}` : '');
+        }
+        if (treeLabel) result.output = treeLabel + (result.output || '');
         failures.push(result);
       }
     }

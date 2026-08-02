@@ -11,6 +11,13 @@
  *
  * PostToolUse hooks CANNOT block (the tool already executed).
  * We use `systemMessage` to surface warnings in the conversation.
+ * Exit 2 feeds stderr back to Claude — used for lint/format/type errors that
+ * survive auto-fix so they get repaired immediately.
+ *
+ * Hardened (2026-08-02): checks run with cwd = the edited file's own git tree
+ * (worktree edits are checked in the worktree) and tools resolve from that
+ * tree's .venv (falling back to the main checkout's venv, then PATH). A
+ * missing tool is a warning here — the Stop hook blocks on it.
  *
  * Exit codes:
  *   0 → success (stdout parsed for JSON)
@@ -28,6 +35,7 @@ const {
   detectService,
   isSecurityFile,
   getDocUpdateNeeded,
+  findTreeRoot,
   NON_TESTABLE_EXTENSIONS,
   runCommand,
   formatCommandFailure
@@ -109,35 +117,49 @@ function runSecurityChecks(filePath) {
 
 function runLintFix(filePath) {
   if (path.extname(filePath).toLowerCase() !== '.py') {
-    return [];
+    return { failures: [], warnings: [] };
   }
+
+  // Run against the file's own git tree (a worktree edit is checked in the
+  // worktree, with tools resolved from its venv — see runCommand/resolveTool).
+  const cwd = findTreeRoot(filePath) || PROJECT_ROOT;
 
   // Preserve the existing safe auto-fix/format behavior, then verify the
   // saved file with non-mutating required checks.
   runCommand('Ruff auto-fix', 'ruff', ['check', '--fix', filePath], {
     timeout: 30000,
-    cwd: PROJECT_ROOT,
+    cwd,
   });
   runCommand('Ruff format', 'ruff', ['format', filePath], {
     timeout: 15000,
-    cwd: PROJECT_ROOT,
+    cwd,
   });
 
   const requiredChecks = [
     runCommand('Ruff final check', 'ruff', ['check', filePath], {
       timeout: 30000,
-      cwd: PROJECT_ROOT,
+      cwd,
     }),
     runCommand('Ruff final format check', 'ruff', ['format', '--check', filePath], {
       timeout: 15000,
-      cwd: PROJECT_ROOT,
+      cwd,
     }),
     runCommand('Strict mypy', 'mypy', [filePath], {
       timeout: 30000,
-      cwd: PROJECT_ROOT,
+      cwd,
     }),
   ];
-  return requiredChecks.filter(result => !result.success);
+
+  const failed = requiredChecks.filter(result => !result.success);
+  return {
+    // A missing tool is a per-edit warning only — the Stop hook blocks on it.
+    failures: failed.filter(result => result.kind !== 'unavailable'),
+    warnings: failed
+      .filter(result => result.kind === 'unavailable')
+      .map(result =>
+        `${result.name}: tool not found (no .venv? — the Stop gate will block until installed)`
+      ),
+  };
 }
 
 // ──────────────────────────────────────────────
@@ -184,7 +206,8 @@ async function main() {
 
     // 3. Lint auto-fix: ruff + mypy for Python files
     if (['.py'].includes(ext)) {
-      const failures = runLintFix(filePath);
+      const { failures, warnings: lintWarnings } = runLintFix(filePath);
+      warnings.push(...lintWarnings);
       if (failures.length > 0) {
         const details = failures.map(formatCommandFailure).join('\n\n');
         respondBlock(

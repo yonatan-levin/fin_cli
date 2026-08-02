@@ -230,6 +230,56 @@ function normalizePath(filePath) {
   return filePath.replace(/\\/g, '/');
 }
 
+/**
+ * Walk up from a file to its git tree root (`.git` dir or worktree `.git` file).
+ * Returns null when the file is not inside any git tree.
+ */
+function findTreeRoot(filePath) {
+  let dir = path.dirname(path.resolve(filePath));
+  for (;;) {
+    if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/**
+ * Main-checkout root for a worktree tree root (its `.git` FILE points at
+ * `<main>/.git/worktrees/<name>`). Returns null for a normal checkout.
+ */
+function mainRepoRootOf(treeRoot) {
+  try {
+    const gitPath = path.join(treeRoot, '.git');
+    if (!fs.statSync(gitPath).isFile()) return null;
+    const m = fs.readFileSync(gitPath, 'utf8').match(/^gitdir:\s*(.+)$/m);
+    if (!m) return null;
+    // <main>/.git/worktrees/<name> → <main>
+    return path.resolve(m[1].trim(), '..', '..', '..');
+  } catch { return null; }
+}
+
+/**
+ * Resolve a gate tool to the project venv when available (hooks inherit a PATH
+ * that usually lacks ruff/mypy/pytest — they live in .venv/Scripts). Tries the
+ * gated tree's venv, then this checkout's, then the main checkout's (worktrees
+ * share the main venv). Falls back to the bare name (PATH lookup).
+ */
+function resolveTool(file, gateCwd) {
+  if (file.includes('/') || file.includes('\\')) return file; // already a path
+  const roots = [gateCwd, PROJECT_ROOT, gateCwd && mainRepoRootOf(gateCwd)].filter(Boolean);
+  const suffixes = process.platform === 'win32'
+    ? [`Scripts/${file}.exe`, `Scripts/${file}`]
+    : [`bin/${file}`];
+  for (const root of roots) {
+    for (const suffix of suffixes) {
+      const candidate = path.join(root, '.venv', suffix);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  }
+  return file; // fall back to PATH
+}
+
 function detectService(filePath) {
   const normalized = normalizePath(filePath);
   for (const [name, config] of Object.entries(SERVICES)) {
@@ -241,7 +291,13 @@ function detectService(filePath) {
 }
 
 function isTestable(filePath) {
-  const normalized = normalizePath(filePath);
+  // Exclusions match against the path RELATIVE to the file's own git tree, so
+  // files inside a worktree under `.claude/worktrees/<name>/` are judged by
+  // their in-repo path, not by the worktree's location.
+  const treeRoot = findTreeRoot(filePath);
+  const normalized = normalizePath(
+    treeRoot ? path.relative(treeRoot, path.resolve(filePath)) : filePath
+  );
   for (const p of NON_TESTABLE_PATHS) {
     if (normalized.includes(p)) return false;
   }
@@ -305,11 +361,15 @@ function runCommand(name, command, args, options = {}) {
     };
   }
 
-  let executable = command;
+  // Resolve the tool from the gated tree's venv first (hooks inherit a PATH
+  // that usually lacks ruff/mypy/pytest — they live in .venv/Scripts).
+  let executable = resolveTool(command, cwd);
   let executableArgs = args;
   let windowsVerbatimArguments = false;
 
-  if (process.platform === 'win32') {
+  if (executable === command && process.platform === 'win32') {
+    // No venv hit — fall back to a PATH lookup (handles .cmd/.bat launchers,
+    // which Node refuses to spawn without an explicit cmd.exe wrapper).
     const lookup = spawnSync('where.exe', [command], {
       encoding: 'utf8',
       windowsHide: true,
@@ -346,6 +406,7 @@ function runCommand(name, command, args, options = {}) {
       name,
       command: commandText,
       kind: timedOut ? 'timeout' : 'unavailable',
+      status: null,
       output: (output || result.error.message).substring(0, 1200),
     };
   }
@@ -355,6 +416,7 @@ function runCommand(name, command, args, options = {}) {
     name,
     command: commandText,
     kind: result.status === 0 ? 'success' : 'non-zero',
+    status: result.status,
     output,
   };
 }
@@ -494,6 +556,9 @@ module.exports = {
   DOC_TRIGGER_PATTERNS,
   normalizeGitBashPath,
   normalizePath,
+  findTreeRoot,
+  mainRepoRootOf,
+  resolveTool,
   detectService,
   isTestable,
   isSensitive,
