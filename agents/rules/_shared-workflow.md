@@ -50,6 +50,38 @@ Each role has a corresponding role file that defines its responsibilities and ho
 
 ---
 
+## SDLC Router & Orchestration Policy
+
+> Full procedure: the user-level `/sdlc` skill. Workspace policy: the Strade
+> parent `agents/rules/_shared-workflow.md`.
+
+**Orchestration authority:** the MAIN conversation owns task state, planning,
+decomposition, sequencing, quality gates, and final acceptance. Subagents are
+specialists, never coordinators — never delegate orchestration, planning
+authority, or acceptance to a subagent. Subagent output is evidence, not truth.
+
+**Intake:** classify every work-producing request — **feature / epic / task /
+bug** — propose the classification to the user for confirmation, then route per
+`/sdlc`: feature/epic → brainstorm + grill → issue (with DoD checklist) → ARCH
+spec in `docs/` → cycles → closure; task → skip planning → cycles → closure;
+bug → debug/QA round first → reclassify → route.
+
+**Closure is mandatory:** `/code-review` → live e2e of the changed surface
+(waived only for docs/meta-only) → tiered regression → `/github-tracking` DoD
+update → `/docs-update` + archive → worktree housekeeping.
+
+**Regression tiers (algo_beta):** **T1** (always) this project's full suite,
+run here; **T2** (published contract touched) workspace smoke from the Strade
+parent per its `docs/RUNBOOK.md`; **T3** (contract change / pre-merge to main)
+full cross-tool regression coordinated from the parent.
+
+**Model routing:** pinned per role in `~/.claude/agents/` frontmatter
+(frontier = main thread / ARCH / REVIEWER; workhorse = BACKEND / FRONTEND /
+VERIFIER / QA; mechanical sweeps = haiku, set per call). Delegate noisy work;
+keep only conclusions in the main context.
+
+---
+
 ## Validation Cycle (4-Stage)
 
 ```
@@ -63,7 +95,7 @@ Each role has a corresponding role file that defines its responsibilities and ho
 |       |     VERIFIED |            |         |                                  |
 |       +--------------+------------+---------+                                  |
 |                                                                                |
-|  Max 2-3 iterations before escalating to HUMAN                                 |
+|  Exit on criteria; hard cap 3 cycles -> escalate to HUMAN                      |
 +--------------------------------------------------------------------------------+
 ```
 
@@ -227,7 +259,7 @@ HANDOFF_TO: <ARCH | BACKEND | FRONTEND | UX_UI | VERIFIER | QA | REVIEWER | HUMA
 1. **Spec-first**: Always check project docs before routing. Missing specs → ARCH first.
 2. **Never skip quality gates**: Every implementation goes through VERIFIER → REVIEWER → QA → HUMAN.
 3. **Small changes**: Break large tasks into smaller, reviewable chunks.
-4. **Iteration limit**: Max 2-3 cycles of BACKEND/FRONTEND vs REVIEWER/QA before escalating to HUMAN.
+4. **Iteration limit**: cycles exit on **criteria** (gates green; VERIFIER = VERIFIED; REVIEWER approves with no HIGH findings; QA = PASS), with a **hard cap of 3 cycles** — at the cap, stop and escalate to HUMAN with the open findings; never mark done at the cap.
 5. **Preserve context**: Handoffs must include all relevant context.
 6. **No scope creep**: Unrelated changes should be separate tasks.
 7. **Explicit gaps**: Ask for clarification rather than guessing.
