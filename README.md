@@ -1,27 +1,30 @@
-# Fin CLI — Finviz stock screener (CLI + HTTP API)
+# Fin CLI
 
-> A Python package that scrapes Finviz.com's stock screener through two co-equal entry points: a command-line tool that emits a timestamped CSV, and a FastAPI HTTP service that returns the same screen as JSON.
+> Turn Finviz stock screens into reproducible data — one filter set in, a clean CSV or typed JSON out.
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## Overview
+Fin CLI (`fincli`) is the stock-screener tool of the **Strade** multi-tool finance workspace, alongside its siblings **midas** (DCF valuation), **swinger** (technical snapshots), **borker** (Interactive Brokers trading), and the **orchestrator** that composes them.
 
-Fin CLI is a Python package with two co-equal entry points sharing one orchestrator:
+## What is it?
 
-- **CLI** (`fincli/`) — pick filter values from the standard Finviz vocabulary (P/E, sector, country, RSI, market cap, etc.); the tool builds the corresponding Finviz URL, fetches every paginated result page through `cfscrape` (Cloudflare bypass), parses the HTML stock table with BeautifulSoup, and writes a timestamped CSV to `workspace_output/`.
-- **HTTP API** (`fincli_api/`) — a FastAPI service that exposes the same screener over REST+JSON for polyglot consumers (Go/TS/Rust integrators codegen typed clients from the committed OpenAPI snapshot at `docs/api/openapi.yaml`).
+Fin CLI turns [Finviz.com](https://finviz.com)'s stock screener into a scriptable, contract-stable data source. You express a filter set once — using Finviz's own filter vocabulary — and get the matching ticker table back as a timestamped CSV (for humans and Excel) or typed JSON (for programs), through one shared engine behind both a CLI and a FastAPI service.
 
-There is no database and no broker integration. CLI outputs are CSVs you read in Excel, in pandas, or in any tool that opens CSV; API outputs are typed JSON envelopes. See the [Pipeline mode](#pipeline-mode) section for non-interactive CLI usage and the [HTTP API](#http-api) section for the FastAPI surface.
+Under the hood it builds the Finviz screener URL from your filters, fetches every paginated result page, parses the result table, and hands you the screen as rows. That's it — no database, no broker, no web UI. It's for the personal or technical investor (and their downstream automation) who wants Finviz screens as reproducible data rather than a web page.
+
+## Why it's interesting
+
+- **66 filter keys, three families.** Fundamental (P/E, forward P/E, PEG, P/S, P/B, EPS/sales growth, ROA/ROE/ROI, ratios, debt/equity, margins, ownership), Descriptive (exchange, index, sector, industry, country, market cap, dividend yield, analyst recommendation, earnings date, volume, price, IPO date), and Technical (performance, volatility, RSI(14), gap, SMA 20/50/200, change, highs/lows, chart pattern, candlestick, beta, ATR).
+- **Two co-equal entry points, one engine.** The CLI and the HTTP API share a single orchestrator and validator, so the filter vocabulary, error classification, and behavior can't drift between surfaces. A filter that's valid on the command line is valid — identically — over HTTP.
+- **Contract-first by design.** [CONTRACTS.md](CONTRACTS.md) pins every CLI flag, CSV column, exit code, JSON schema, and API shape. A committed OpenAPI 3.1.0 snapshot ([`docs/api/openapi.yaml`](docs/api/openapi.yaml)) plus a Postman collection let Go/TypeScript/Rust consumers codegen typed clients.
+- **Pipeline-grade CLI ergonomics.** Differentiated exit codes, a `--json-summary` line, CSV streaming to stdout (CSV bytes on stdout, all chatter on stderr), and an always-emitted `OUTPUT_PATH=` line — built to be a well-behaved building block in scripts and cron jobs.
+- **Correctness-first ethic.** Silent corruption — a row that fails to parse and quietly vanishes — is treated as the worst possible failure mode. Market Cap is a nullable float (an empty cell for N/A, never `"nan"`), and parse failures are classified loudly rather than swallowed.
+- **Human-friendly output too.** The CSV's Ticker cells are Excel `HYPERLINK` formulas, so every ticker is a clickable link to its Finviz quote page when opened in Excel or Google Sheets — with a raw `Symbol` column alongside for machines.
 
 ## Quick Start
 
-### Prerequisites
-
-- Python 3.12 or later
-- pip
-
-### Install
+Requires Python 3.12+.
 
 ```bash
 git clone https://github.com/yonatan-levin/fin_cli.git
@@ -29,249 +32,95 @@ cd fin_cli
 pip install -e ".[dev]"
 ```
 
-The editable install with the `[dev]` extra pulls runtime deps from `requirements.txt` and dev tooling (`ruff`, `mypy`, `pytest`, `pytest-cov`, `types-beautifulsoup4`, `pip-audit`) from `pyproject.toml`.
-
-If you previously installed this project under its old distribution name `finscrape`, run `pip uninstall finscrape` before reinstalling so pip picks up the rename cleanly.
-
-### Run
+### Run the CLI
 
 ```bash
-# Interactive filter selection (preferred; bare shell command)
-fincli
+fincli                                   # interactive filter picker
+python -m fincli                         # portable equivalent
 
-# Equivalent fallback when the venv's Scripts/ dir is not on PATH
-python -m fincli
-
-# Reuse the last filter selection (reads <Config.history_dir>/filter_history.json; see CONTRACTS.md §4 for the path resolution)
-fincli --history
-
-# Verbose logging
-fincli --debug
-```
-
-> If you installed the project before the `[project.scripts]` entry point was added, re-run `pip install -e ".[dev]"` once so the bare `fincli` command lands on PATH. Prefer `python -m fincli` when the venv's `Scripts/` directory is not on PATH — it works regardless.
-
-### Pipeline mode
-
-`fincli` is also a single-shot building block for downstream automation. Structured filter input, deterministic output destination, stream discipline, and differentiated exit codes (0/1/2/3/4) compose orthogonally; the interactive flow above is unchanged when none of these flags are set.
-
-```bash
-# Stream CSV to stdout, pipe to jq via the JSON summary on stderr
+# Non-interactive: filters as flags, stream CSV to stdout
 fincli --filter fa_pe=u20 --filter sec=energy --output - | head
 
-# Write to an exact path (no timestamp; overwrites if file exists)
+# Filters as inline JSON, exact output path, machine-readable summary
 fincli --filters-json '{"fa_pe":"u20"}' --output ./out.csv --quiet --json-summary
-
-# Read filters from a JSON file; emit JSON summary on stdout for jq
-fincli --filters-file ./filters.json --output ./out.csv --quiet --json-summary | jq '.row_count'
-
-# Override the default workspace_output/ parent via env var
-FINCLI_OUTPUT_DIR=/tmp/screener fincli --filter fa_pe=u20
-
-# Recover the destination from stderr without parsing the JSON summary
-fincli --filter fa_pe=u20 --output ./out.csv 2> /tmp/log
-tail -n1 /tmp/log | cut -d= -f2-     # -> /abs/path/to/out.csv
 ```
 
-| Surface | Behavior |
-|---|---|
-| `--filter K=V` (repeatable), `--filters-json`, `--filters-file` | Non-interactive filter input. Mutually exclusive with `--history` / `--scrape-link`. Unknown key/value -> exit 2. |
-| `--output PATH` / `-o PATH` | Exact destination; parent dir must exist; no timestamp; overwrites. |
-| `--output -` | Stream CSV to stdout. Stdout contains only CSV bytes; banner/progress/errors go to stderr. `Ticker` column is the raw symbol (not `=HYPERLINK(...)`). |
-| `FINCLI_OUTPUT_DIR=<dir>` | Parent-dir override for the default timestamped filename. Loses to `--output PATH`. |
-| `--quiet` / `-q` | Suppress banner + INFO/DEBUG console lines. Warnings/errors still emit. |
-| `--json-summary` | Single-line JSON summary at end of run; schema in CONTRACTS §5.5. |
-
-Exit codes (full table in CONTRACTS §1): `0` SUCCESS, `1` INTERNAL, `2` USAGE, `3` UPSTREAM, `4` DATA. Zero-row results stay exit 0 and write a header-only CSV.
-
-For non-Python integrators (Go, Node, etc.), see [INTEGRATION.md](INTEGRATION.md).
-
-### HTTP API
-
-Fin CLI also exposes its screener over REST+JSON via a sibling FastAPI package
-(`fincli_api/`). The API consumes the same orchestrator the CLI uses, so the
-contract cannot drift across surfaces — every filter validated by `fincli
---filter` is validated identically by `POST /screens`, and every row in the
-streamed CSV maps 1:1 to a row in the JSON response.
-
-#### Quick start
-
-```bash
-# Install (if not already done)
-pip install -e ".[dev]"
-
-# Start the API on localhost:8000 (dev mode with auto-reload)
-uvicorn fincli_api.main:app --reload
-
-# Or via the console script (installed by `[project.scripts]`)
-fincli-api
-```
-
-Then open `http://localhost:8000/docs` for the Swagger UI (auto-generated
-from Pydantic models — every endpoint is fully typed).
-
-#### Endpoints
-
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/filters` | Dump the full Finviz filter inventory as JSON (same shape as `fincli --list-filters --json`) |
-| `POST` | `/screens` | Run a screen with provided filters; returns matching stocks as JSON |
-| `GET` | `/healthz` | Liveness check |
-| `GET` | `/openapi.json` | Auto-generated OpenAPI 3.1 spec |
-| `GET` | `/docs` | Swagger UI |
-| `GET` | `/redoc` | Redoc UI |
-
-#### Sample curl
-
-```bash
-# List all valid filter keys + value codes
-curl http://localhost:8000/filters | jq .
-
-# Run a screen — returns stocks as typed JSON
-curl -X POST http://localhost:8000/screens \
-  -H 'Content-Type: application/json' \
-  -d '{"filters": {"fa_pe": "u5", "sec": "energy"}}' \
-  | jq .
-
-# Liveness
-curl http://localhost:8000/healthz
-# -> {"status": "ok"}
-```
-
-#### Polyglot consumers
-
-The committed OpenAPI snapshot at [`docs/api/openapi.yaml`](docs/api/openapi.yaml)
-is the contract artifact for non-Python clients. Generate typed clients via
-your language's preferred tooling:
-
-- Go: `oapi-codegen -config codegen.yaml docs/api/openapi.yaml`
-- TypeScript: `openapi-typescript docs/api/openapi.yaml > api.d.ts`
-- Rust: `openapi-generator-cli generate -i docs/api/openapi.yaml -g rust`
-- Postman: import the ready-made collection at [`docs/api/postman_collection.json`](docs/api/postman_collection.json) (all three endpoints + sample bodies + Newman-runnable test scripts; set the `baseUrl` variable to your server).
-
-The snapshot is regeneratable and drift-checkable via:
-
-```bash
-python scripts/dump_openapi.py            # regenerate the snapshot
-python scripts/dump_openapi.py --check    # CI/pre-commit drift check (exit 1 on drift)
-```
-
-#### Error responses
-
-All non-2xx responses use the `ErrorResponse` envelope (see
-[`docs/api/openapi.yaml`](docs/api/openapi.yaml) `components.schemas.ErrorResponse`):
-
-| HTTP | `error_class` | Meaning |
-|---|---|---|
-| 422 | `validation` | Bad filter key/value (caller's fault — fix and retry) |
-| 502 | `upstream` | Finviz fetch failed (retry with backoff) |
-| 502 | `parsing` | Finviz HTML unparseable (likely structural drift) |
-| 500 | `internal` | Unclassified bug — surface `request_id` to operator |
-
-### Output
-
-Results land in `workspace_output/` as a timestamped CSV named by `Config.file_path`:
-
-| Filename | Content |
-|---|---|
-| `stock_screener_YYYY-MM-DD_HH-MM.csv` | Screener results with Excel-compatible `=HYPERLINK(...)` ticker cells |
-
-The `Ticker` column is wrapped as `=HYPERLINK("https://finviz.com/quote.ashx?t=AAPL", "AAPL")` so each ticker becomes a clickable link to its Finviz quote page when the CSV is opened in Excel or Google Sheets.
-
-### Sample CSV columns
+By default results land as a timestamped CSV at `workspace_output/stock_screener_YYYY-MM-DD_HH-MM.csv` with columns:
 
 ```
 No., Ticker, Company, Sector, Industry, Country, Market Cap, P/E, Price, Change, Volume, Symbol
 ```
 
-The pipeline is synchronous: pages from Finviz are fetched one at a time, in cooperation with the host's anti-bot pacing.
-
-## Configuration
-
-Config lives in `config/config.py` as a Pydantic `Config(SystemSettings)` model. The interesting fields:
-
-- `use_history: bool` — load the last filter selection from `<Config.history_dir>/filter_history.json` (see CONTRACTS.md §4.1 for the default + override).
-- `filters: tuple` — parsed filter tuples; populated by the interactive UI or by `--history`.
-- `scrape_link: str` — direct Finviz URL override.
-- `file_path(name)` — produces a timestamped CSV path under `workspace_output/`.
-
-The full data-shape contract — every Click option, every CSV column, every Pydantic field — is documented in [CONTRACTS.md](CONTRACTS.md).
-
-## Tests
+### Run the HTTP API
 
 ```bash
-pytest tests/
-pytest tests/unit/
-pytest tests/integration/
-pytest -k "<pattern>"
-pytest --cov=fincli --cov=core --cov=config
+uvicorn fincli_api.main:app --reload     # dev mode with auto-reload (localhost:8000)
+fincli-api                               # or the console script (binds 0.0.0.0:8000)
 ```
 
-The Phase-2 test suite seed landed with the pipeline-mode rollout (2026-05-16): 200+ tests under `tests/unit/` (per-function: market_cap, json_to_tuples, validators, output_path, stream routing, CLI option parsing, exit-codes classifier) and `tests/integration/` (CliRunner-driven end-to-end with `fincli.utils.web_scraper.fetch_page_sync` mocked against canned HTML fixtures under `tests/integration/fixtures/`). Coverage is informational in Phase 1; the 90% gate enables in Phase 3 (see `TESTING.md`).
-
-Lint, format, type-check:
+Then run a screen:
 
 ```bash
-ruff check .
-ruff format .
-mypy fincli core config logger
+curl -X POST http://localhost:8000/screens \
+  -H 'Content-Type: application/json' \
+  -d '{"filters": {"fa_pe": "u5", "sec": "energy"}}'
+# -> {"schema_version":1,"row_count":N,"duration_ms":...,
+#     "stocks":[{"ticker":"CNX","sector":"Energy","market_cap":5.2e9,
+#                "pe":"4.2","price":"$34.55","rank":1,
+#                "finviz_url":"https://finviz.com/quote.ashx?t=CNX"}, ...]}
 ```
 
-See [TESTING.md](TESTING.md) for the full testing strategy, fixture conventions, mocking guidance, and the Phase 2 / 3 / 4 follow-up roadmap.
+An empty `{}` body runs a full dump; zero matches returns `200` with `stocks: []`. Interactive docs live at the Swagger UI: `http://localhost:8000/docs`.
 
-## Project Structure
+## Usage at a glance
 
-```
-fin_cli/
-  fincli/              # Stock screener (cfscrape + BS4 + Click)
-  core/                # Pure Python configuration framework
-  config/              # Concrete Config(SystemSettings) instance
-  logger/              # Singleton logger (typing console + plain console + JSON file)
-  tests/               # unit/ domain/ e2e/ — bodies arrive in Phase 2
-  workspace_output/    # CSV results (gitignored)
-  docs/                # THESIS.md, MODULE_REFERENCE.md, FEEDBACK-LOG.md, specs, features, pendingwork
-  agents/              # AI-agent rules + role files
-  .claude/             # Claude Code harness (settings + hooks)
-  pyproject.toml
-  requirements.txt
-  ARCHITECTURE.md
-  CLAUDE.md
-  CONTRACTS.md
-  TESTING.md
-  TOOLS_REFERENCE.md
-  AGENTS.md
-```
+### CLI
+
+| Flag | What it does |
+|---|---|
+| `--list-filters` (+ `--json`) | Dump the full 66-key filter inventory and exit 0 (no screen runs) |
+| `--filter K=V` (repeatable) | Add a filter, e.g. `--filter fa_pe=u20 --filter sec=energy` |
+| `--filters-json '{...}'` / `--filters-file PATH` | Filters as inline JSON or a JSON file |
+| `--output PATH` / `-o` | Exact CSV destination; `--output -` streams CSV to stdout |
+| `--history` | Re-run the last filter selection |
+| `--scrape-link URL` | Screen from a direct Finviz URL |
+| `--quiet` / `-q`, `--debug` | Less / more console chatter (never on stdout) |
+| `--json-summary` | Single-line JSON run summary for `jq` and friends |
+
+The filter-input flags (`--filter`, `--filters-json`, `--filters-file`, `--history`, `--scrape-link`, `--list-filters`) are mutually exclusive — at most one, else exit 2.
+
+**Exit codes:** `0` success (zero rows still exits 0 with a header-only CSV) · `1` internal · `2` usage · `3` upstream (Finviz/network) · `4` data (parse/contract failure).
+
+### HTTP API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/filters` | Full filter inventory (byte-equivalent to `fincli --list-filters --json`) |
+| `POST` | `/screens` | Run a screen; returns a typed `ScreenResult` envelope |
+| `GET` | `/healthz` | Liveness — `{"status":"ok"}` |
+| `GET` | `/docs` · `/redoc` · `/openapi.json` | Swagger UI, Redoc, OpenAPI spec |
+
+Errors map 1:1 to the CLI exit codes: validation → `422`, upstream → `502`, parsing → `502`, internal → `500` (with a `request_id`).
+
+## Status & non-goals
+
+Fin CLI (v0.1.0) is **functional and used for real investment research**. The CLI is the original surface; the HTTP API shipped 2026-05-24. The suite ships with 200+ tests.
+
+Honest edges to know about:
+
+- **Source-only** — no PyPI release yet; install from the repo.
+- **Localhost, single-user API by design** — no auth, no rate limiting, no persistence. Don't put it on the open internet as-is.
+- **Known limitation (tracked):** malformed Finviz HTML that lacks the screener table currently returns `200` with empty `stocks` instead of a `502` parsing error.
+
+Explicit **non-goals** — Fin CLI is *not* a backtester, a portfolio optimizer, a trading bot, or a fundamental-analysis pipeline. It does one thing: turn a Finviz screen into data you can trust and build on.
 
 ## Contributing
 
-This repo is harness-aware. **Both AI agents and humans should start with [`AGENTS.md`](AGENTS.md)** — it is the index for everything else: which docs to read for which task, which roles handle which work, the curation rhythm for keeping these docs fresh.
+Contributions are very welcome — new filter coverage, output formats, hardening the parsing contract, or just better docs. Start with [AGENTS.md](AGENTS.md) (the doc index for humans and AI agents alike), then [CONTRACTS.md](CONTRACTS.md) for the public surfaces and [TESTING.md](TESTING.md) for how the suite is organized. Please make sure `ruff check .`, `ruff format --check .`, and `pytest tests/` are green before opening a PR.
 
-In addition:
-
-- **AI agents** read `AGENTS.md`, then follow `agents/rules/_shared-workflow.md` (auto-injected at SessionStart by `.claude/hooks/load-rules.js`). Subagents pick up their role files from `agents/roles/`. The full skill / slash-command / MCP-tool reference is in [`TOOLS_REFERENCE.md`](TOOLS_REFERENCE.md).
-- **Humans** also read [`CLAUDE.md`](CLAUDE.md) (build/run, conventions, gotchas, phase status) and [`ARCHITECTURE.md`](ARCHITECTURE.md) (system overview, module map, data flow, layering).
-
-Pull requests should pass `ruff check .`, `ruff format --check .`, and a clean `pytest tests/` run before review. The `mypy` advisory output is a Phase 1 signal, not a Phase 1 gate (Phase 4 promotes it to gating).
-
-## Documentation
-
-| Document | Audience | Content |
-|---|---|---|
-| [README.md](README.md) | Everyone | This file — quickstart, overview, doc index |
-| [AGENTS.md](AGENTS.md) | AI + humans | Master index. Tier 1–4 reading order. Sub-agent context diet. Curation rhythm. |
-| [CLAUDE.md](CLAUDE.md) | Humans + AI assistants | Build/run, conventions, gotchas, phase status, file map |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Anyone touching internals | System overview, module map, data flow, layering, threading |
-| [CONTRACTS.md](CONTRACTS.md) | Anyone touching public surfaces | CLI options, Finviz query contract, CSV schema, Pydantic config, logger contract, stability policy |
-| [TESTING.md](TESTING.md) | Anyone writing tests | Philosophy, layout, running, mocking, coverage policy, Phase 2/3/4 roadmap |
-| [TOOLS_REFERENCE.md](TOOLS_REFERENCE.md) | Anyone using the harness | Build/test/lint/format/type/MCP/hook command reference |
-| [docs/THESIS.md](docs/THESIS.md) | Anyone | Project vision, current phase, roadmap, scope boundaries |
-| [docs/MODULE_REFERENCE.md](docs/MODULE_REFERENCE.md) | Anyone | Per-module purpose, public surface, data shapes, error modes |
-
-## Authors
+## Authors & License
 
 - **GoBoldMS** — initial work
 - **Yonatan Levin** — continued development
 
-## License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+Licensed under the MIT License — see [LICENSE](LICENSE) for details.
