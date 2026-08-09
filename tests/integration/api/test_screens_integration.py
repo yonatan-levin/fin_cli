@@ -141,7 +141,7 @@ def test_post_screens_malformed_row_returns_502_parsing(
     body = response.json()
     assert body["schema_version"] == 1
     assert body["error_class"] == "parsing"
-    # 5xx envelopes carry a request_id for log correlation; 4xx do not.
+    # Every error envelope carries the correlation request_id for log correlation.
     assert body.get("request_id") is not None
 
 
@@ -233,8 +233,9 @@ def test_post_screens_unknown_filter_key_returns_422(
     assert response.status_code == 422
     body = response.json()
     assert body["error_class"] == "validation"
-    # 4xx envelopes deliberately omit request_id (caller's fault).
-    assert body.get("request_id") is None
+    # Per the observability standard, every error envelope now carries the
+    # correlation request_id (matching the echoed X-Request-ID), not just 5xx.
+    assert isinstance(body.get("request_id"), str) and body["request_id"]
     # And critically — the mocked fetch was never invoked, proving the
     # validator gate fired before any pipeline work.
     mock_fetch.assert_not_called()

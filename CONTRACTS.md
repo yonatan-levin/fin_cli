@@ -494,7 +494,11 @@ Spec source: `docs/superpowers/specs/archive/2026-05-22-fincli-api-design.md` (S
 |---|---|---|---|---|---|
 | `GET` | `/filters` | Dump filter inventory (byte-equivalent to `fincli --list-filters --json`, modulo HTTP framing) | (none) | `FilterInventory` | `500` |
 | `POST` | `/screens` | Run a screen with the supplied filters and return matching stocks | `ScreenRequest` | `ScreenResult` | `422` / `502` / `500` |
-| `GET` | `/healthz` | Liveness check | (none) | `{"status": "ok"}` | (none) |
+| `GET` | `/healthz` | Liveness check (original) | (none) | `{"status": "ok"}` | (none) |
+| `GET` | `/health` | Liveness (observability standard) | (none) | `{"status":"ok", ...}` | (none) |
+| `GET` | `/ready` | Readiness (process-up) | (none) | `{"status":"ready"}` | (none) |
+| `GET` | `/health/detailed` | Component map | (none) | `{"status":"healthy", ...}` | `206`/`503` |
+| `GET` | `/metrics` | Prometheus exposition (`fincli_`-prefixed HTTP families) | (none) | text/plain | (none) |
 | `GET` | `/openapi.json` | Auto-generated OpenAPI 3.1 spec | (none) | OpenAPI dict | (none) |
 | `GET` | `/docs` | Swagger UI (auto-generated) | (none) | HTML | (none) |
 | `GET` | `/redoc` | Redoc UI (auto-generated) | (none) | HTML | (none) |
@@ -564,10 +568,11 @@ Why `422` (not `400`) for `validation`: `400` is reserved for FastAPI's automati
 
 **`message` field plain-text contract:** producers of `ErrorResponse` MUST plain-text-encode `message` (no HTML, no Markdown control characters). Downstream UIs may render the field unsafely otherwise; the spec assumes string-only consumers. The exception handler in `fincli_api/exception_handlers.py` honors this by using `str(exc)` directly (Click's `UsageError` message strings are already plain text by construction).
 
-`details` is an `error_class`-specific structured payload — `{"key", "suggestions"}` for `validation`, `{"url", "timeout_s"}` for `upstream`, `{"exception_type", "exception_message"}` for `parsing`, omitted for `internal`. `request_id` is populated only on `5xx` paths.
+`details` is an `error_class`-specific structured payload — `{"key", "suggestions"}` for `validation`, `{"url", "timeout_s"}` for `upstream`, `{"exception_type", "exception_message"}` for `parsing`, omitted for `internal`. `request_id` is the correlation id (the value echoed on the `X-Request-ID` response header) and is populated on **every** error envelope (4xx and 5xx) per the workspace observability standard (`../docs/OBSERVABILITY.md`).
 
 ### 8.5 Known limitations
 
 - **Malformed-HTML coercion (deferred — MAJOR #4)**: when Finviz returns valid HTML that lacks the screener `<table>` element (or contains structurally broken rows), the current implementation coerces to a `200` with an empty `stocks` array instead of the spec §5.1 `502 parsing` response. The exception handler classifies correctly when an `IndexError` / `AttributeError` actually escapes, but the BS4 parser chain swallows several of these earlier and yields an empty row list. Tracked in `fincli_api/exception_handlers.py`'s module docstring and pinned by the xfail-pair pattern in `tests/integration/api/test_screens_integration.py` (one test asserts the documented `502 parsing` contract and is `xfail`, its companion asserts the current `200 + empty` behavior and passes). Fix is non-breaking once the parser surfaces the failure — the contract here already names `502 parsing` as the target.
 - **No request-level timeout knob in the API contract**: the per-page Finviz fetch timeout is hard-coded to 10 seconds in `fincli/utils/web_scraper.py:fetch_page_sync` (inherited from the CLI). A multi-page screen can therefore take 10 × `<page_count>` seconds in the worst case; FastAPI does not impose a request timeout by default. Personal-scale screens (the only supported deployment posture) complete in <10s in practice. Surfacing a per-request `timeout_ms` knob is deferred to a future spec when multi-user load materializes (spec §2 N1/N2/N9).
-- **No `request_id` correlation in logs**: `request_id` appears in the `5xx` response envelope but is not currently propagated into the logger (§5) call chain — the field exists for forward compatibility with structured-logging integration (spec §2 N10) but cannot be `grep`'d in `logs/activity.log` yet.
+- **Artifact capture (observability standard)**: `?trace=1` (or `X-Strade-Trace: 1`) writes a debug bundle to `artifacts/<date>/req_<request_id>/` (manifest, redacted request/response, the request's log lines), governed by `FINCLI_API_ARTIFACTS_{ENABLED,DIR,ON_ERROR,RETENTION_DAYS}` — see the workspace standard's §Artifact capture.
+- **API `request_id` correlation (observability standard)**: every request reads/mints an `X-Request-ID` (validated `^[A-Za-z0-9_.:-]{1,128}$`, else UUIDv4), echoes it, binds it to the request context, and includes it on every error envelope. The API's stdlib log lines are JSON on stderr and carry `request_id`. **Deferred:** the bespoke Singleton logger (`logger/logger.py`, used by the CLI and the screener pipeline) is not yet JSON-ified or correlation-stamped, so the CLI's `run_id` and Singleton-routed lines in `logs/activity.log` are not yet `grep`-correlatable — tracked as a follow-up.

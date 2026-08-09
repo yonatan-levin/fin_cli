@@ -22,21 +22,27 @@ import requests
 from fastapi.testclient import TestClient
 
 
-def test_validation_exception_returns_422_envelope_no_request_id(
+def test_validation_exception_returns_422_envelope_with_request_id(
     client: TestClient,
     mock_run_screen: MagicMock,
 ) -> None:
-    """USAGE (2) -> 422 ``validation``; no request_id (caller-fault path)."""
+    """USAGE (2) -> 422 ``validation``.
+
+    Per the observability standard the envelope now carries the correlation
+    ``request_id`` on every failure (matching the echoed ``X-Request-ID``), not
+    just on 5xx — so a client can always correlate to server logs. The id is the
+    one the request-context middleware bound (here the inbound header value).
+    """
     mock_run_screen.side_effect = click.UsageError("bad filter")
 
-    response = client.post("/screens", json={"filters": {"fa_pe": "u5"}})
+    response = client.post(
+        "/screens", json={"filters": {"fa_pe": "u5"}}, headers={"X-Request-ID": "trace-422"}
+    )
 
     assert response.status_code == 422
     body = response.json()
     assert body["error_class"] == "validation"
-    # 4xx envelopes omit request_id per spec §5.2 / exception_handlers.py
-    # ``exclude_none=True`` rule. ``not in body`` is the assertion shape.
-    assert "request_id" not in body
+    assert body["request_id"] == "trace-422"
 
 
 @pytest.mark.parametrize(
