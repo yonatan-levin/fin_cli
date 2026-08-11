@@ -22,10 +22,14 @@ Five-code table (single source of truth — `CONTRACTS.md` §1 mirrors these):
     ``requests.exceptions.RequestException`` (cfscrape's exceptions are
     ``requests`` subclasses).
   * ``DATA``      = 4 — Data-contract / parse failure: the screener
-    ``<table>`` element is missing, BeautifulSoup couldn't parse the page,
-    or a column is missing where one was expected. Classified by checking
-    ``IndexError``, ``AttributeError``, ``KeyError`` — the three exception
-    types BS4-based row parsing raises when the HTML shape drifts.
+    ``<table>`` element is missing (with no legitimate zero-result
+    marker), BeautifulSoup couldn't parse the page, a column is missing
+    where one was expected, or a ticker cell's visible text disagrees
+    with its link href (Finviz layout drift / corrupted ticker data).
+    Classified by checking ``IndexError``, ``AttributeError``,
+    ``KeyError`` — the three exception types BS4-based row parsing raises
+    when the HTML shape drifts — and
+    ``fincli.stock_screening.errors.ScreenerLayoutError``.
 
 Tests import the constants from here so a future renumbering touches one
 file. Hardcoding the integers in test bodies would re-create the
@@ -36,6 +40,8 @@ from __future__ import annotations
 
 import click
 import requests
+
+from fincli.stock_screening.errors import ScreenerLayoutError
 
 # Exit-code constants — pinned values per spec §5.4. Renumbering any of these
 # is a breaking change governed by `CONTRACTS.md` §7 (CLI exit-code
@@ -97,8 +103,12 @@ def classify(exc: BaseException) -> int:
     # a row is short, ``AttributeError`` on ``.find('a').get('href')`` when
     # the link cell is missing, ``KeyError`` on a missing dict lookup
     # downstream. The orchestrator re-raises these from the BS4 invocation
-    # site so they reach the classifier unmodified.
-    if isinstance(exc, (IndexError, AttributeError, KeyError)):
+    # site so they reach the classifier unmodified. ``ScreenerLayoutError``
+    # covers the two layout-contract violations the BS4 exceptions can't
+    # express on their own: a missing screener table with no legitimate
+    # empty-result marker, and a ticker cell whose text disagrees with its
+    # href (issue #14).
+    if isinstance(exc, (IndexError, AttributeError, KeyError, ScreenerLayoutError)):
         return DATA
 
     # Anything else — ValueError from a column-count mismatch, a third-party

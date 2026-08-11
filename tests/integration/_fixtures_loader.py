@@ -73,11 +73,13 @@ def finviz_empty_html() -> bytes:
 
 
 def finviz_no_table_html() -> bytes:
-    """Screener page missing the table element entirely.
+    """Screener page missing the table element entirely, no empty marker.
 
-    Selector returns an empty list. In isolation this routes through the
-    same zero-row branch as ``finviz_empty_html``; the malformed-row
-    fixture is the one that actually triggers the DATA classifier.
+    Selector returns an empty list AND the page carries none of Finviz's
+    ``js-screener-body-empty`` zero-result marker either, so
+    ``aggregate_rows`` raises ``ScreenerLayoutError`` -> DATA classifier
+    (exit 4 / HTTP 502 ``parsing``). Distinct from a legitimate zero-match
+    screen, which DOES carry the marker — see ``finviz_zero_redesign_html``.
     """
     return _read_fixture("finviz_no_table.html")
 
@@ -91,3 +93,40 @@ def finviz_malformed_row_html() -> bytes:
     ``AttributeError`` — the DATA-class exception classified as exit 4.
     """
     return _read_fixture("finviz_malformed_row.html")
+
+
+def finviz_redesign_html() -> bytes:
+    """Two-row screener result on Finviz's redesigned layout (issue #14).
+
+    Trimmed from a live capture: each ticker cell nests a logo-fallback
+    anchor (text = first letter only) followed by a tab-link anchor
+    (text = full ticker). Regression fixture for the duplicated-first-
+    letter bug (``StockTableScreenerParser.ticker_symbol`` must read only
+    the last anchor). Row 1 is ``A``, row 2 is ``AA`` — no pagination
+    markup, so ``page_count == 0``.
+    """
+    return _read_fixture("finviz_redesign.html")
+
+
+def finviz_zero_redesign_html() -> bytes:
+    """Legitimate zero-result page on the redesigned layout.
+
+    No ``table.styled-table-new`` element, but carries Finviz's
+    ``js-screener-body-empty`` marker table with a "0 Total" ``count-text``
+    cell — the honest empty-result shape, NOT a layout-drift failure. Drives
+    the zero-row success branch (header-only CSV / ``stocks: []``), not the
+    ``ScreenerLayoutError`` DATA classifier.
+    """
+    return _read_fixture("finviz_zero_redesign.html")
+
+
+def finviz_ticker_mismatch_html() -> bytes:
+    """Redesigned-layout row with a corrupted/drifted ticker cell.
+
+    Hand-drifted from the real redesign markup: the last anchor's visible
+    text is ``"KKTOS"`` while its href's ``t`` query parameter is
+    ``"KTOS"``. ``StockTableScreenerParser.ticker_symbol`` must raise
+    ``ScreenerLayoutError`` on this disagreement rather than return the
+    corrupted text -> DATA classifier (exit 4 / HTTP 502 ``parsing``).
+    """
+    return _read_fixture("finviz_ticker_mismatch.html")

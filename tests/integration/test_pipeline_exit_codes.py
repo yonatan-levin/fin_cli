@@ -26,6 +26,7 @@ going through ``classify``) fails loudly.
 
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -34,7 +35,10 @@ import requests
 from _fixtures_loader import (
     finviz_happy_html,
     finviz_malformed_row_html,
+    finviz_no_table_html,
     finviz_one_page_html,
+    finviz_redesign_html,
+    finviz_ticker_mismatch_html,
 )
 from click.testing import CliRunner
 
@@ -175,6 +179,54 @@ def test_parse_failure_summary_carries_data_code() -> None:
 
 
 # ---------------------------------------------------------------------------
+# DATA (exit 4) — layout drift (MAJOR #4 closed) and ticker-cell corruption
+# (issue #14), both raising ScreenerLayoutError.
+# ---------------------------------------------------------------------------
+
+
+def test_no_table_and_no_empty_marker_exits_with_data_code() -> None:
+    """No screener table AND no empty-result marker -> exit 4 (DATA).
+
+    MAJOR #4 closed: previously silently routed to the zero-row success
+    branch (exit 0); now ``aggregate_rows`` raises ``ScreenerLayoutError``.
+    """
+    runner = CliRunner()
+    with patch(
+        "fincli.app.main.fetch_page_sync",
+        return_value=finviz_no_table_html(),
+    ):
+        result = runner.invoke(
+            run_main,
+            ["--filter", "fa_pe=u20", "--output", "-"],
+            catch_exceptions=False,
+        )
+
+    assert result.exit_code == exit_codes.DATA, (
+        f"Expected exit code {exit_codes.DATA} (DATA); got {result.exit_code}. "
+        f"stderr: {result.stderr}"
+    )
+
+
+def test_ticker_mismatch_exits_with_data_code() -> None:
+    """Ticker cell text/href disagreement (issue #14) -> exit 4 (DATA)."""
+    runner = CliRunner()
+    with patch(
+        "fincli.app.main.fetch_page_sync",
+        return_value=finviz_ticker_mismatch_html(),
+    ):
+        result = runner.invoke(
+            run_main,
+            ["--filter", "fa_pe=u20", "--output", "-"],
+            catch_exceptions=False,
+        )
+
+    assert result.exit_code == exit_codes.DATA, (
+        f"Expected exit code {exit_codes.DATA} (DATA); got {result.exit_code}. "
+        f"stderr: {result.stderr}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # INTERNAL (exit 1) — unrecognized exception bubbles to the classifier.
 # ---------------------------------------------------------------------------
 
@@ -251,3 +303,34 @@ def test_single_page_result_exits_with_success_code(tmp_path: Path) -> None:
     lines = target.read_text(encoding="utf-8").splitlines()
     # Header + at least one data row (fixture has 3).
     assert len(lines) >= 2, f"Expected header + data rows; got {lines!r}"
+
+
+# ---------------------------------------------------------------------------
+# Redesigned-layout regression — issue #14. Symbol column holds the
+# un-duplicated tickers end-to-end through the CLI CSV-write path.
+# ---------------------------------------------------------------------------
+
+
+def test_redesign_layout_result_exits_with_success_code_and_correct_tickers(
+    tmp_path: Path,
+) -> None:
+    """2-row redesigned-layout result -> exit 0, Symbol column un-duplicated."""
+    target = tmp_path / "out.csv"
+    runner = CliRunner()
+    with patch("fincli.app.main.fetch_page_sync", return_value=finviz_redesign_html()):
+        result = runner.invoke(
+            run_main,
+            ["--filter", "cap=midover", "--output", str(target)],
+            catch_exceptions=False,
+        )
+
+    assert result.exit_code == exit_codes.SUCCESS, f"stderr: {result.stderr}"
+    assert target.exists()
+
+    with target.open(encoding="utf-8", newline="") as f:
+        rows = list(csv.reader(f))
+    header, data_rows = rows[0], rows[1:]
+    symbol_index = header.index("Symbol")
+    assert len(data_rows) == 2
+    symbols = [row[symbol_index] for row in data_rows]
+    assert symbols == ["A", "AA"]

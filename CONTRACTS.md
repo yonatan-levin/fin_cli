@@ -64,7 +64,7 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 | `1` | **INTERNAL** — Unexpected internal failure. Uncaught exception that escaped the orchestrator and did not match the upstream/data classifier families. Traceback is printed to stderr and written to `logs/error.log`. |
 | `2` | **USAGE** — CLI input validation error. Click's default for `UsageError` and `BadParameter`. Includes the mutual-exclusion error and the unknown-key / unknown-value errors raised by `validate_filter_pairs`. Click owns this code; the orchestrator never emits it directly. |
 | `3` | **UPSTREAM** — Upstream / network failure. `cfscrape` raised, HTTP error, DNS failure, request timeout. Classified by `requests.exceptions.RequestException` (cfscrape raises `requests` subclasses internally). |
-| `4` | **DATA** — Data-contract / parse failure. Screener `<table>` element missing, BeautifulSoup couldn't extract a row, columns mismatch. Classified by `IndexError` / `AttributeError` / `KeyError` from inside the BS4 parsing chain. |
+| `4` | **DATA** — Data-contract / parse failure. Screener `<table>` element missing with no legitimate empty-result marker present, BeautifulSoup couldn't extract a row, columns mismatch, or a ticker cell's visible text disagrees with its link href (Finviz layout drift / corrupted ticker data). Classified by `IndexError` / `AttributeError` / `KeyError` from inside the BS4 parsing chain, plus `fincli.stock_screening.errors.ScreenerLayoutError`. A genuine zero-match screen (carrying Finviz's `js-screener-body-empty` marker instead of the table) is NOT this — it stays `0` SUCCESS with a header-only result. |
 
 Classifier source-of-truth is `fincli/app/exit_codes.py`; downstream pipelines should import the constants (`SUCCESS`, `INTERNAL`, `USAGE`, `UPSTREAM`, `DATA`) rather than hardcoding integers. Spec `docs/features/archive/pipeline-mode-spec.md` §5.4.
 
@@ -561,7 +561,7 @@ All non-2xx responses share a single envelope shape:
 |---|---|---|---|
 | `validation` | `422 Unprocessable Entity` | `2` USAGE | Unknown filter key or value (rejected by `validate_filter_pairs` before any HTTP fetch). |
 | `upstream`   | `502 Bad Gateway`          | `3` UPSTREAM | Finviz unreachable / timeout / non-2xx HTTP / cfscrape raised (`requests.exceptions.RequestException` family). |
-| `parsing`    | `502 Bad Gateway`          | `4` DATA     | Finviz returned HTML the BS4 parser could not extract a row from (`IndexError` / `AttributeError` / `KeyError` from the parser chain). |
+| `parsing`    | `502 Bad Gateway`          | `4` DATA     | Finviz returned HTML the BS4 parser could not extract a row from (`IndexError` / `AttributeError` / `KeyError` from the parser chain), OR the screener HTML violates the layout contract (`ScreenerLayoutError`): a missing `<table>` with no legitimate empty-result marker, or a ticker cell whose text disagrees with its href (layout drift / corrupted ticker data). |
 | `internal`   | `500 Internal Server Error`| `1` INTERNAL | Unclassified bug in fincli or the API layer. Includes a `request_id` (UUID4) for cross-referencing with logs. |
 
 Why `422` (not `400`) for `validation`: `400` is reserved for FastAPI's automatic handling of malformed JSON or missing-required-field cases; `422` is the more precise code for syntactically-valid JSON with a semantically-invalid filter key. Why `502` for both `upstream` and `parsing`: from the API's perspective both mean "the upstream gave us something we couldn't work with"; the `error_class` discriminates.

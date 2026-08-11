@@ -16,6 +16,7 @@ import pytest
 import requests
 
 from fincli.app import exit_codes
+from fincli.stock_screening.errors import ScreenerLayoutError
 
 # ---------------------------------------------------------------------------
 # Constant-value pinning. The exit codes are part of the stable CLI surface
@@ -168,3 +169,13 @@ def test_classify_custom_lookup_subclass_still_data() -> None:
         pass
 
     assert exit_codes.classify(CustomLookupError("nope")) == exit_codes.DATA
+
+
+def test_classify_screener_layout_error_returns_data() -> None:
+    """`ScreenerLayoutError` (issue #14 / MAJOR #4) -> DATA (4).
+
+    Covers both raise sites: a missing screener table with no legitimate
+    empty-result marker, and a ticker cell whose text disagrees with its
+    href.
+    """
+    assert exit_codes.classify(ScreenerLayoutError("layout drift")) == exit_codes.DATA
