@@ -6,6 +6,6 @@ exported functions are the bridge points the FastAPI route handlers
 call to fulfil ``GET /filters`` and ``POST /screens`` respectively.
 """
 
-from fincli_api.adapters.fincli import get_filter_inventory, run_screen
+from fincli_api.adapters.fincli import get_filter_inventory, run_screen, run_screen_from_link
 
-__all__ = ["get_filter_inventory", "run_screen"]
+__all__ = ["get_filter_inventory", "run_screen", "run_screen_from_link"]

@@ -307,6 +307,33 @@ class Fundamental_Params:
         },
     ]
 
+    # Extracted live from Finviz's `fs_fa_sales3years` <select> (screener.ashx?v=111&ft=4,
+    # 2026-08-11) — orchestrator change request docs/pendingwork/2026-07-25-scrape-link-http-api.md
+    # (frozen 9-filter screen uses `fa_sales3years_pos`). Unlike its 5-year sibling below,
+    # Finviz does not expose an explicit "Negative" value code for this filter.
+    SALES_GROWTH_PAST_3_YEARS = [
+        "fa_sales3years",
+        {
+            "": "Any",
+            "pos": "Positive (>0%)",
+            "poslow": "Positive Low (0-10%)",
+            "high": "High (>25%)",
+            "u5": "Under 5%",
+            "u10": "Under 10%",
+            "u15": "Under 15%",
+            "u20": "Under 20%",
+            "u25": "Under 25%",
+            "u30": "Under 30%",
+            "o5": "Over 5%",
+            "o10": "Over 10%",
+            "o15": "Over 15%",
+            "o20": "Over 20%",
+            "o25": "Over 25%",
+            "o30": "Over 30%",
+            "frange": "Custom (Elite only)",
+        },
+    ]
+
     SALES_GROWTH_PAST_5_YEARS = [
         "fa_sales5years",
         {

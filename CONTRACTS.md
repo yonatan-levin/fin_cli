@@ -357,7 +357,7 @@ Stable JSON payload emitted to **stdout** by `fincli --list-filters --json` for 
 
 **Key-ordering nuance** (spec §5.2): ordering is by **class membership**, not by key-prefix. Keys with prefix `sh_*` appear in both `Fundamental_Params` (insider/institutional ownership) and `Descriptive_Params` (shares outstanding / average volume / price / float); both groups respect the Fundamental → Descriptive → Technical class order even though their prefixes interleave.
 
-**Payload size** (measured live 2026-05-19): 66 filter keys (29 Fundamental + 18 Descriptive + 19 Technical), 47,216 bytes single-line. Small enough to fetch once at consumer-app startup and cache for hours-to-days.
+**Payload size** (re-measured 2026-08-11): 67 filter keys (30 Fundamental + 18 Descriptive + 19 Technical), 48,997 bytes single-line. (Was 66 keys / 47,216 bytes at the 2026-05-19 measurement; `fa_sales3years` joined 2026-08-11.) Small enough to fetch once at consumer-app startup and cache for hours-to-days.
 
 **Source of truth**: `fincli.resource.params.validators.list_valid_filters_with_labels` (importable but interim-private — sibling of the existing `list_valid_filters` per §6.7). Walks the same `_PARAM_CLASSES` constant via the shared `_iter_param_entries` helper. The schema-version constant lives at `fincli.app.cli.LIST_FILTERS_SCHEMA_VERSION` (mirrors the `JSON_SUMMARY_SCHEMA_VERSION` pattern in §5.5).
 
@@ -514,6 +514,20 @@ No version prefix (`/v1/...`) by design — added when the first breaking change
 `filters` is a JSON object mapping Finviz filter `query_key` to `value_code` — the same shape `filter_history.json` (§4.3) and `--filters-json` (§6.3) use, so all four structured-input paths share one schema. Valid keys and values come from `GET /filters` (or equivalently `fincli --list-filters --json`, schema §5.6). The top-level `filters` wrapper leaves room for future `options` / `pagination` additions without breaking the request schema.
 
 Empty object (`{}`) is valid and submits a no-filter screen (Finviz default-view dump). Unknown keys or values raise `422 validation` (envelope shape in §8.4) — the same `validate_filter_pairs` chokepoint (§6.7) the CLI's structured-input modes use.
+
+**`scrape_link` (added 2026-08-11)** — a second, mutually-exclusive input mode:
+
+```json
+{"scrape_link": "https://finviz.com/screener.ashx?v=111&f=fa_sales3years_pos,ta_perf2_3yup&ft=2"}
+```
+
+Mirrors the CLI's `--scrape-link` (§1 behavior table): the URL is fetched **verbatim**, with **no filter-inventory validation**. Exactly one of `filters` or `scrape_link` must be set — `ScreenRequest`'s `model_validator` rejects both-set or neither-set with a `ValueError`, which FastAPI surfaces as its **standard request-validation `422`** (`{"detail": [...]}`) — deliberately **not** the `ErrorResponse` envelope in §8.4, since this is a malformed request rather than a failed pipeline run.
+
+`scrape_link` additionally requires an absolute `http`/`https` URL whose host is `finviz.com` or a subdomain of it (e.g. `elite.finviz.com`) — a host allowlist enforced at the request-model layer, same `422` envelope. This is a **deliberate deviation from CLI parity**: `--scrape-link` accepts any URL (a local, single-user process), but the API binds `0.0.0.0` by default, so an unrestricted URL fetch here would be an SSRF hole. See `INTEGRATION.md` "scrape_link input" for the full consumer-facing table.
+
+`filter_history.json` writeback (§4.3) is structurally impossible on the `scrape_link` path — the only writeback call site is the CLI's interactive picker, never reached from the HTTP API on either input mode.
+
+Importable surface: `fincli.app.main.scrape_link_to_dataframe(scrape_link, *, hyperlink_wrap=False)` (sibling of `screen_to_dataframe` in §6.1, same shared `_screen_from_query` core) and `fincli_api.adapters.fincli.run_screen_from_link(scrape_link)` (sibling of `run_screen`).
 
 ### 8.3 Response — `POST /screens` (200)
 

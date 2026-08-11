@@ -17,12 +17,16 @@ from fastapi.testclient import TestClient
 
 
 @pytest.mark.live
-def test_e2e_get_filters_returns_66_keys(client: TestClient) -> None:
-    """Live: GET /filters returns the full 66-key Finviz filter inventory."""
+def test_e2e_get_filters_returns_67_keys(client: TestClient) -> None:
+    """Live: GET /filters returns the full 67-key Finviz filter inventory.
+
+    66 keys since the 2026-05-21 inventory dump; ``fa_sales3years`` joined
+    on 2026-08-11 (scrape_link CR's complementary inventory growth) -> 67.
+    """
     response = client.get("/filters")
     assert response.status_code == 200
     payload = response.json()
-    assert len(payload["keys"]) == 66
+    assert len(payload["keys"]) == 67
 
 
 @pytest.mark.live

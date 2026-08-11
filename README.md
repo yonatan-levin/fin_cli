@@ -78,7 +78,7 @@ An empty `{}` body runs a full dump; zero matches returns `200` with `stocks: []
 
 | Flag | What it does |
 |---|---|
-| `--list-filters` (+ `--json`) | Dump the full 66-key filter inventory and exit 0 (no screen runs) |
+| `--list-filters` (+ `--json`) | Dump the full 67-key filter inventory and exit 0 (no screen runs) |
 | `--filter K=V` (repeatable) | Add a filter, e.g. `--filter fa_pe=u20 --filter sec=energy` |
 | `--filters-json '{...}'` / `--filters-file PATH` | Filters as inline JSON or a JSON file |
 | `--output PATH` / `-o` | Exact CSV destination; `--output -` streams CSV to stdout |

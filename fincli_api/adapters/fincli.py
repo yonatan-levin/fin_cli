@@ -32,7 +32,7 @@ from typing import Any
 
 import pandas as pd
 
-from fincli.app.main import screen_to_dataframe
+from fincli.app.main import scrape_link_to_dataframe, screen_to_dataframe
 from fincli.resource.params.const import BASE_URL
 from fincli.resource.params.validators import list_valid_filters_with_labels
 from fincli_api.models import FilterEntry, FilterInventory, ScreenResult, Stock
@@ -112,13 +112,63 @@ def run_screen(filters: dict[str, str]) -> ScreenResult:
         ``ErrorResponse`` envelope via ``fincli.app.exit_codes.classify``.
     """
     started_at = datetime.now(tz=UTC)
-
     # ``hyperlink_wrap=False`` keeps the ``Ticker`` column as the raw
     # symbol (e.g. ``"AAPL"``) rather than the Excel ``=HYPERLINK(...)``
     # formula the CLI's file-write path uses. API consumers want bare
     # tickers — spec §4.3 ``Stock.ticker`` example is ``"CNX"``.
     df = screen_to_dataframe(filters, hyperlink_wrap=False)
+    return _build_screen_result(df, started_at)
 
+
+def run_screen_from_link(scrape_link: str) -> ScreenResult:
+    """Run a Finviz screen from a direct URL and return ``ScreenResult``.
+
+    Bridges ``fincli.app.main.scrape_link_to_dataframe`` to the API
+    contract — the ``scrape_link`` sibling of ``run_screen``. Reuses
+    ``_build_screen_result`` for the DataFrame -> ``ScreenResult``
+    projection so the two entry points cannot drift.
+
+    NO filter-inventory validation happens on this path (the URL is
+    opaque, same as the CLI's ``--scrape-link``) — callers (the T4b route
+    handler) MUST NOT call ``validate_filter_pairs`` before invoking this
+    function; doing so would have nothing to validate against a bare URL.
+
+    Args:
+        scrape_link: A Finviz screener URL matching
+            ``ScreenRequest.scrape_link`` (host-allowlisted to finviz.com
+            and its subdomains at the request-model layer, per the SSRF
+            guard in ``fincli_api/models/screens.py``).
+
+    Returns:
+        Same shape/semantics as ``run_screen`` — see its docstring for the
+        field contract.
+
+    Raises:
+        Same as ``run_screen``.
+    """
+    started_at = datetime.now(tz=UTC)
+    df = scrape_link_to_dataframe(scrape_link, hyperlink_wrap=False)
+    return _build_screen_result(df, started_at)
+
+
+def _build_screen_result(df: pd.DataFrame, started_at: datetime) -> ScreenResult:
+    """Shared DataFrame -> ``ScreenResult`` projection for both entry points.
+
+    Factored out of ``run_screen`` so ``run_screen`` and
+    ``run_screen_from_link`` cannot drift on the row-projection or timing
+    logic — both call this single chokepoint.
+
+    Args:
+        df: The screener DataFrame from either ``screen_to_dataframe`` or
+            ``scrape_link_to_dataframe`` (identical column contract —
+            ``hyperlink_wrap=False`` in both callers).
+        started_at: Wall-clock UTC timestamp captured at the caller's
+            entry, before the (possibly slow) Finviz fetch/parse.
+
+    Returns:
+        ``ScreenResult`` with ``schema_version=1``, the per-run timing
+        metadata, and the ``stocks`` list.
+    """
     # ``Link`` column is dropped inside ``build_data_frame``, so the
     # adapter rebuilds the canonical Finviz quote URL per row matching
     # spec §4.3; see ``_FINVIZ_QUOTE_PATH`` above for the CSV-path drift.
