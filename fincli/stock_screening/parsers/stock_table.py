@@ -71,8 +71,8 @@ class StockTableScreenerParser:
         """
         anchors = cells[1].find_all("a")
         if not anchors:
-            # No anchor at all: let `ticker_link`'s `.find("a")` raise the
-            # existing AttributeError contract instead of masking it here.
+            # No anchor at all: let `ticker_link` raise the existing
+            # AttributeError contract instead of masking it here.
             return cells[1].get_text(strip=True)
 
         last_anchor = anchors[-1]
@@ -86,12 +86,22 @@ class StockTableScreenerParser:
                 f"{href_ticker!r} (href={href!r}) — Finviz layout drift or "
                 "corrupted ticker data"
             )
+        # Not a dead cast: `anchors[-1]` is `Any` under the bs4 stubs, so
+        # `get_text()` returns `Any` and strict mypy needs the narrowing.
         return cast(str, text)
 
     @classmethod
     def ticker_link(cls, cells: list[Tag]) -> str:
+        """Return the canonical Finviz URL for the row's ticker cell.
+
+        Derived from the LAST anchor in the ticker cell — the same anchor
+        ``ticker_symbol`` validates text-vs-href agreement on — so the
+        emitted ``Link`` column can never come from a different element
+        than the validated symbol. (Both live-layout anchors share one
+        href today; this guards future drift.)
         """
-        Returns the ticker link.
-        """
-        link = cast(str, cast(Tag, cells[1].find("a")).get("href"))
+        # `None.get` preserves the pinned no-anchor failure contract:
+        # AttributeError, classified DATA=4 (same as the legacy `.find("a")`).
+        last_anchor = cells[1].find_all("a")[-1] if cells[1].find_all("a") else None
+        link = cast(str, cast(Tag, last_anchor).get("href"))
         return BASE_URL + link

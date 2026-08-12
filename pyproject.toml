@@ -25,7 +25,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "ruff>=0.6",
+    # Pinned to one minor so `ruff format --check` output is stable across
+    # venv rebuilds: 0.16 began formatting Markdown code fences, and unpinned
+    # worktree venvs resolving different ruff minors made the same tree pass
+    # one gate run and fail the next (2026-08-12 burndown session).
+    "ruff>=0.16.2,<0.17",
     "mypy>=1.10",
     "pytest>=8",
     "pytest-cov>=5",

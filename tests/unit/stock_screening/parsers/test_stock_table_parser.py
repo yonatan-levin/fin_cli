@@ -112,6 +112,14 @@ def test_ticker_symbol_missing_t_param_raises_layout_error() -> None:
         StockTableScreenerParser.ticker_symbol(cells)
 
 
+def test_ticker_symbol_anchor_without_href_raises_layout_error() -> None:
+    """An anchor carrying no `href` attribute at all -> raise, never silently return."""
+    cells = _cells("<tr><td>1</td><td><a>AAPL</a></td></tr>")
+
+    with pytest.raises(ScreenerLayoutError):
+        StockTableScreenerParser.ticker_symbol(cells)
+
+
 def test_ticker_symbol_no_anchor_falls_back_to_cell_text() -> None:
     """No `<a>` in the cell: return the plain text rather than raising here.
 
