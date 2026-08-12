@@ -14,7 +14,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
 import requests
 from _fixtures_loader import (
     finviz_empty_html,
@@ -22,6 +21,9 @@ from _fixtures_loader import (
     finviz_malformed_row_html,
     finviz_no_table_html,
     finviz_one_page_html,
+    finviz_redesign_html,
+    finviz_ticker_mismatch_html,
+    finviz_zero_redesign_html,
 )
 from fastapi.testclient import TestClient
 
@@ -147,36 +149,21 @@ def test_post_screens_malformed_row_returns_502_parsing(
 
 
 # ---------------------------------------------------------------------------
-# Missing table — MAJOR #4 deferred limitation. Currently coerced to a 200
-# empty result instead of 502 "parsing". Documented as ``xfail`` so when
-# the limitation is closed the test starts passing and the marker can drop.
+# Missing table, no empty marker — MAJOR #4 closed. ``ScreenerLayoutError``
+# now routes this through the DATA classifier -> 502 "parsing" instead of
+# silently coercing to a 200 empty result.
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    reason=(
-        "MAJOR #4 deferred (see exception_handlers.py module docstring): "
-        "malformed HTML with no styled-table-new element currently routes "
-        "through the zero-row success branch (200, empty stocks) instead "
-        "of the 502 parsing envelope spec §5.1 implies. Closing requires "
-        "parser-level changes in fincli/stock_screening/ — out of T5 scope."
-    ),
-    strict=True,
-)
 def test_post_screens_no_table_returns_502_parsing(
     client: TestClient, mock_fetch: MagicMock
 ) -> None:
-    """``finviz_no_table.html`` (no table element) -> 502 error_class=parsing.
+    """``finviz_no_table.html`` (no table, no empty marker) -> 502 parsing.
 
-    Spec §5.1 implies "malformed Finviz response" should classify as
-    parsing (502), but the current ``page_count == 0`` + empty
-    ``all_table_content`` branch silently routes to 200/empty. Marked
-    ``xfail(strict=True)`` so closing MAJOR #4 will trip the marker and
-    force a docs update.
-
-    PAIRED WITH ``test_post_screens_no_table_current_behavior_returns_200_empty``
-    below — both tests must be flipped/deleted in the same commit when
-    MAJOR #4 closes (strict=True ensures the pair stays mechanically coupled).
+    MAJOR #4 closed 2026-08-11: a missing screener table with no
+    legitimate zero-result marker now raises ``ScreenerLayoutError`` in
+    ``aggregate_rows``, classified DATA -> HTTP 502 ``error_class="parsing"``
+    — no longer silently coerced to a 200 empty result.
     """
     mock_fetch.return_value = finviz_no_table_html()
 
@@ -187,29 +174,75 @@ def test_post_screens_no_table_returns_502_parsing(
     assert body["error_class"] == "parsing"
 
 
-def test_post_screens_no_table_current_behavior_returns_200_empty(
+# ---------------------------------------------------------------------------
+# Legitimate zero-result page on the redesigned layout — no styled-table-new,
+# but carries Finviz's js-screener-body-empty marker. Must stay 200/empty,
+# NOT 502 parsing.
+# ---------------------------------------------------------------------------
+
+
+def test_post_screens_zero_redesign_returns_200_empty_stocks(
     client: TestClient, mock_fetch: MagicMock
 ) -> None:
-    """Document the ACTUAL current behavior of the no-table fixture.
+    """``finviz_zero_redesign.html`` (empty-result marker, no table) -> 200 []."""
+    mock_fetch.return_value = finviz_zero_redesign_html()
 
-    Pinned alongside the ``xfail`` above so the current MAJOR #4 limitation
-    is testable and visible. When the limitation is closed, this test must
-    be flipped (delete or invert) at the same time as the xfail marker is
-    removed.
+    response = client.post("/screens", json={"filters": {"cap": "mega"}})
 
-    PAIRED WITH ``test_post_screens_no_table_returns_502_parsing`` above —
-    closing MAJOR #4 flips strict=True xfail to "unexpected pass" AND
-    breaks this current-behavior assertion. The pair must be edited
-    together in a single commit.
-    """
-    mock_fetch.return_value = finviz_no_table_html()
-
-    response = client.post("/screens", json={"filters": {"fa_pe": "u20"}})
-
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     body = response.json()
     assert body["row_count"] == 0
     assert body["stocks"] == []
+
+
+# ---------------------------------------------------------------------------
+# Redesigned layout — issue #14 regression. Ticker cells must not duplicate
+# their first letter.
+# ---------------------------------------------------------------------------
+
+
+def test_post_screens_redesign_fixture_returns_correct_tickers(
+    client: TestClient, mock_fetch: MagicMock
+) -> None:
+    """``finviz_redesign.html`` (2 rows, redesigned layout) -> tickers un-duplicated.
+
+    Regression for GitHub issue #14: the old cell-wide ``get_text()``
+    concatenated the logo-fallback anchor's single letter with the
+    tab-link anchor's full ticker (e.g. "A" -> "AA", "AA" -> "AAA").
+    """
+    mock_fetch.return_value = finviz_redesign_html()
+
+    response = client.post("/screens", json={"filters": {"cap": "midover"}})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["row_count"] == 2
+    tickers = [s["ticker"] for s in body["stocks"]]
+    assert tickers == ["A", "AA"]
+
+
+# ---------------------------------------------------------------------------
+# Corrupted/drifted ticker cell — text disagrees with its href.
+# ---------------------------------------------------------------------------
+
+
+def test_post_screens_ticker_mismatch_returns_502_parsing(
+    client: TestClient, mock_fetch: MagicMock
+) -> None:
+    """``finviz_ticker_mismatch.html`` -> 502 error_class=parsing.
+
+    The row's last anchor text ("KKTOS") disagrees with its href's ``t``
+    query parameter ("KTOS"). ``ticker_symbol`` raises
+    ``ScreenerLayoutError`` rather than returning the corrupted text;
+    classified DATA -> HTTP 502 ``parsing``.
+    """
+    mock_fetch.return_value = finviz_ticker_mismatch_html()
+
+    response = client.post("/screens", json={"filters": {"fa_pe": "u20"}})
+
+    assert response.status_code == 502
+    body = response.json()
+    assert body["error_class"] == "parsing"
 
 
 # ---------------------------------------------------------------------------

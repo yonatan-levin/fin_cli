@@ -40,7 +40,7 @@ A single-page reference for every command, skill, MCP tool, and Claude Code hook
 | `pytest --cov=fincli --cov=fincli_api --cov=core --cov=config --cov-report=term-missing` | Coverage report (informational; gate deferred to Phase 3). |
 | `pytest -ra` | Short summary of skipped/xfailed/errored tests (default via `pytest.ini`). |
 
-> Current state: 279 passed / 1 skipped / 3 deselected (live tier) / 1 xfailed in the default invocation. The live-tier gate (`pytest -m live tests/e2e/api/`) is **mandatory before HUMAN approval** on any change to `fincli_api/` or `fincli/stock_screening/` per FEEDBACK-LOG.md 2026-05-22 entry.
+> The live-tier gate (`pytest -m live tests/e2e/api/`) is **mandatory before HUMAN approval** on any change to `fincli_api/` or `fincli/stock_screening/` per FEEDBACK-LOG.md 2026-05-22 entry. (Exact suite counts live in the Stop-hook gate output, not here — recorded counts drift.)
 
 ---
 

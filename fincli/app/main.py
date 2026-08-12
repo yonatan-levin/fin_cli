@@ -40,6 +40,7 @@ from core.configuration import configurator
 from fincli.app import exit_codes
 from fincli.cli.cli_stock_screener import select_filters_and_values
 from fincli.stock_screening.content.stock_table import StockTableScreeningContent
+from fincli.stock_screening.errors import ScreenerLayoutError
 from fincli.stock_screening.locators.stock_table_locators import StockTableLocators
 from fincli.utils.market_cap import convert_market_cap_to_numeric
 from fincli.utils.quary_builders import build_stock_screener_query
@@ -68,7 +69,18 @@ def aggregate_rows(pages: list[bytes]) -> list[list[list[str]]]:
     rows = []
     for page_content in pages:
         tab = StockTableScreeningContent(page_content)
-        rows.extend(tab.all_table_content)
+        page_tables = tab.all_table_content
+        # A page with no screener table is only legitimate when it carries
+        # Finviz's zero-result marker (a genuine "0 Total" screen). Anything
+        # else — missing table, no marker — is layout drift or junk HTML
+        # that must not silently fall through to the zero-row success
+        # branch (MAJOR #4).
+        if not page_tables and not tab.has_empty_marker:
+            raise ScreenerLayoutError(
+                "Finviz screener table not found and no empty-result marker "
+                "present — layout drift or junk HTML"
+            )
+        rows.extend(page_tables)
     return [row.table_data for row in rows]
 
 
