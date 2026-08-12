@@ -39,4 +39,4 @@ class StockTableScreeningContent:
             True when the empty-result marker element is present on the
             page, False otherwise.
         """
-        return self.soup.find(id=StockTableLocators.EMPTY_BODY_ID) is not None
+        return self.soup.find("table", id=StockTableLocators.EMPTY_BODY_ID) is not None
