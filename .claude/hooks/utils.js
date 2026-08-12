@@ -254,8 +254,11 @@ function mainRepoRootOf(treeRoot) {
     if (!fs.statSync(gitPath).isFile()) return null;
     const m = fs.readFileSync(gitPath, 'utf8').match(/^gitdir:\s*(.+)$/m);
     if (!m) return null;
-    // <main>/.git/worktrees/<name> → <main>
-    return path.resolve(m[1].trim(), '..', '..', '..');
+    // <main>/.git/worktrees/<name> → <main>. A relative gitdir (e.g. under
+    // git worktree.useRelativePaths) is relative to treeRoot, not this
+    // process's cwd — resolve against treeRoot so absolute gitdirs are
+    // unaffected (path.resolve stops at the first absolute segment).
+    return path.resolve(treeRoot, m[1].trim(), '..', '..', '..');
   } catch { return null; }
 }
 
