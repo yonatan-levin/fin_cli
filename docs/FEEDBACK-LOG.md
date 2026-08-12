@@ -206,3 +206,27 @@ detailed evidence in the subject spec/closeout, one-line shipped-stream entries
 in `docs/CHANGELOG.md`, and user corrections/validated ways of working in this
 file. `CLAUDE.md` may link to those homes but keeps only the present-tense rule
 an editor must know before acting.
+
+---
+
+### 2026-08-11 — Merge resolutions can silently revert quality-gate scope; re-verify `pyproject.toml` policy lines after every merge
+
+**What:** The `feat/observability` merge (`6ee7093`/`0bec51a`) silently dropped
+`fincli_api` from `[tool.mypy] files`. The branch was cut before the
+harness-burndown merge added `fincli_api` to the scope, its plan even recorded
+"fincli_api is deliberately NOT in that list — unchanged project choice" (true
+when written, false by merge time), and the textual merge resolution kept the
+branch's version of the line. Result: strict mypy stopped covering `fincli_api`
+on master for ~2 weeks while THESIS Phase 4 claimed it was gated. Found by the
+2026-08-11 burndown-spec verification pass; `fincli_api` was strict-clean when
+restored, so no type debt accumulated.
+
+**Why:** `pyproject.toml` policy lines (mypy `files`, coverage `source`,
+`fail_under`) are single-line lists that both sides of a merge routinely touch;
+textual merge tools pick one side and the loss is invisible because gates
+*pass* — they just check less.
+
+**How to apply:** When merging any branch that predates a quality-scope change,
+diff the merged `[tool.mypy]`/`[tool.coverage]` sections against BOTH parents
+before concluding gates are intact. A spec/plan claiming a scope choice is
+"unchanged" is a snapshot, not an invariant — re-verify at merge time.

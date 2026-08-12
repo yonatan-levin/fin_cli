@@ -344,12 +344,12 @@ The `logger/` package is a flat set of files — there are no subdirectories.
 from logger import logger
 
 logger.info("message")
-logger.warn("message")                    # note: `.warn` not `.warning`
-logger.error("title", message="...")      # parameter order is flipped (footgun)
+logger.warn("message")  # note: `.warn` not `.warning`
+logger.error("title", message="...")  # parameter order is flipped (footgun)
 logger.debug("message")
 logger.set_level(logging.DEBUG)
-logger.set_console_stream(sys.stderr)     # Pillar 2 — used by --output - mode
-logger.set_quiet(True)                    # Pillar 3 — suppress INFO/DEBUG console
+logger.set_console_stream(sys.stderr)  # Pillar 2 — used by --output - mode
+logger.set_quiet(True)  # Pillar 3 — suppress INFO/DEBUG console
 ```
 
 Handlers are not part of the public surface — they are initialized internally and must not be instantiated directly. The `set_console_stream` and `set_quiet` methods exist so the orchestrator has named entry points for the Pillar-2 / Pillar-3 stream-discipline behavior; default users never call them.

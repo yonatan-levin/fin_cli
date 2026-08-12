@@ -114,16 +114,20 @@ Each test layer has its own `conftest.py`. Shared cross-layer fixtures live in t
 ```python
 # tests/conftest.py
 
+
 @pytest.fixture
 def sample_screening_df():
     """DataFrame mimicking the output of build_data_frame."""
-    return pd.DataFrame({
-        "Symbol":      ["AAPL", "MSFT", "GOOGL"],
-        "Ticker":      ["AAPL", "MSFT", "GOOGL"],
-        "Sector":      ["Technology"] * 3,
-        "Country":     ["USA"] * 3,
-        "Market Cap":  [2_890_000_000_000, 2_800_000_000_000, 1_700_000_000_000],
-    })
+    return pd.DataFrame(
+        {
+            "Symbol": ["AAPL", "MSFT", "GOOGL"],
+            "Ticker": ["AAPL", "MSFT", "GOOGL"],
+            "Sector": ["Technology"] * 3,
+            "Country": ["USA"] * 3,
+            "Market Cap": [2_890_000_000_000, 2_800_000_000_000, 1_700_000_000_000],
+        }
+    )
+
 
 @pytest.fixture
 def finviz_sample_html():
@@ -183,6 +187,7 @@ from unittest.mock import patch, MagicMock
 import pandas as pd
 import pytest
 
+
 @patch("fincli.utils.web_scraper.cfscrape.create_scraper")
 def test_fetch_urls_returns_one_blob_per_page(mock_create_scraper, finviz_sample_html):
     mock_scraper = MagicMock()
@@ -190,6 +195,7 @@ def test_fetch_urls_returns_one_blob_per_page(mock_create_scraper, finviz_sample
     mock_create_scraper.return_value = mock_scraper
 
     from fincli.app.main import fetch_urls
+
     pages = fetch_urls("https://finviz.com/screener.ashx?v=111&f=fa_pe_u20&ft=2", page_count=3)
     assert len(pages) == 3
     assert all(isinstance(p, bytes) for p in pages)

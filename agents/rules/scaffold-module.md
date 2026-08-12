@@ -55,6 +55,7 @@ tests/
 
 ```python
 """{ModuleName} — short description of what this module does."""
+
 from __future__ import annotations
 
 # Re-export the public API surface here when stable.
@@ -64,6 +65,7 @@ from __future__ import annotations
 
 ```python
 """Click command group for {module-name}."""
+
 from __future__ import annotations
 
 import click
@@ -95,6 +97,7 @@ def main(example: str | None) -> None:
 
 ```python
 """{ModuleName} pipeline orchestration."""
+
 from __future__ import annotations
 
 from logger import logger
@@ -169,6 +172,7 @@ If the module has its own `python -m` entry point, add `{module-name}/__main__.p
 
 ```python
 """Entry point: python -m {module-name}."""
+
 from __future__ import annotations
 
 from .app.cli import cli

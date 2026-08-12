@@ -36,10 +36,12 @@ Restore the `--scrape-link=<url>` Click option that was incidentally removed dur
 The historical Click decorator lived on `fundainsight/app/cli.py` (commit `3eb9228`, Oct 2023):
 
 ```python
-@click.option('--scrape-link', default="", help='Set the scrape link to be used.')
+@click.option("--scrape-link", default="", help="Set the scrape link to be used.")
 def run_main(ctx, history=False, debug=False, set_filters="", scrape_link=""):
     if ctx.invoked_subcommand is None:
-        get_opportunities(history=history, debug=debug, set_filters=set_filters, scrape_link=scrape_link)
+        get_opportunities(
+            history=history, debug=debug, set_filters=set_filters, scrape_link=scrape_link
+        )
 ```
 
 And the consumer in `fundainsight/app/fincli.py`:
@@ -96,20 +98,24 @@ import click
 
 
 @click.group(invoke_without_command=True)
-@click.option('--history', '--hist', is_flag=True, help='Use filters of recent search.')
-@click.option('--debug', is_flag=True, help='Display details logging.')
-@click.option('--scrape-link', default="", help='Direct Finviz screener URL; bypasses interactive filter selection. Mutually exclusive with --history.')
+@click.option("--history", "--hist", is_flag=True, help="Use filters of recent search.")
+@click.option("--debug", is_flag=True, help="Display details logging.")
+@click.option(
+    "--scrape-link",
+    default="",
+    help="Direct Finviz screener URL; bypasses interactive filter selection. Mutually exclusive with --history.",
+)
 @click.pass_context
-def run_main(ctx: click.Context,
-             history: bool = False,
-             debug: bool = False,
-             scrape_link: str = ""
-             ) -> None:
+def run_main(
+    ctx: click.Context, history: bool = False, debug: bool = False, scrape_link: str = ""
+) -> None:
     """
     Welcome to the Stock Screener CLI!
     """
     if history and scrape_link:
-        raise click.UsageError("--history and --scrape-link are mutually exclusive; pick one input mode.")
+        raise click.UsageError(
+            "--history and --scrape-link are mutually exclusive; pick one input mode."
+        )
     click.echo("Welcome to the Stock Screener CLI!")
     from .main import run_stock_screener
 
@@ -119,11 +125,7 @@ def run_main(ctx: click.Context,
 
 `core/configuration/configurator.py`:
 ```python
-def build_config(
-    use_history: bool = False,
-    filters: str = "",
-    scrape_link: str = ""
-) -> Config:
+def build_config(use_history: bool = False, filters: str = "", scrape_link: str = "") -> Config:
     """Create the configuration."""
     config = Config()
 
@@ -136,8 +138,8 @@ def build_config(
 
     if use_history:
         config.use_history = use_history
-        filepath = config.history_dir / 'filter_history.json'
-        with open(filepath, 'r') as f:
+        filepath = config.history_dir / "filter_history.json"
+        with open(filepath, "r") as f:
             filters_data = json.load(f)
             config.filters = tuple(filters_data.items())
 
@@ -160,17 +162,17 @@ def test_scrape_link_option_accepted():
     """--scrape-link=<url> is parsed and forwarded; CLI exits 0 if downstream succeeds."""
     runner = CliRunner()
     # Use --help to short-circuit the screener call but prove the option parses.
-    result = runner.invoke(run_main, ['--scrape-link=https://finviz.com/test', '--help'])
+    result = runner.invoke(run_main, ["--scrape-link=https://finviz.com/test", "--help"])
     assert result.exit_code == 0
-    assert '--scrape-link' in result.output
+    assert "--scrape-link" in result.output
 
 
 def test_scrape_link_and_history_mutually_exclusive():
     """Passing both --history and --scrape-link raises UsageError."""
     runner = CliRunner()
-    result = runner.invoke(run_main, ['--history', '--scrape-link=https://finviz.com/test'])
+    result = runner.invoke(run_main, ["--history", "--scrape-link=https://finviz.com/test"])
     assert result.exit_code != 0
-    assert 'mutually exclusive' in result.output.lower()
+    assert "mutually exclusive" in result.output.lower()
 ```
 
 ---
