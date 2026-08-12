@@ -11,8 +11,10 @@ plus the validator-first ordering and the UPSTREAM-exception path.
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
 import requests
 from _fixtures_loader import (
     finviz_empty_html,
@@ -325,3 +327,128 @@ def test_post_screens_finviz_url_uses_single_slash(
         assert url.startswith("https://finviz.com/quote.ashx?t="), url
         # Specifically reject the legacy double-slash form.
         assert "//quote" not in url, f"Double-slash regression in {url!r}"
+
+
+# ---------------------------------------------------------------------------
+# scrape_link end-to-end — real adapter, real parser, canned HTML fixture.
+# Change request: docs/pendingwork/2026-07-25-scrape-link-http-api.md.
+# ---------------------------------------------------------------------------
+
+
+def test_post_screens_scrape_link_happy_path_returns_200_with_stock(
+    client: TestClient, mock_fetch: MagicMock
+) -> None:
+    """``scrape_link`` -> 200 with the parsed stock, same as the filters path."""
+    mock_fetch.return_value = finviz_happy_html()
+    url = "https://finviz.com/screener.ashx?v=111&f=fa_sales3years_pos,ta_perf2_3yup&ft=2"
+
+    response = client.post("/screens", json={"scrape_link": url})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["row_count"] == 1
+    assert body["stocks"][0]["ticker"] == "AAPL"
+    # The URL is fetched verbatim as the query — no query-builder rewrite.
+    mock_fetch.assert_any_call(url)
+
+
+def test_post_screens_scrape_link_skips_filter_inventory_validation(
+    client: TestClient, mock_fetch: MagicMock
+) -> None:
+    """A URL encoding filter codes NOT in the inventory still succeeds (200).
+
+    Pins the "no filter-inventory validation on the scrape_link path"
+    semantics: the codes below (``totally_bogus_filter_zzz``) are not, and
+    will never be, registered keys — proving ``validate_filter_pairs`` is
+    never reached on this path (unlike the ``filters`` path, which would
+    422 on the same codes).
+    """
+    mock_fetch.return_value = finviz_happy_html()
+    url = "https://finviz.com/screener.ashx?v=111&f=totally_bogus_filter_zzz_pos&ft=2"
+
+    response = client.post("/screens", json={"scrape_link": url})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["row_count"] == 1
+
+
+def test_post_screens_both_filters_and_scrape_link_returns_422(
+    client: TestClient, mock_fetch: MagicMock
+) -> None:
+    """Both fields set -> 422, and no fetch ever fires (rejected before the pipeline).
+
+    This is FastAPI's standard request-validation envelope (``{"detail": [...]}``)
+    from ``ScreenRequest``'s ``model_validator`` raising ``ValueError`` — NOT the
+    custom ``ErrorResponse``/``error_class`` envelope used for pipeline failures.
+    See ``ScreenRequest``'s docstring for why that distinction is deliberate.
+    """
+    response = client.post(
+        "/screens",
+        json={"filters": {"fa_pe": "u5"}, "scrape_link": "https://finviz.com/screener.ashx"},
+    )
+
+    assert response.status_code == 422
+    assert "detail" in response.json()
+    mock_fetch.assert_not_called()
+
+
+def test_post_screens_neither_filters_nor_scrape_link_returns_422(
+    client: TestClient, mock_fetch: MagicMock
+) -> None:
+    """Neither field set -> 422 (FastAPI's standard validation envelope), no fetch fires."""
+    response = client.post("/screens", json={})
+
+    assert response.status_code == 422
+    assert "detail" in response.json()
+    mock_fetch.assert_not_called()
+
+
+def test_post_screens_scrape_link_non_finviz_host_returns_422(
+    client: TestClient, mock_fetch: MagicMock
+) -> None:
+    """Non-finviz.com host -> 422 (SSRF guard), no fetch ever fires."""
+    response = client.post(
+        "/screens", json={"scrape_link": "https://evil.example.com/screener.ashx"}
+    )
+
+    assert response.status_code == 422
+    mock_fetch.assert_not_called()
+
+
+def test_post_screens_scrape_link_non_http_scheme_returns_422(
+    client: TestClient, mock_fetch: MagicMock
+) -> None:
+    """Non-http(s) scheme -> 422 (SSRF guard), no fetch ever fires."""
+    response = client.post("/screens", json={"scrape_link": "file:///etc/passwd"})
+
+    assert response.status_code == 422
+    mock_fetch.assert_not_called()
+
+
+def test_post_screens_scrape_link_does_not_write_filter_history(
+    client: TestClient,
+    mock_fetch: MagicMock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The scrape_link API path never touches ``filter_history.json``.
+
+    History writeback only happens inside the interactive picker
+    (``fincli.cli.cli_stock_screener.select_filters_and_values``), which is
+    never on the API call path (``run_screen_from_link`` ->
+    ``scrape_link_to_dataframe`` -> ``_screen_from_query`` directly) —
+    writeback here is structurally impossible, not merely skipped by a
+    flag. Isolate ``HISTORY_DIR`` per the pattern in
+    ``tests/unit/configuration/test_configurator_filters.py`` and assert
+    the file is never created.
+    """
+    monkeypatch.setenv("HISTORY_DIR", str(tmp_path))
+    history_file = tmp_path / "filter_history.json"
+    mock_fetch.return_value = finviz_happy_html()
+
+    response = client.post(
+        "/screens", json={"scrape_link": "https://finviz.com/screener.ashx?v=111&f=fa_pe_u5"}
+    )
+
+    assert response.status_code == 200, response.text
+    assert not history_file.exists()

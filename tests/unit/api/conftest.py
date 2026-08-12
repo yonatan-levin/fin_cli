@@ -58,6 +58,19 @@ def mock_run_screen() -> Iterator[MagicMock]:
 
 
 @pytest.fixture
+def mock_run_screen_from_link() -> Iterator[MagicMock]:
+    """Patch the run_screen_from_link adapter at the IMPORT SITE in the route.
+
+    Sibling of ``mock_run_screen`` for the ``scrape_link`` request path. The
+    route does ``from fincli_api.adapters import run_screen_from_link``; we
+    patch ``fincli_api.routes.screens.run_screen_from_link`` so the route
+    sees the mock.
+    """
+    with patch("fincli_api.routes.screens.run_screen_from_link") as m:
+        yield m
+
+
+@pytest.fixture
 def sample_filter_inventory() -> FilterInventory:
     """Minimal FilterInventory fixture matching spec §4.4 shape."""
     return FilterInventory(

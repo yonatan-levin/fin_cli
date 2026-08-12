@@ -187,11 +187,39 @@ curl http://localhost:8000/healthz
 # List filters (cache aggressively — schema_version bumps invalidate)
 curl http://localhost:8000/filters
 
-# Run a screen
+# Run a screen — structured filters
 curl -X POST http://localhost:8000/screens \
   -H 'Content-Type: application/json' \
   -d '{"filters": {"fa_pe": "u5", "sec": "energy"}}'
+
+# Run a screen — direct Finviz URL (see "scrape_link input" below)
+curl -X POST http://localhost:8000/screens \
+  -H 'Content-Type: application/json' \
+  -d '{"scrape_link": "https://finviz.com/screener.ashx?v=111&f=fa_sales3years_pos,ta_perf2_3yup&ft=2"}'
 ```
+
+### `scrape_link` input
+
+`POST /screens` accepts a second, mutually-exclusive input mode: `scrape_link`, a
+direct Finviz screener URL fetched **verbatim**, mirroring the CLI's
+`--scrape-link` (CONTRACTS §1 behavior table). Exactly one of `filters` or
+`scrape_link` must be set — sending both, or neither, is rejected with `422`
+before any pipeline work happens.
+
+| Property | Behavior |
+|---|---|
+| Validation | **None.** The URL is opaque — no filter-inventory check (unlike `filters`, which is validated against `GET /filters`). Use this when you have a filter combination (or a raw Finviz code) not yet in the inventory. |
+| Mutual exclusion | Setting both `filters` and `scrape_link` (or neither) raises a `422` **at the request-validation layer** — FastAPI's standard `{"detail": [...]}` shape, not the `ErrorResponse` envelope (§ "Error handling" below) used for pipeline failures. This distinction is deliberate: it's a malformed request, not a failed screen run. |
+| **Host allowlist (SSRF guard — deviation from CLI parity)** | `scrape_link` must be an absolute `http`/`https` URL whose host is `finviz.com` or a subdomain of it (e.g. `elite.finviz.com`). Any other host, or a non-http(s) scheme, is rejected with the same request-validation `422`. The CLI's `--scrape-link` has no such restriction (it's a local, single-user process); the API binds `0.0.0.0` by default, so an unrestricted URL fetch on this field would let a caller point the server at an arbitrary internal or external URL. This is intentionally **not** CLI-parity — treat it as a hard constraint, not a bug. |
+| `filter_history.json` writeback | Never happens on this path — not merely skipped by a flag, but structurally impossible. Writeback only happens inside the CLI's interactive picker, which the HTTP API never calls (both `filters` and `scrape_link` requests bypass it entirely). |
+| Response shape | Identical `ScreenResult` shape as the `filters` path (CONTRACTS §8.3) — same `stocks` array, same timing metadata. |
+
+Example: the orchestrator's frozen 9-filter screen uses two Finviz filter
+codes (`fa_sales3years_pos`, `ta_perf2_3yup`) that predate this inventory's
+coverage of them; `scrape_link` lets that screen run today via the URL
+directly, while `fa_sales3years` and the missing `ta_perf2` value codes have
+also been added to the structured-`filters` inventory as of 2026-08-11 (see
+`docs/pendingwork/2026-07-25-scrape-link-http-api.md`).
 
 ### Polyglot codegen
 

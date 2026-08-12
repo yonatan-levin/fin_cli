@@ -256,6 +256,42 @@ def screen_to_dataframe(
     return _screen_from_query(quarry, hyperlink_wrap=hyperlink_wrap)
 
 
+def scrape_link_to_dataframe(scrape_link: str, *, hyperlink_wrap: bool = False) -> pd.DataFrame:
+    """Fetch a Finviz screener URL verbatim and return the DataFrame in memory.
+
+    Public shared entry point mirroring ``screen_to_dataframe`` for callers
+    that already have a fully-formed Finviz screener URL — the HTTP API's
+    ``scrape_link`` request field (CONTRACTS §8.2), matching the CLI's
+    ``--scrape-link`` semantics exactly: ``run_stock_screener`` resolves its
+    quarry as ``config.scrape_link or select_filters_and_values(config)``,
+    i.e. the URL is used verbatim with no query-building step. This
+    function is that same bypass, exposed as an importable function so the
+    HTTP API adapter (``fincli_api/adapters/fincli.py``) never has to go
+    through the CLI's ``Config``/Click layer.
+
+    No filter-inventory validation is performed — the URL is opaque, same
+    as ``--scrape-link`` (``fincli/resource/params/validators.py`` module
+    docstring: "``--scrape-link`` and ``--history`` deliberately skip
+    validation"). ``filter_history.json`` is never written on this path:
+    the interactive picker's history-writeback side effect
+    (``fincli.cli.cli_stock_screener.select_filters_and_values``) is not on
+    the call path at all — writeback here is structurally impossible, not
+    merely skipped by a flag.
+
+    Args:
+        scrape_link: A Finviz screener URL, used verbatim as the query.
+        hyperlink_wrap: When ``True``, wrap the ``Ticker`` column as an
+            Excel ``=HYPERLINK(...)`` formula. Defaults to ``False`` so API
+            consumers get raw ticker symbols, matching
+            ``screen_to_dataframe``'s default and spec §4.3 ``Stock.ticker``.
+
+    Returns:
+        The screener DataFrame (header-only on zero-row Finviz results).
+        Column order matches ``_FINAL_COLUMNS``.
+    """
+    return _screen_from_query(scrape_link, hyperlink_wrap=hyperlink_wrap)
+
+
 def _resolve_output_path_label(output_path: str, resolved_file_path: str | None) -> str:
     """Pick the value to surface as `OUTPUT_PATH=...` and `summary.output_path`.
 
