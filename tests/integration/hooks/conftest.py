@@ -21,6 +21,7 @@ class HookSandbox:
     hook_dir: Path
     command_log: Path
     environment: dict[str, str]
+    tool_runner: Path
 
     def write_file(self, relative_path: str, content: str) -> Path:
         file_path = self.project_root / relative_path
@@ -131,27 +132,49 @@ if (
         encoding="utf-8",
     )
 
-    for tool in ("git", "mypy", "pip-audit", "pytest", "ruff"):
-        if os.name == "nt":
-            wrapper = bin_dir / f"{tool}.cmd"
-            wrapper.write_text(
-                '@set "COV_CORE_SOURCE="\n'
-                '@set "COV_CORE_CONFIG="\n'
-                '@set "COV_CORE_DATAFILE="\n'
-                f'@"{sys.executable}" "{runner}" "{tool}" %*\n',
-                encoding="utf-8",
-            )
-        else:
-            wrapper = bin_dir / tool
-            wrapper.write_text(
-                "#!/bin/sh\n"
-                "unset COV_CORE_SOURCE COV_CORE_CONFIG COV_CORE_DATAFILE\n"
-                f'exec "{sys.executable}" "{runner}" "{tool}" "$@"\n',
-                encoding="utf-8",
-            )
-            wrapper.chmod(0o755)
+    # Non-gate tools (git, pip-audit) resolve via PATH; write them here. The
+    # venv-only gate tools (ruff/mypy/pytest) are written into the sandbox
+    # project's .venv by ``install_venv_tools`` — the hooks refuse PATH
+    # fallback for those, so a PATH shim alone would never be invoked.
+    for tool in ("git", "pip-audit"):
+        write_tool_wrapper(bin_dir, tool, runner)
 
     return bin_dir, command_log
+
+
+def write_tool_wrapper(directory: Path, tool: str, runner: Path) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        wrapper = directory / f"{tool}.cmd"
+        wrapper.write_text(
+            '@set "COV_CORE_SOURCE="\n'
+            '@set "COV_CORE_CONFIG="\n'
+            '@set "COV_CORE_DATAFILE="\n'
+            f'@"{sys.executable}" "{runner}" "{tool}" %*\n',
+            encoding="utf-8",
+        )
+    else:
+        wrapper = directory / tool
+        wrapper.write_text(
+            "#!/bin/sh\n"
+            "unset COV_CORE_SOURCE COV_CORE_CONFIG COV_CORE_DATAFILE\n"
+            f'exec "{sys.executable}" "{runner}" "{tool}" "$@"\n',
+            encoding="utf-8",
+        )
+        wrapper.chmod(0o755)
+
+
+def install_venv_tools(project_root: Path, runner: Path, *tools: str) -> Path:
+    """Write gate-tool shims into ``<project_root>/.venv`` (Scripts/ or bin/).
+
+    Mirrors where the hooks' venv-only resolver looks for ruff/mypy/pytest —
+    the sandbox must provide them exactly there, since PATH fallback for
+    those tools is refused by design.
+    """
+    venv_bin = project_root / ".venv" / ("Scripts" if os.name == "nt" else "bin")
+    for tool in tools:
+        write_tool_wrapper(venv_bin, tool, runner)
+    return venv_bin
 
 
 @pytest.fixture
@@ -167,6 +190,10 @@ def hook_sandbox(tmp_path: Path) -> HookSandbox:
     (project_root / "singleton.py").write_text("", encoding="utf-8")
 
     bin_dir, command_log = _write_fake_toolchain(tmp_path)
+    runner = bin_dir / "tool_runner.py"
+    # Venv-only gate tools live in the sandbox project's own .venv — the hooks
+    # refuse PATH fallback for ruff/mypy/pytest, so PATH shims would be ignored.
+    install_venv_tools(project_root, runner, "ruff", "mypy", "pytest")
     environment = os.environ.copy()
     environment.update(
         {
@@ -176,4 +203,4 @@ def hook_sandbox(tmp_path: Path) -> HookSandbox:
             "PATH": os.pathsep.join((str(bin_dir), environment["PATH"])),
         }
     )
-    return HookSandbox(project_root, hook_dir, command_log, environment)
+    return HookSandbox(project_root, hook_dir, command_log, environment, runner)
