@@ -230,3 +230,35 @@ textual merge tools pick one side and the loss is invisible because gates
 diff the merged `[tool.mypy]`/`[tool.coverage]` sections against BOTH parents
 before concluding gates are intact. A spec/plan claiming a scope choice is
 "unchanged" is a snapshot, not an invariant — re-verify at merge time.
+
+---
+
+### 2026-08-12 — Quality gates must never run a PATH interpreter; pytest must run from the gated tree's own venv
+
+**What:** The Stop hook's tool resolver fell back to PATH when no project venv
+executable was found. On this machine the global `C:\Python312` pytest carried
+an incompatible `pytest-asyncio`, so a Stop gate reported a red repo (import
+errors collecting `tests/e2e/api`) while the actual project — under its own
+venv — was fully green (350 passed, 94.45% coverage). Symmetrically dangerous
+in reverse: a healthy global interpreter could report GREEN for a broken tree.
+A second, subtler hazard: pytest from any OTHER venv (main checkout's, another
+worktree's) imports `fincli` through THAT venv's editable install — it silently
+tests a different tree than the one being gated.
+
+**Why:** A gate's verdict is only meaningful if the tool that produced it
+belongs to the tree being judged. PATH is machine state, not project state.
+
+**How to apply:** `.claude/hooks/utils.js` now enforces venv-only resolution
+for ruff/mypy/pytest (`VENV_ONLY_TOOLS`): ruff/mypy may come from the gated
+tree's / hook checkout's / main checkout's venv (they never import the tree;
+honest from any venv now that ruff AND mypy are minor-pinned in dev deps);
+pytest only from the gated tree's own venv.
+No venv → blocking "create the venv" failure, never a PATH run. Every gate
+failure now prints `via: <executable>` so a wrong-environment verdict is
+diagnosable from the failure text alone. Fresh worktrees therefore need
+`python -m venv .venv && .venv/Scripts/python -m pip install -e ".[dev]"`
+before their first gate run — that is the supported way to make worktree
+gates pass. Hook regression test: PATH shims present + venv absent must block
+without invoking any gate tool
+(`tests/integration/hooks/test_quality_gate_hooks.py`).
+

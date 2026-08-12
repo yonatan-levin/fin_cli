@@ -14,10 +14,12 @@
  * Exit 2 feeds stderr back to Claude — used for lint/format/type errors that
  * survive auto-fix so they get repaired immediately.
  *
- * Hardened (2026-08-02): checks run with cwd = the edited file's own git tree
- * (worktree edits are checked in the worktree) and tools resolve from that
- * tree's .venv (falling back to the main checkout's venv, then PATH). A
- * missing tool is a warning here — the Stop hook blocks on it.
+ * Hardened (2026-08-02, venv-only policy 2026-08-12): checks run with cwd =
+ * the edited file's own git tree (worktree edits are checked in the worktree)
+ * and ruff/mypy resolve from that tree's .venv, falling back to the hook
+ * checkout's or main checkout's .venv — never PATH (see utils
+ * VENV_ONLY_TOOLS). A missing tool is a warning here — the Stop hook blocks
+ * on it.
  *
  * Exit codes:
  *   0 → success (stdout parsed for JSON)

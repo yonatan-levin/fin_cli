@@ -10,9 +10,13 @@
  *  5. Dependency audit (pip-audit) — advisory
  *  6. Documentation sync reminder
  *
- * Hardened (2026-08-02):
- *  - Gate tools resolve from the gated tree's .venv (falling back to the main
- *    checkout's venv, then PATH) — hooks inherit a PATH without ruff/mypy/pytest.
+ * Hardened (2026-08-02, venv-only policy 2026-08-12):
+ *  - Gate tools resolve from project venvs ONLY (see utils VENV_ONLY_TOOLS):
+ *    ruff/mypy may come from the gated tree's, the hook checkout's, or the
+ *    main checkout's .venv; pytest must come from the gated tree's own .venv
+ *    (any other venv would import a different tree via its editable install).
+ *    PATH fallback for these tools is refused — a machine-global interpreter
+ *    once masqueraded as a red repo gate.
  *  - Gates run once per GIT TREE that received testable edits — a session that
  *    edited files in a worktree gates that worktree (cwd = tree root), not the
  *    main checkout.
@@ -263,12 +267,16 @@ async function main() {
           skipped.push({ name: check.name, reason: 'no tests collected' });
           continue;
         }
-        if (result.kind === 'unavailable') {
-          // A gate that cannot run must not report green — block with a fix hint.
+        if (result.kind === 'unavailable' && !/PATH fallback is refused/.test(result.output || '')) {
+          // A gate that cannot run must not report green — append a fix hint
+          // to failures that did not come from the venv-only resolver (spawn
+          // errors on a corrupt venv launcher, etc.). Resolver refusals
+          // already carry the full diagnostic, detected by its marker text.
           result.output =
-            `tool '${check.command}' not found (checked ${treeRoot}/.venv and PATH) ` +
-            `— create the venv / pip install -e ".[dev]"` +
-            (result.output ? `\n${result.output}` : '');
+            (result.output ? `${result.output}\n` : '') +
+            `tool '${check.command}' could not run — create the gated tree's venv: ` +
+            'python -m venv .venv && .venv/Scripts/python -m pip install -e ".[dev]" ' +
+            '(.venv/bin/python on POSIX)';
         }
         if (treeLabel) result.output = treeLabel + (result.output || '');
         failures.push(result);

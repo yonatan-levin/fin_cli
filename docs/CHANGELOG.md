@@ -4,6 +4,7 @@ A thin, newest-first index of shipped streams. Phase status and direction live
 in `docs/THESIS.md`; implementation detail lives in the linked spec or closeout.
 Per-merge history does not belong in `CLAUDE.md`.
 
+- 2026-08-12 · Hook gate integrity · gate tools (ruff/mypy/pytest) resolve from project venvs ONLY — pytest pinned to the gated tree's own venv, PATH-interpreter fallback refused with an actionable blocking diagnostic, and every gate failure names the executable that judged it; ruff pinned `>=0.16.2,<0.17` (same stream, PR #21) · `.claude/hooks/utils.js` + `docs/FEEDBACK-LOG.md`
 - 2026-08-11 · `scrape_link` on `POST /screens` · accept a direct Finviz URL on the HTTP API, mirroring the CLI's `--scrape-link` (mutually exclusive with `filters`, no inventory validation, host-allowlisted to finviz.com); also grows the filter inventory with `fa_sales3years` and the missing `ta_perf2` 3/5/10-year value codes · `docs/pendingwork/2026-07-25-scrape-link-http-api.md`
 - 2026-08-11 · Parser hardening · fix GitHub issue #14 (redesigned-layout ticker cells duplicating their first letter) and close MAJOR #4 (missing-table HTML silently coercing to a 200 empty result) via `ScreenerLayoutError` + the `js-screener-body-empty` empty-result discriminator · GitHub issue #14
 - 2026-08-11 · Observability · request-id correlation, JSON logs, health triad + `/metrics` on the HTTP API; CLI `run_id` (Singleton-logger correlation deferred — THESIS "Beyond Phase 4") · `docs/plans/2026-07-14-observability.md`
