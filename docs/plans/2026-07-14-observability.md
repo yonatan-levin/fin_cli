@@ -1,5 +1,13 @@
 # Plan — Observability integration (algo_beta / Fin CLI)
 
+> **Status: SHIPPED 2026-08-11** — merged to master as `0bec51a` (merge commit
+> `6ee7093`). Open follow-up preserved in `docs/THESIS.md` "Beyond Phase 4":
+> full CLI log correlation through the Singleton logger was an explicit
+> non-goal of this change and remains unimplemented. Note: this plan's §3.1
+> remark that `fincli_api` is "deliberately NOT" in `[tool.mypy] files` was
+> stale at merge time and caused a scope regression, fixed 2026-08-11 — see
+> `docs/FEEDBACK-LOG.md`.
+
 **Date:** 2026-07-14 · **Slug:** observability · **Author role:** ARCH
 **Standard:** `../../../docs/OBSERVABILITY.md` (workspace) · **Reference module:** `../../../docs/observability-reference/observability/`
 **Sibling reference impl:** swinger (PR yonatan-levin/swinger#1, all gates green).

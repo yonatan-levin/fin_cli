@@ -1,5 +1,13 @@
 # Harness Quality Gates Burndown Implementation Plan
 
+> **Status: EXECUTED — SHIPPED and archived 2026-08-11.** The work landed via
+> commits `0d90ef8`, `7c59fb6`, `db93430` (merged `d46afda`, follow-up `05a1536`);
+> end state verified 2026-08-11 (strict-mypy zero, 94.13% aggregate coverage,
+> blocking hooks). Checkboxes below were not ticked during execution and are
+> preserved as-is; the governing spec's banner
+> (`docs/refactoring/archive/harness-quality-gates-burndown-spec.md`) is the
+> closure record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > `superpowers:subagent-driven-development` (recommended) or
 > `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox
@@ -22,7 +30,7 @@ historical artifacts move to archive with a repo-wide inbound-link sweep.
 Claude Code hooks, Markdown.
 
 **Governing spec:**
-`docs/refactoring/spec/harness-quality-gates-burndown-spec.md`
+`docs/refactoring/archive/harness-quality-gates-burndown-spec.md`
 
 ## Global Constraints
 

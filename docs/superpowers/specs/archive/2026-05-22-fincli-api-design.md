@@ -93,15 +93,16 @@ The only file in `fincli_api/` that imports from `fincli/`. Two functions:
 ```python
 def get_filter_inventory() -> dict:
     """Wraps fincli.resource.params.validators.list_valid_filters_with_labels.
-       Returns the same {schema_version, keys, filters} shape the CLI's
-       --list-filters --json emits (single source of truth — both paths
-       call the same Python function)."""
+    Returns the same {schema_version, keys, filters} shape the CLI's
+    --list-filters --json emits (single source of truth — both paths
+    call the same Python function)."""
+
 
 def run_screen(filters: dict[str, str]) -> ScreenResult:
     """Calls fincli's screener orchestrator with structured filter input;
-       returns parsed stock rows + run metadata. Never writes a CSV file;
-       never spawns a subprocess. Reuses the URL-builder fincli already
-       uses for the Excel HYPERLINK wrap so `finviz_url` cannot drift."""
+    returns parsed stock rows + run metadata. Never writes a CSV file;
+    never spawns a subprocess. Reuses the URL-builder fincli already
+    uses for the Excel HYPERLINK wrap so `finviz_url` cannot drift."""
 ```
 
 To return a DataFrame in-memory rather than writing CSV, `fincli/app/main.py` gains a one-time small helper (`screen_to_dataframe(filters, ...) -> pd.DataFrame` or similar) that the existing `run_stock_screener` also calls internally for the CSV write path. **This is a non-breaking addition to fincli**, not a refactor of the existing CLI flow.
@@ -157,9 +158,10 @@ class ScreenResult(BaseModel):
     schema_version: int = 1
     row_count: int
     duration_ms: int
-    started_at: str        # ISO 8601
+    started_at: str  # ISO 8601
     finished_at: str
     stocks: list[Stock]
+
 
 class Stock(BaseModel):
     ticker: str
@@ -167,13 +169,13 @@ class Stock(BaseModel):
     sector: str
     industry: str
     country: str
-    market_cap: float | None        # nullable per fincli/utils/market_cap.py
-    pe: str | None                  # "n/a" possible; preserved as fincli formats it
-    price: str                      # "$25.41" — preserved
-    change: str                     # "+1.23%" — preserved
-    volume: str                     # "1.2M" — preserved
-    rank: int                       # mapped from Finviz "No." column (1-based)
-    finviz_url: str                 # https://finviz.com/quote.ashx?t={ticker}
+    market_cap: float | None  # nullable per fincli/utils/market_cap.py
+    pe: str | None  # "n/a" possible; preserved as fincli formats it
+    price: str  # "$25.41" — preserved
+    change: str  # "+1.23%" — preserved
+    volume: str  # "1.2M" — preserved
+    rank: int  # mapped from Finviz "No." column (1-based)
+    finviz_url: str  # https://finviz.com/quote.ashx?t={ticker}
 ```
 
 **Field-naming rule:** snake_case for all fields. Verbatim Finviz column names (`Ticker`, `Market Cap`, `P/E`, `No.`) are normalized to snake_case in the API contract (`ticker`, `market_cap`, `pe`, `rank`). The OpenAPI spec documents the mapping.
@@ -201,11 +203,12 @@ class Stock(BaseModel):
 ```python
 class FilterEntry(BaseModel):
     label: str
-    values: dict[str, str]              # value_code -> human label
+    values: dict[str, str]  # value_code -> human label
+
 
 class FilterInventory(BaseModel):
     schema_version: int = 1
-    keys: list[str]                     # canonical ordering, same as --list-filters --json
+    keys: list[str]  # canonical ordering, same as --list-filters --json
     filters: dict[str, FilterEntry]
 ```
 
@@ -235,9 +238,9 @@ Byte-equivalent to `fincli --list-filters --json` (modulo HTTP framing). Both pa
 class ErrorResponse(BaseModel):
     schema_version: int = 1
     error_class: Literal["validation", "upstream", "parsing", "internal"]
-    message: str                           # human-readable, safe to surface in UI
-    details: dict | None = None            # error-class-specific structured payload
-    request_id: str | None = None          # for cross-referencing with logs (5xx only)
+    message: str  # human-readable, safe to surface in UI
+    details: dict | None = None  # error-class-specific structured payload
+    request_id: str | None = None  # for cross-referencing with logs (5xx only)
 ```
 
 Examples by class:

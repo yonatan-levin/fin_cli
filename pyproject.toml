@@ -79,7 +79,11 @@ indent-style = "space"
 
 [tool.mypy]
 python_version = "3.12"
-files = ["fincli", "core", "config", "logger", "observability", "singleton.py"]
+# The COMPLETE shipped surface must stay listed here — it is the scope for the
+# blocking strict-mypy Stop gate (harness-quality-gates-burndown spec). The
+# 2026-08-11 audit found `fincli_api` silently dropped by the feat/observability
+# merge resolution (the branch pre-dated the burndown merge); restored below.
+files = ["fincli", "fincli_api", "core", "config", "logger", "observability", "singleton.py"]
 strict = true
 warn_unused_ignores = true
 show_error_codes = true

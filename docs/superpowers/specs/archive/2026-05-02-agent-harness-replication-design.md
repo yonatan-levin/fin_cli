@@ -2,7 +2,7 @@
 
 > **ARCHIVED — SHIPPED:** The harness was implemented and its remaining
 > coverage/type-gate follow-through was completed by
-> `docs/refactoring/spec/harness-quality-gates-burndown-spec.md`. This document
+> `docs/refactoring/archive/harness-quality-gates-burndown-spec.md`. This document
 > is retained as historical design input; its phase status and module inventory
 > are not current policy.
 

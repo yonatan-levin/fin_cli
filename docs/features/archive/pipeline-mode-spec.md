@@ -151,13 +151,13 @@ New CLI option `--output PATH | -` plus an env-var override.
   ```python
   # Pseudocode for the new precedence. BACKEND writes the actual code.
   def file_path(self, name: str) -> str:
-      if self.output_path:                      # caller pinned an exact path
+      if self.output_path:  # caller pinned an exact path
           return self.output_path
-      date = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
-      basename = f'{name}_{date}.csv'
-      if self.output_dir is not None:           # env-var override
+      date = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+      basename = f"{name}_{date}.csv"
+      if self.output_dir is not None:  # env-var override
           return str(self.output_dir / basename)
-      return os.path.join(os.getcwd(), f'workspace_output/{basename}')  # default
+      return os.path.join(os.getcwd(), f"workspace_output/{basename}")  # default
   ```
   Note: `file_path` flips from `@staticmethod` to an instance method. This is a **backward-compatible signature change** because every caller already calls `config.file_path(name)` (instance call), which works whether or not the method is decorated `@staticmethod`. CONTRACTS §6 does not list `Config.file_path` and is unaffected.
 - The stdout-sentinel `--output -` is detected in `run_stock_screener`, which hands `final_df.to_csv(sys.stdout, index=False)` instead of a path (pandas accepts a file-like object).
@@ -690,8 +690,8 @@ A small new section under "Usage" called "Pipeline mode" giving the two highest-
 
 **§4.1 — `Config` Pydantic model** add to the model snippet:
 ```python
-output_path: str = ""              # explicit destination, overrides default
-output_dir: Path | None = None     # parent-dir override; populated from FINCLI_OUTPUT_DIR
+output_path: str = ""  # explicit destination, overrides default
+output_dir: Path | None = None  # parent-dir override; populated from FINCLI_OUTPUT_DIR
 ```
 Add a new sentence to the surrounding prose: "`output_dir` is read from the `FINCLI_OUTPUT_DIR` env var by `core.configuration.configurator.build_config`. When set and `--output` is not passed, the default filename's parent directory becomes `output_dir`."
 

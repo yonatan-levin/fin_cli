@@ -59,12 +59,13 @@ Detailed shipped-stream history is indexed in `docs/CHANGELOG.md`.
 | Phase 5 — HTTP API | **COMPLETE** | FastAPI surface and committed OpenAPI 3.1.0 contract share the CLI orchestrator. |
 
 The governing closeout for Phases 3–4 is
-`docs/refactoring/spec/harness-quality-gates-burndown-spec.md`. Ruff
+`docs/refactoring/archive/harness-quality-gates-burndown-spec.md`. Ruff
 pydocstyle (`D`) enforcement was explicitly not folded into Phase 4; it would
 require its own scoped decision.
 
 ### Beyond Phase 4
 
+- **Full CLI log correlation through the Singleton logger.** The observability stream (merged 2026-08-11, plan: `docs/plans/2026-07-14-observability.md`) gave the HTTP API request-id correlation and the CLI a `run_id` for stdlib logging, but JSON-ifying / correlating the Singleton logger's own output was an explicit non-goal of that change and remains open.
 - **TUI / dashboard / notebook frontend.** The current UX is a series of CLI prompts. A richer interface — a `textual` TUI, a Jupyter notebook wrapper, or a lightweight web dashboard — would reduce friction for exploratory screening sessions.
 - **Async I/O for screener fetch.** The pipeline is synchronous to cooperate with Finviz's anti-bot pacing. If profiling shows the page-by-page latency dominates a typical run and Cloudflare tolerates parallel requests, an `httpx`/`aiohttp` rewrite of `fetch_page_sync` is a possibility.
 
@@ -115,7 +116,7 @@ It is **not**:
 
 ## Infrastructure Constraints
 
-- **Local-only project** — no remote issue tracker. Work is tracked in `docs/reviewer/`, `docs/bugs/`, `docs/refactoring/`, and session notes.
+- **GitHub-tracked** — origin is `https://github.com/yonatan-levin/fin_cli` and GitHub Issues/PRs are the canonical tracker for bugs and integration decisions (e.g. issue #14). The local doc trees (`docs/reviewer/`, `docs/bugs/`, `docs/refactoring/`, `docs/pendingwork/`) remain the home for working artifacts — specs, plans, reviewer trackers, session handoffs — and cross-link to the GitHub issue when one exists. (Corrected 2026-08-11; the previous "local-only, no remote tracker" wording had been stale since at least 2026-06-27.)
 - **Windows dev environment** — Yonatan works on Windows 11. Path separators, shell quoting (PowerShell vs cmd — e.g. `&` in Finviz URLs needs `python -m fincli "--scrape-link=…"` or the `--%` stop-parsing token), and WSL-awareness matter.
 - **Finviz rate limits** — `cfscrape` handles Cloudflare but the screener still rate-limits. `fetch_page_sync` uses exponential backoff; do not remove it.
 

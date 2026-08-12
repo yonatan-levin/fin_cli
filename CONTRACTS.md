@@ -176,14 +176,16 @@ Defined in `config/config.py`, extends `core/configuration/config_base.py:System
 
 ```python
 class Config(SystemSettings):
-    name: str             = "Stock Screener CLI config"
-    description: str      = "Configuration for the Stock Screener CLI app."
-    use_history: bool     = False
-    filters: tuple        = ()           # tuple of (filter_key, value_code) pairs
-    scrape_link: str      = ""
-    history_dir: Path     = Field(default_factory=lambda: Path(user_data_dir("fincli", appauthor=False)) / "local_history")
-    output_path: str      = ""           # `--output PATH` / `--output -` (sentinel)
-    output_dir: Path | None = None       # `FINCLI_OUTPUT_DIR` env override
+    name: str = "Stock Screener CLI config"
+    description: str = "Configuration for the Stock Screener CLI app."
+    use_history: bool = False
+    filters: tuple = ()  # tuple of (filter_key, value_code) pairs
+    scrape_link: str = ""
+    history_dir: Path = Field(
+        default_factory=lambda: Path(user_data_dir("fincli", appauthor=False)) / "local_history"
+    )
+    output_path: str = ""  # `--output PATH` / `--output -` (sentinel)
+    output_dir: Path | None = None  # `FINCLI_OUTPUT_DIR` env override
 
     def file_path(self, name: str) -> str: ...
 ```

@@ -171,19 +171,29 @@ from __future__ import annotations
 _ACRONYMS: frozenset[str] = frozenset(
     {
         # Fundamental ratios
-        "PE", "PEG", "PB", "PS", "PC", "PFCF",
+        "PE",
+        "PEG",
+        "PB",
+        "PS",
+        "PC",
+        "PFCF",
         # Returns
-        "ROA", "ROE", "ROI",
+        "ROA",
+        "ROE",
+        "ROI",
         # Earnings / averages / volatility
-        "EPS", "SMA", "ATR", "RSI",
+        "EPS",
+        "SMA",
+        "ATR",
+        "RSI",
         # Misc
-        "LT", "IPO", "REIT",
+        "LT",
+        "IPO",
+        "REIT",
     }
 )
 
-_CONNECTORS: frozenset[str] = frozenset(
-    {"to", "and", "or", "of", "in", "at", "by", "for", "with"}
-)
+_CONNECTORS: frozenset[str] = frozenset({"to", "and", "or", "of", "in", "at", "by", "for", "with"})
 
 
 def attr_to_label(attr: str) -> str:

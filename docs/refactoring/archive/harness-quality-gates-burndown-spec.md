@@ -3,9 +3,10 @@
 MODE: PLAN_AND_CREATE  
 ROLE: ARCH
 
-**Status:** READY FOR IMPLEMENTATION  
-**Branch:** `refactor/harness-spec-burndown`  
-**Companion plan:** `docs/refactoring/implementations/harness-quality-gates-burndown-plan.md`  
+**Status:** SHIPPED — verified and archived 2026-08-11  
+**Branch:** `refactor/harness-spec-burndown` (merged via `d46afda`; key commits `0d90ef8` strict-mypy zero + 94% coverage, `7c59fb6` blocking gates, `db93430` doc roles + CHANGELOG, follow-up `05a1536`)  
+**Companion plan:** `docs/refactoring/archive/harness-quality-gates-burndown-plan.md`  
+**Verification (2026-08-11):** gates re-run green on master — Ruff + format clean, strict mypy zero, 310 passed + 1 xfail, aggregate coverage 94.13% (blocking >=90%); hook negative tests present (`tests/integration/hooks/`); all four `docs/superpowers` artifacts in terminal archive locations. ONE regression found and fixed in the same audit: the later `feat/observability` merge resolution dropped `fincli_api` from `[tool.mypy] files` (restored 2026-08-11; see `docs/FEEDBACK-LOG.md`). The unchecked boxes below are preserved as written; this banner is the authoritative closure record.  
 **Public contract impact:** None
 
 ## Summary
