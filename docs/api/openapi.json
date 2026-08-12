@@ -36,8 +36,8 @@
     },
     "/screens": {
       "post": {
-        "summary": "Run a Finviz screen with the given filter map.",
-        "description": "Validates filter keys/values via fincli's chokepoint validator (unknown -> HTTP 422 via the API exception handler), then runs the screen and returns the matching stocks.",
+        "summary": "Run a Finviz screen from a filter map or a direct scrape_link URL.",
+        "description": "Exactly one of `filters` or `scrape_link` must be set (422 if both or neither — see ScreenRequest). `filters` is validated via fincli's chokepoint validator (unknown key/value -> HTTP 422 via the API exception handler) before the screen runs. `scrape_link` is fetched verbatim with NO filter-inventory validation (mirrors the CLI's --scrape-link) and is restricted to finviz.com and its subdomains (SSRF guard, enforced by ScreenRequest at request-parse time).",
         "operationId": "run_screen_endpoint_screens_post",
         "requestBody": {
           "content": {
@@ -241,26 +241,56 @@
       "ScreenRequest": {
         "properties": {
           "filters": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Filters",
-            "description": "Map of Finviz filter key to value code. See ``GET /filters`` for the valid set.",
+            "description": "Map of Finviz filter key to value code. See ``GET /filters`` for the valid set. Mutually exclusive with ``scrape_link`` — exactly one of the two must be set.",
             "examples": [
               {
                 "fa_pe": "u5",
                 "sec": "energy"
               }
             ]
+          },
+          "scrape_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scrape Link",
+            "description": "Direct Finviz screener URL, fetched verbatim with NO filter-inventory validation (mirrors the CLI's --scrape-link). Mutually exclusive with ``filters``. Restricted to finviz.com and its subdomains over http(s) — a deliberate deviation from CLI parity to close an SSRF hole, since the API binds 0.0.0.0 by default. See INTEGRATION.md.",
+            "examples": [
+              "https://finviz.com/screener.ashx?v=111&f=fa_sales3years_pos,ta_perf2_3yup"
+            ]
           }
         },
         "type": "object",
-        "required": [
-          "filters"
-        ],
         "title": "ScreenRequest",
-        "description": "Request body for ``POST /screens`` (spec §4.2)."
+        "description": "Request body for ``POST /screens`` (spec §4.2).\n\nExactly one of ``filters`` or ``scrape_link`` must be set — the two\ninput modes mirror the CLI's mutually-exclusive ``--filter`` /\n``--filters-json`` / ``--filters-file`` vs. ``--scrape-link`` input\nmodes (CONTRACTS §1). Violating the mutual-exclusion rule (both set,\nor neither set) raises a standard Pydantic ``ValueError`` at request\nparse time, which FastAPI surfaces as its normal 422\nrequest-validation envelope — NOT the ``ErrorResponse`` envelope used\nfor pipeline failures (``fincli_api/exception_handlers.py``). That\ndistinction is deliberate: this is a malformed *request*, not a failed\n*screen run*, so it belongs to FastAPI's own validation-error shape.\n\n``scrape_link`` additionally requires an absolute ``http``/``https``\nURL whose host is ``finviz.com`` or a subdomain of it (SSRF guard —\nsee ``_validate_scrape_link``); this is enforced the same way, via the\nsame 422 envelope.",
+        "examples": [
+          {
+            "filters": {
+              "fa_pe": "u5",
+              "sec": "energy"
+            }
+          },
+          {
+            "scrape_link": "https://finviz.com/screener.ashx?v=111&f=fa_sales3years_pos,ta_perf2_3yup&ft=2"
+          }
+        ]
       },
       "ScreenResult": {
         "properties": {

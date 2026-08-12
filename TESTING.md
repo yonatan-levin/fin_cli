@@ -6,7 +6,7 @@ This document defines the testing strategy, conventions, and follow-up roadmap f
 
 Tests verify **behavior**, not implementation. A test that locks in the current implementation of a function (mocking out internals, asserting call counts on private helpers) becomes a tax to pay every time the function is refactored, even when behavior is unchanged. A test that asserts what the function *does* — input goes in, output comes out, side effect happens — survives refactors and earns its keep.
 
-The test suite uses a three-tier pyramid: `tests/unit/` (mocked at boundaries), `tests/integration/` (real fincli + mocked Finviz HTML fixtures), `tests/e2e/` (live Finviz HTTP, opt-in via `pytest -m live`). Each tier has a `tests/<tier>/api/` sub-directory mirroring the layout for `fincli_api/`. Current state: 302 passed / 3 deselected (live tier) / 1 xfailed (MAJOR #4 deferred) on the default `pytest tests/` invocation. The config-driven aggregate run reports 94% coverage. `pytest -m live tests/e2e/api/` runs the 3 live-Finviz API smoke tests (~3s, network-dependent).
+The test suite uses a three-tier pyramid: `tests/unit/` (mocked at boundaries), `tests/integration/` (real fincli + mocked Finviz HTML fixtures), `tests/e2e/` (live Finviz HTTP, opt-in via `pytest -m live`). Each tier has a `tests/<tier>/api/` sub-directory mirroring the layout for `fincli_api/`. `pytest -m live tests/e2e/api/` runs the 3 live-Finviz API smoke tests (~3s, network-dependent).
 
 When tests do land, they should:
 
@@ -44,8 +44,11 @@ tests/
     fixtures/
       finviz_happy.html                # one valid row
       finviz_empty.html                # table present, no rows
-      finviz_no_table.html             # missing table element
+      finviz_no_table.html             # missing table, no empty marker (-> DATA exit 4)
       finviz_malformed_row.html        # row without link anchor (-> DATA exit 4)
+      finviz_redesign.html             # redesigned-layout dual-anchor ticker cells (issue #14)
+      finviz_zero_redesign.html        # legit zero-result, empty marker, no table
+      finviz_ticker_mismatch.html      # ticker text/href disagreement (-> DATA exit 4)
     test_pipeline_streaming.py         # --output - stream discipline
     test_pipeline_summary.py           # --json-summary schema
     test_pipeline_ticker_carveout.py   # Ticker/Symbol carve-out (spec §5.6)
@@ -148,14 +151,17 @@ Fixture rules of thumb:
 
 The pipeline-mode shipping cycle introduced the `tests/integration/` directory and a shared canned-HTML fixture set under `tests/integration/fixtures/`. The integration tests are CliRunner-driven end-to-end runs through the full Click entry point with `fetch_page_sync` mocked at the orchestrator boundary; assertions target `result.stdout` / `result.stderr` / `result.exit_code` / the contents of the file written under `tmp_path`.
 
-Four canned HTML fixtures exist (loaded via `tests/integration/_fixtures_loader.py`):
+Seven canned HTML fixtures exist (loaded via `tests/integration/_fixtures_loader.py`):
 
 | Fixture | Purpose |
 |---|---|
 | `finviz_happy.html` | One valid row with a working link anchor — drives the happy-path tests. |
 | `finviz_empty.html` | Table present, empty `<tbody>` — drives the zero-row success branch (header-only CSV, exit 0). |
-| `finviz_no_table.html` | Page without the screener table element — `all_table_content` returns empty list. |
+| `finviz_no_table.html` | Page without the screener table element AND without the `js-screener-body-empty` marker — drives the `ScreenerLayoutError` DATA classifier (exit 4 / HTTP 502 `parsing`). |
 | `finviz_malformed_row.html` | Row with a non-anchor cell where the parser expects `<a href=...>` — drives the DATA classifier (exit 4 via `AttributeError`). |
+| `finviz_redesign.html` | Redesigned-layout rows whose ticker cell nests a logo-fallback anchor + tab-link anchor — regression fixture for GitHub issue #14 (`ticker_symbol` must read only the last anchor). |
+| `finviz_zero_redesign.html` | Legitimate zero-result page: no screener table, but carries the `js-screener-body-empty` marker — stays on the zero-row success branch, NOT the DATA classifier. |
+| `finviz_ticker_mismatch.html` | Redesigned-layout row whose last anchor's text disagrees with its href `t` param — drives the `ScreenerLayoutError` DATA classifier. |
 
 To add a new pipeline-mode integration test:
 
@@ -215,9 +221,9 @@ The API has a 3-tier test pyramid mirroring the spec §6 structure (`docs/superp
 
 **Mock target rule** (T3 BACKEND surprise): integration tier patches `fincli.app.main.fetch_page_sync`, NOT `fincli.utils.web_scraper.fetch_page_sync`. The former is the local-name binding via `from ... import fetch_page_sync` in `main.py`; patching the original location doesn't affect what `main.py` already imported. (Same rule as the pipeline-mode integration suite — see "Mocking Strategy" above.)
 
-### MAJOR #4 deferred limitation
+### MAJOR #4 closed (2026-08-11)
 
-`tests/integration/api/test_screens_integration.py` pairs a `@pytest.mark.xfail(strict=True)` test (spec-intent: 502 parsing) with a current-behavior pin test (actual: 200 empty) for the `finviz_no_table.html` fixture. Closing MAJOR #4 (malformed HTML -> 502) will mechanically trip both tests in the same commit — forcing a coordinated code + test + docs update. See `fincli_api/exception_handlers.py` module docstring for the deferred rationale.
+`tests/integration/api/test_screens_integration.py::test_post_screens_no_table_returns_502_parsing` is now a plain (non-xfail) test: the `finviz_no_table.html` fixture (no screener table, no empty-result marker) raises `ScreenerLayoutError` in `aggregate_rows`, classified DATA -> HTTP 502 `error_class="parsing"`. The former `xfail`/current-behavior pin pair was removed together with the fix. See `fincli_api/exception_handlers.py` module docstring and `fincli/stock_screening/errors.py`.
 
 ### Pre-PR live-Finviz gate
 
@@ -279,6 +285,5 @@ would require a separate migration decision.
 
 - Finviz HTML can change without notice. Recorded fixtures isolate the default
   suite; refresh them deliberately when the upstream contract changes.
-- The malformed-HTML no-table case remains the documented MAJOR #4 xfail pair.
 - The Singleton logger can leak handler state if future parallel tests stop
   restoring it; add a reset fixture only if that failure materializes.

@@ -100,3 +100,72 @@ def test_post_screens_stocks_have_finviz_url_single_slash(
         # Asserts no double-slash after the scheme — the CSV path's
         # ticker_link legacy quirk must not leak into the API surface.
         assert "//" not in url[len("https://") :]
+
+
+# ---------------------------------------------------------------------------
+# scrape_link request path — routes to run_screen_from_link, skips the
+# filter-inventory validator entirely (URL is opaque, mirrors the CLI).
+# ---------------------------------------------------------------------------
+
+
+def test_post_screens_scrape_link_routes_to_adapter_and_skips_validator(
+    client: TestClient,
+    mock_run_screen: MagicMock,
+    mock_run_screen_from_link: MagicMock,
+    sample_screen_result: ScreenResult,
+) -> None:
+    """``scrape_link`` request -> ``run_screen_from_link`` invoked with the URL,
+    ``run_screen`` (the filters adapter) is NEVER invoked, and no filter
+    validation occurs (the request has no ``filters`` field to validate)."""
+    mock_run_screen_from_link.return_value = sample_screen_result
+    url = "https://finviz.com/screener.ashx?v=111&f=fa_sales3years_pos,ta_perf2_3yup&ft=2"
+
+    response = client.post("/screens", json={"scrape_link": url})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["row_count"] == 1
+    mock_run_screen_from_link.assert_called_once_with(url)
+    mock_run_screen.assert_not_called()
+
+
+def test_post_screens_both_filters_and_scrape_link_returns_422(
+    client: TestClient,
+    mock_run_screen: MagicMock,
+    mock_run_screen_from_link: MagicMock,
+) -> None:
+    """Both fields set -> 422 at the request-validation layer; neither adapter runs."""
+    response = client.post(
+        "/screens",
+        json={"filters": {"fa_pe": "u5"}, "scrape_link": "https://finviz.com/screener.ashx"},
+    )
+
+    assert response.status_code == 422
+    mock_run_screen.assert_not_called()
+    mock_run_screen_from_link.assert_not_called()
+
+
+def test_post_screens_neither_filters_nor_scrape_link_returns_422(
+    client: TestClient,
+    mock_run_screen: MagicMock,
+    mock_run_screen_from_link: MagicMock,
+) -> None:
+    """Neither field set -> 422; neither adapter runs."""
+    response = client.post("/screens", json={})
+
+    assert response.status_code == 422
+    mock_run_screen.assert_not_called()
+    mock_run_screen_from_link.assert_not_called()
+
+
+def test_post_screens_scrape_link_non_finviz_host_returns_422(
+    client: TestClient,
+    mock_run_screen_from_link: MagicMock,
+) -> None:
+    """A non-finviz.com host is rejected by the request-model host allowlist (SSRF guard)."""
+    response = client.post(
+        "/screens", json={"scrape_link": "https://evil.example.com/screener.ashx"}
+    )
+
+    assert response.status_code == 422
+    mock_run_screen_from_link.assert_not_called()

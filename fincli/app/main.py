@@ -40,6 +40,7 @@ from core.configuration import configurator
 from fincli.app import exit_codes
 from fincli.cli.cli_stock_screener import select_filters_and_values
 from fincli.stock_screening.content.stock_table import StockTableScreeningContent
+from fincli.stock_screening.errors import ScreenerLayoutError
 from fincli.stock_screening.locators.stock_table_locators import StockTableLocators
 from fincli.utils.market_cap import convert_market_cap_to_numeric
 from fincli.utils.quary_builders import build_stock_screener_query
@@ -68,7 +69,18 @@ def aggregate_rows(pages: list[bytes]) -> list[list[list[str]]]:
     rows = []
     for page_content in pages:
         tab = StockTableScreeningContent(page_content)
-        rows.extend(tab.all_table_content)
+        page_tables = tab.all_table_content
+        # A page with no screener table is only legitimate when it carries
+        # Finviz's zero-result marker (a genuine "0 Total" screen). Anything
+        # else — missing table, no marker — is layout drift or junk HTML
+        # that must not silently fall through to the zero-row success
+        # branch (MAJOR #4).
+        if not page_tables and not tab.has_empty_marker:
+            raise ScreenerLayoutError(
+                "Finviz screener table not found and no empty-result marker "
+                "present — layout drift or junk HTML"
+            )
+        rows.extend(page_tables)
     return [row.table_data for row in rows]
 
 
@@ -242,6 +254,42 @@ def screen_to_dataframe(
     filter_pairs = filters.items() if isinstance(filters, dict) else filters
     quarry = build_stock_screener_query(filter_pairs)
     return _screen_from_query(quarry, hyperlink_wrap=hyperlink_wrap)
+
+
+def scrape_link_to_dataframe(scrape_link: str, *, hyperlink_wrap: bool = False) -> pd.DataFrame:
+    """Fetch a Finviz screener URL verbatim and return the DataFrame in memory.
+
+    Public shared entry point mirroring ``screen_to_dataframe`` for callers
+    that already have a fully-formed Finviz screener URL — the HTTP API's
+    ``scrape_link`` request field (CONTRACTS §8.2), matching the CLI's
+    ``--scrape-link`` semantics exactly: ``run_stock_screener`` resolves its
+    quarry as ``config.scrape_link or select_filters_and_values(config)``,
+    i.e. the URL is used verbatim with no query-building step. This
+    function is that same bypass, exposed as an importable function so the
+    HTTP API adapter (``fincli_api/adapters/fincli.py``) never has to go
+    through the CLI's ``Config``/Click layer.
+
+    No filter-inventory validation is performed — the URL is opaque, same
+    as ``--scrape-link`` (``fincli/resource/params/validators.py`` module
+    docstring: "``--scrape-link`` and ``--history`` deliberately skip
+    validation"). ``filter_history.json`` is never written on this path:
+    the interactive picker's history-writeback side effect
+    (``fincli.cli.cli_stock_screener.select_filters_and_values``) is not on
+    the call path at all — writeback here is structurally impossible, not
+    merely skipped by a flag.
+
+    Args:
+        scrape_link: A Finviz screener URL, used verbatim as the query.
+        hyperlink_wrap: When ``True``, wrap the ``Ticker`` column as an
+            Excel ``=HYPERLINK(...)`` formula. Defaults to ``False`` so API
+            consumers get raw ticker symbols, matching
+            ``screen_to_dataframe``'s default and spec §4.3 ``Stock.ticker``.
+
+    Returns:
+        The screener DataFrame (header-only on zero-row Finviz results).
+        Column order matches ``_FINAL_COLUMNS``.
+    """
+    return _screen_from_query(scrape_link, hyperlink_wrap=hyperlink_wrap)
 
 
 def _resolve_output_path_label(output_path: str, resolved_file_path: str | None) -> str:

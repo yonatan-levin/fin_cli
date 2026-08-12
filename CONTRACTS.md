@@ -64,7 +64,7 @@ Usage: python -m fincli [OPTIONS]   (equivalent: fincli [OPTIONS])
 | `1` | **INTERNAL** — Unexpected internal failure. Uncaught exception that escaped the orchestrator and did not match the upstream/data classifier families. Traceback is printed to stderr and written to `logs/error.log`. |
 | `2` | **USAGE** — CLI input validation error. Click's default for `UsageError` and `BadParameter`. Includes the mutual-exclusion error and the unknown-key / unknown-value errors raised by `validate_filter_pairs`. Click owns this code; the orchestrator never emits it directly. |
 | `3` | **UPSTREAM** — Upstream / network failure. `cfscrape` raised, HTTP error, DNS failure, request timeout. Classified by `requests.exceptions.RequestException` (cfscrape raises `requests` subclasses internally). |
-| `4` | **DATA** — Data-contract / parse failure. Screener `<table>` element missing, BeautifulSoup couldn't extract a row, columns mismatch. Classified by `IndexError` / `AttributeError` / `KeyError` from inside the BS4 parsing chain. |
+| `4` | **DATA** — Data-contract / parse failure. Screener `<table>` element missing with no legitimate empty-result marker present, BeautifulSoup couldn't extract a row, columns mismatch, or a ticker cell's visible text disagrees with its link href (Finviz layout drift / corrupted ticker data). Classified by `IndexError` / `AttributeError` / `KeyError` from inside the BS4 parsing chain, plus `fincli.stock_screening.errors.ScreenerLayoutError`. A genuine zero-match screen (carrying Finviz's `js-screener-body-empty` marker instead of the table) is NOT this — it stays `0` SUCCESS with a header-only result. |
 
 Classifier source-of-truth is `fincli/app/exit_codes.py`; downstream pipelines should import the constants (`SUCCESS`, `INTERNAL`, `USAGE`, `UPSTREAM`, `DATA`) rather than hardcoding integers. Spec `docs/features/archive/pipeline-mode-spec.md` §5.4.
 
@@ -359,7 +359,7 @@ Stable JSON payload emitted to **stdout** by `fincli --list-filters --json` for 
 
 **Key-ordering nuance** (spec §5.2): ordering is by **class membership**, not by key-prefix. Keys with prefix `sh_*` appear in both `Fundamental_Params` (insider/institutional ownership) and `Descriptive_Params` (shares outstanding / average volume / price / float); both groups respect the Fundamental → Descriptive → Technical class order even though their prefixes interleave.
 
-**Payload size** (measured live 2026-05-19): 66 filter keys (29 Fundamental + 18 Descriptive + 19 Technical), 47,216 bytes single-line. Small enough to fetch once at consumer-app startup and cache for hours-to-days.
+**Payload size** (re-measured 2026-08-11): 67 filter keys (30 Fundamental + 18 Descriptive + 19 Technical), 48,997 bytes single-line. (Was 66 keys / 47,216 bytes at the 2026-05-19 measurement; `fa_sales3years` joined 2026-08-11.) Small enough to fetch once at consumer-app startup and cache for hours-to-days.
 
 **Source of truth**: `fincli.resource.params.validators.list_valid_filters_with_labels` (importable but interim-private — sibling of the existing `list_valid_filters` per §6.7). Walks the same `_PARAM_CLASSES` constant via the shared `_iter_param_entries` helper. The schema-version constant lives at `fincli.app.cli.LIST_FILTERS_SCHEMA_VERSION` (mirrors the `JSON_SUMMARY_SCHEMA_VERSION` pattern in §5.5).
 
@@ -517,6 +517,20 @@ No version prefix (`/v1/...`) by design — added when the first breaking change
 
 Empty object (`{}`) is valid and submits a no-filter screen (Finviz default-view dump). Unknown keys or values raise `422 validation` (envelope shape in §8.4) — the same `validate_filter_pairs` chokepoint (§6.7) the CLI's structured-input modes use.
 
+**`scrape_link` (added 2026-08-11)** — a second, mutually-exclusive input mode:
+
+```json
+{"scrape_link": "https://finviz.com/screener.ashx?v=111&f=fa_sales3years_pos,ta_perf2_3yup&ft=2"}
+```
+
+Mirrors the CLI's `--scrape-link` (§1 behavior table): the URL is fetched **verbatim**, with **no filter-inventory validation**. Exactly one of `filters` or `scrape_link` must be set — `ScreenRequest`'s `model_validator` rejects both-set or neither-set with a `ValueError`, which FastAPI surfaces as its **standard request-validation `422`** (`{"detail": [...]}`) — deliberately **not** the `ErrorResponse` envelope in §8.4, since this is a malformed request rather than a failed pipeline run.
+
+`scrape_link` additionally requires an absolute `http`/`https` URL whose host is `finviz.com` or a subdomain of it (e.g. `elite.finviz.com`) — a host allowlist enforced at the request-model layer, same `422` envelope. This is a **deliberate deviation from CLI parity**: `--scrape-link` accepts any URL (a local, single-user process), but the API binds `0.0.0.0` by default, so an unrestricted URL fetch here would be an SSRF hole. See `INTEGRATION.md` "scrape_link input" for the full consumer-facing table.
+
+`filter_history.json` writeback (§4.3) is structurally impossible on the `scrape_link` path — the only writeback call site is the CLI's interactive picker, never reached from the HTTP API on either input mode.
+
+Importable surface: `fincli.app.main.scrape_link_to_dataframe(scrape_link, *, hyperlink_wrap=False)` (sibling of `screen_to_dataframe` in §6.1, same shared `_screen_from_query` core) and `fincli_api.adapters.fincli.run_screen_from_link(scrape_link)` (sibling of `run_screen`).
+
 ### 8.3 Response — `POST /screens` (200)
 
 ```json
@@ -563,7 +577,7 @@ All non-2xx responses share a single envelope shape:
 |---|---|---|---|
 | `validation` | `422 Unprocessable Entity` | `2` USAGE | Unknown filter key or value (rejected by `validate_filter_pairs` before any HTTP fetch). |
 | `upstream`   | `502 Bad Gateway`          | `3` UPSTREAM | Finviz unreachable / timeout / non-2xx HTTP / cfscrape raised (`requests.exceptions.RequestException` family). |
-| `parsing`    | `502 Bad Gateway`          | `4` DATA     | Finviz returned HTML the BS4 parser could not extract a row from (`IndexError` / `AttributeError` / `KeyError` from the parser chain). |
+| `parsing`    | `502 Bad Gateway`          | `4` DATA     | Finviz returned HTML the BS4 parser could not extract a row from (`IndexError` / `AttributeError` / `KeyError` from the parser chain), OR the screener HTML violates the layout contract (`ScreenerLayoutError`): a missing `<table>` with no legitimate empty-result marker, or a ticker cell whose text disagrees with its href (layout drift / corrupted ticker data). |
 | `internal`   | `500 Internal Server Error`| `1` INTERNAL | Unclassified bug in fincli or the API layer. Includes a `request_id` (UUID4) for cross-referencing with logs. |
 
 Why `422` (not `400`) for `validation`: `400` is reserved for FastAPI's automatic handling of malformed JSON or missing-required-field cases; `422` is the more precise code for syntactically-valid JSON with a semantically-invalid filter key. Why `502` for both `upstream` and `parsing`: from the API's perspective both mean "the upstream gave us something we couldn't work with"; the `error_class` discriminates.

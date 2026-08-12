@@ -47,3 +47,21 @@ from fincli.stock_screening.content.stock_table import StockTableScreeningConten
 def test_page_count_handles_all_pagination_shapes(html: str, expected: int) -> None:
     content = StockTableScreeningContent(html)
     assert content.page_count == expected
+
+
+# ---------------------------------------------------------------------------
+# `has_empty_marker` — distinguishes a legitimate zero-result page from a
+# missing/malformed screener table.
+# ---------------------------------------------------------------------------
+
+
+def test_has_empty_marker_true_when_empty_body_id_present() -> None:
+    html = '<html><body><table id="js-screener-body-empty"></table></body></html>'
+
+    assert StockTableScreeningContent(html).has_empty_marker is True
+
+
+def test_has_empty_marker_false_when_absent() -> None:
+    html = '<html><body><table class="styled-table-new"></table></body></html>'
+
+    assert StockTableScreeningContent(html).has_empty_marker is False

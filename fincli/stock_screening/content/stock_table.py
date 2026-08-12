@@ -24,3 +24,19 @@ class StockTableScreeningContent:
         if len(content) == 1:
             return int(content[0].get_text(strip=True))
         return int(content[-2].get_text(strip=True))
+
+    @property
+    def has_empty_marker(self) -> bool:
+        """Whether this page carries Finviz's legitimate zero-result marker.
+
+        Finviz renders a `table#js-screener-body-empty` element (with a
+        "0 Total" `count-text` cell) instead of `STOCKS_TABLE` when a screen
+        genuinely matches zero tickers. Callers use this to tell a legit
+        empty result apart from a missing/malformed screener table — see
+        `fincli.app.main.aggregate_rows`.
+
+        Returns:
+            True when the empty-result marker element is present on the
+            page, False otherwise.
+        """
+        return self.soup.find(id=StockTableLocators.EMPTY_BODY_ID) is not None
