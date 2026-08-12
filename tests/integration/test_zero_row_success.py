@@ -24,7 +24,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from _fixtures_loader import finviz_empty_html
+from _fixtures_loader import finviz_empty_html, finviz_zero_redesign_html
 from click.testing import CliRunner
 
 from fincli.app.cli import run_main
@@ -210,3 +210,36 @@ def test_zero_row_stdout_streaming_no_banner_or_logs() -> None:
     assert "Fetching HTML" not in result.stdout
     assert "Data Handling" not in result.stdout
     assert OUTPUT_PATH_LINE_PREFIX not in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Legitimate zero-result on the redesigned layout — no `styled-table-new`
+# element, but carries Finviz's `js-screener-body-empty` marker. Must stay
+# on the zero-row success branch, NOT the `ScreenerLayoutError` DATA path.
+# ---------------------------------------------------------------------------
+
+
+def test_zero_redesign_with_file_output_writes_header_only_csv(tmp_path: Path) -> None:
+    """`finviz_zero_redesign.html` (empty marker, no table) -> exit 0, header-only CSV.
+
+    Mirrors ``test_zero_row_with_file_output_writes_header_only_csv`` above
+    for the redesigned-layout empty-result shape (MAJOR #4 discriminator:
+    a missing table is only legitimate when the empty-result marker is
+    present).
+    """
+    target = tmp_path / "out.csv"
+    runner = CliRunner()
+    with patch("fincli.app.main.fetch_page_sync", return_value=finviz_zero_redesign_html()):
+        result = runner.invoke(
+            run_main,
+            ["--filter", "cap=mega", "--output", str(target)],
+            catch_exceptions=False,
+        )
+
+    assert result.exit_code == 0, f"stderr: {result.stderr}"
+    assert target.exists(), "Zero-row run must still write a header-only CSV"
+
+    contents = target.read_text(encoding="utf-8").splitlines()
+    assert contents == [_EXPECTED_HEADER], (
+        f"Expected header-only CSV; got {len(contents)} lines: {contents!r}"
+    )

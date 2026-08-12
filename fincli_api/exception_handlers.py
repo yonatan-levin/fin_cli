@@ -23,12 +23,17 @@ FastAPI's automatic 400/404/405/422-from-Pydantic responses are NOT
 touched by this handler; the ``@app.exception_handler(Exception)``
 decorator only catches what FastAPI itself does not already convert.
 
-Known limitation (2026-05-23, deferred): malformed Finviz HTML that
-parses successfully but yields no rows is currently coerced to a 200
-empty result instead of the 502 "parsing" envelope spec §5.1 implies.
-Distinguishing "Finviz returned junk" from "zero rows matched" requires
-parser-level changes in ``fincli/stock_screening/`` and is out of scope
-for the T4 wave — tracked for a follow-up spec.
+Resolved (2026-08-11): malformed Finviz HTML that used to be coerced to a
+200 empty result now correctly raises ``502`` ``"parsing"``.
+``fincli.stock_screening.errors.ScreenerLayoutError`` (classified DATA by
+``exit_codes.classify``) is raised when the screener ``<table>`` is
+missing with no legitimate empty-result marker present, or when a ticker
+cell's visible text disagrees with its link href (GitHub issue #14's
+duplicated-first-letter bug on Finviz's redesigned layout). A genuine
+zero-match screen — which carries Finviz's ``js-screener-body-empty``
+marker instead of the table — still routes to the 200 empty-``stocks``
+result; see ``fincli.stock_screening.content.stock_table
+.StockTableScreeningContent.has_empty_marker``.
 """
 
 from __future__ import annotations
