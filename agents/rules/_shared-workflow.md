@@ -60,6 +60,17 @@ decomposition, sequencing, quality gates, and final acceptance. Subagents are
 specialists, never coordinators — never delegate orchestration, planning
 authority, or acceptance to a subagent. Subagent output is evidence, not truth.
 
+**Background-review drain (first intake step, last closure step):** before
+classifying new work — and again at closure after any push to `main` — read
+`~/.claude/security/codex-review-findings.md`. Any `UNHANDLED` block is an
+unactioned security finding from the async Codex background review of a commit
+**already on main** (the review runs minutes and outlives sessions) — handle it
+before new work (fix, or defer explicitly with the human), then delete the
+handled block. A `starting` line with no matching `-> verdict` line in
+`~/.claude/security/codex-review.log` means a review is still in flight — never
+end a session silently dropping it; hand it off in the final report. Full
+procedure: the user-level `/sdlc` skill (intake step 1, closure step 7).
+
 **Intake:** classify every work-producing request — **feature / epic / task /
 bug** — propose the classification to the user for confirmation, then route per
 `/sdlc`: feature/epic → brainstorm + grill → issue (with DoD checklist) → ARCH
