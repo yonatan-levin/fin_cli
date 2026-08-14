@@ -262,3 +262,37 @@ gates pass. Hook regression test: PATH shims present + venv absent must block
 without invoking any gate tool
 (`tests/integration/hooks/test_quality_gate_hooks.py`).
 
+---
+
+### 2026-08-14 — Superseded: "never push or open a PR on your own initiative" (owner decision 2026-08-13)
+
+**What:** The 2026-06-29 entry above ("Integration is NOT automatic; never
+push or open a PR on your own initiative") and `CLAUDE.md`'s prior Git
+Workflow wording ("do not advance `master`, push, open a PR, or remove the
+worktree without explicit direction") are **superseded**. New policy: never
+merge or push the default branch (`master`) on an agent's own initiative,
+but the **SDLC HUMAN acceptance gate is the authorization point** — not a
+later separate step. An unmerged PR is a legitimate reviewable work product
+(opening one mid-task is fine); merging and fast-forwarding `master` happen
+at/after that gate, after which removing the worktree and deleting the
+merged branch is REQUIRED.
+
+**Why:** The old "never push/PR without explicit direction" wording directly
+contradicted the user-level `/sdlc` skill's closure step 6 ("commit scoped,
+PR per git rules, remove the worktree, delete the merged branch") — closure
+cannot both require a PR and forbid opening one. The 2026-06-29 entry even
+cross-references `agents/rules/preflight.md` Step 0 by name, so an earlier
+pass that fixed only `preflight.md` would have relocated the contradiction
+into `CLAUDE.md` instead of resolving it (`CLAUDE.md` loads every session).
+Owner-approved supersession, 2026-08-13.
+
+**How to apply:** Opening a PR mid-task no longer needs explicit user
+direction. Merging that PR into `master`, or fast-forwarding `master`
+locally, still requires the SDLC HUMAN acceptance gate. Once that gate
+passes, worktree removal and merged-branch deletion are required, not
+optional. The 2026-06-27 and 2026-06-29 entries above remain as the
+historical record of the prior policy and are unedited by this entry.
+
+**Source:** strade-orchestrator#71 (preflight/SDLC alignment fan-out), owner
+decision 2026-08-13.
+
