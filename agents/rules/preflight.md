@@ -39,6 +39,10 @@ tiers, model routing, closure mechanics) → `agents/rules/_shared-workflow.md`;
   and fast-forwarding `master` happen at/after that gate, after which removing
   the worktree and deleting the merged branch is REQUIRED (`/sdlc` closure
   step 6).
+- **Baseline probe:** before editing, run this repo's gates once in the
+  worktree's own venv (e.g. `python -m ruff check .`, `python -m mypy`,
+  `python -m pytest`) — if something is already red, it is not yours to fix
+  silently (say so).
 - Authority: parent `../CLAUDE.md` "Git workflow (workspace-wide)", this
   repo's `docs/FEEDBACK-LOG.md`. If already inside a linked worktree
   (`git rev-parse --git-dir` ≠ `--git-common-dir`), you're isolated — proceed.
