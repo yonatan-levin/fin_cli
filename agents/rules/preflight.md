@@ -1,13 +1,19 @@
 ---
 alwaysApply: true
 ---
-# Pre-Flight Checklist Skill
+# Pre-Flight Checklist Rule
 
-When invoked with `@preflight`, execute this mandatory checklist before any implementation in the **fin_cli** repository.
+Always-on rule, not a skill: it runs before any implementation in the
+**fin_cli** repository (Finviz stock screener — CLI + HTTP API).
+`@preflight` is an optional mid-session re-invocation, not the only trigger.
 
-## Purpose
+## Where This Fits
 
-Ensures all required context is loaded, the task is properly broken down, and MCP tools are utilized before coding begins. Tailored to the fin_cli Python/CLI surface.
+Preflight owns three things only — everything else is a pointer, not a copy:
+**flow** → `/sdlc`; **policy** (validation cycle, exit criteria, regression
+tiers, model routing, closure mechanics) → `agents/rules/_shared-workflow.md`;
+**context loading** → `AGENTS.md`. Preflight itself owns: worktree isolation
+(Step 0), the layer decision (Step 1), mode + role detection (Step 3).
 
 ## Automatic Actions
 
@@ -15,67 +21,57 @@ Ensures all required context is loaded, the task is properly broken down, and MC
 
 **Before ANY edit (feature, fix, refactor, docs, closeout), work in a dedicated git worktree — never a bare branch in the main checkout, and never edit `master`'s working tree.**
 
-- **Create it with portable git:** `git worktree add ../algo_beta-<task-slug> -b <type>/<slug> master`; do ALL edits/tests/commits there, then `git worktree remove` once the user has chosen an integration path. (Prefer `git worktree add` over any framework-specific tool — it works for every agent/CLI.)
-- **Why:** the workspace runs multiple concurrent sessions over a shared checkout; a parallel `git checkout` swaps the branch underneath you and contaminates merges/verification. A worktree isolates the *working tree*, not just the branch pointer.
-- **Integration is NOT automatic:** finishing in the worktree does NOT imply merging. A local fast-forward of `master` happens **only when the user asks**. **Pushing to `origin` and opening a PR are SEPARATE, explicitly user-initiated steps — never do them on your own initiative.** Default completion = leave the reviewed, green branch in its worktree and report the options (local fast-forward / push+PR / leave on branch).
-- Authority: parent `../CLAUDE.md` "Git workflow (workspace-wide)", this repo's `docs/FEEDBACK-LOG.md`, and the global "commit or push only when the user asks" rule. If already inside a linked worktree (`git rev-parse --git-dir` ≠ `--git-common-dir`), you're isolated — proceed.
+- **Create it with portable git:** `git worktree add ../algo_beta_<topic> -b
+  <type>/<slug> master`; do ALL edits/tests/commits there. Underscore, not
+  hyphen, between `algo_beta` and the topic — a hyphenated worktree directory
+  becomes the package directory in this `package-dir='.'` repo, so ruff N999 +
+  mypy reject the invalid module name before any edit (issue #55). (Prefer
+  `git worktree add` over any framework-specific tool — it works for every
+  agent/CLI.)
+- **Why:** the workspace runs multiple concurrent sessions over a shared
+  checkout; a parallel `git checkout` swaps the branch underneath you and
+  contaminates merges/verification. A worktree isolates the *working tree*,
+  not just the branch pointer.
+- **Push/PR/merge:** never merge or push the default branch (`master`) on an
+  agent's own initiative, but the **SDLC HUMAN acceptance gate is the
+  authorization point**, not a later separate step — an unmerged PR is a
+  legitimate reviewable work product (opening one mid-task is fine); merging
+  and fast-forwarding `master` happen at/after that gate, after which removing
+  the worktree and deleting the merged branch is REQUIRED (`/sdlc` closure
+  step 6).
+- **Baseline probe:** before editing, run this repo's gates once in the
+  worktree's own venv (e.g. `python -m ruff check .`, `python -m mypy`,
+  `python -m pytest`) — if something is already red, it is not yours to fix
+  silently (say so).
+- Authority: parent `../CLAUDE.md` "Git workflow (workspace-wide)", this
+  repo's `docs/FEEDBACK-LOG.md`. If already inside a linked worktree
+  (`git rev-parse --git-dir` ≠ `--git-common-dir`), you're isolated — proceed.
 
-### Step 1: Break Down the Task
+### Step 1: Determine the Layer & Break Down the Task
 
-Use `sequential-thinking` MCP tool to:
-1. Identify the task scope
-2. Break into small, testable steps
-3. Identify dependencies and blockers
-4. Estimate complexity
+1. Layer: CLI (`fincli/`), HTTP API (`fincli_api/`), or shared core
+   (`core/`, `config/`, `logger/`)? Respect the architectural boundary —
+   `fincli_api/adapters/fincli.py` is the ONLY file in `fincli_api/` allowed
+   to import from `fincli/` (`CLAUDE.md` §3.2 / architecture boundary).
+2. Classification, planning, and intake are `/sdlc`'s job — invoke it rather
+   than re-deriving them here.
 
-### Step 2: Load Relevant Documentation
+### Step 2: Load Context
 
-Based on the task, read these files using the Read tool:
-- Root `CLAUDE.md` — project identity, tech stack, conventions, important files
-- Root `AGENTS.md` — loading contract and cross-file relationships (created in C6 of the harness rollout — skip gracefully if not present)
-- Root `ARCHITECTURE.md` — overall system architecture (fincli + supporting modules)
-- Root `CONTRACTS.md` — CLI command surface + CSV output schema
-- Root `TESTING.md` — testing requirements and pytest layout
-- Root `TOOLS_REFERENCE.md` — MCP tooling reference
-- `docs/THESIS.md` — product direction, current phase, roadmap, scope boundaries
-- `docs/MODULE_REFERENCE.md` — file-by-file map of public functions
-- Module-specific docs under `docs/` if relevant
+Defer to `AGENTS.md`'s loading contract — Tier 1 always, Tiers 2–4 as Step
+1's layer decision implicates. Honor its Sub-Agent Context Diet when
+dispatching sub-agents instead of injecting full Tier 1–4 context.
 
 ### Step 3: Identify Role and Mode
 
-Determine from context:
 - **Mode**: PLAN_AND_CREATE | EXECUTE | REFACTOR | DEBUG | CODE_REVIEW
 - **Role**: ARCH | BACKEND | FRONTEND | UX_UI | VERIFIER | QA | REVIEWER
 
-### Step 4: Run Local Quality Gates
+### Step 4: Duplicate-Work Check & Research
 
-For any source-code change, before writing implementation:
-- [ ] Ran `ruff check <touched module>` — note any pre-existing findings
-- [ ] Ran `ruff format --check <touched module>`
-- [ ] Ran `mypy <touched module>` — zero errors are required
-- [ ] Located the relevant Click command in `fincli/app/cli.py`
-- [ ] Located the relevant Pydantic config class in `config/config.py` or `core/configuration/configurator.py`
-- [ ] Identified affected modules across `fincli/`, `core/`, `config/`, `logger/`
-
-### Step 5: Store Context in Memory
-
-Use `memory:create_entities` to store:
-- Task summary
-- Identified files to modify
-- Key constraints
-- Dependencies
-
-### Step 6: Research
-
-If new implementation patterns or unfamiliar libraries are involved:
-- Use `perplexity-ask` for general research
-- Use `context7` for library documentation (Click, pandas, Pydantic, cfscrape, colorama, beautifulsoup4)
-
-### Step 7: Memory Sync
-
-Check for previous session data:
-1. Use `memory:search_nodes` for related past work
-2. Include relevant context in the current task
+Both are `/sdlc`'s job — intake mandates the claude-mem duplicate-work check;
+its MCP-nudges table (and the role file's Skill and Tool Triggers) cover
+research per phase. Invoke `/sdlc` instead of restating either here.
 
 ## Required Output Format
 
@@ -83,64 +79,42 @@ Check for previous session data:
 ## Pre-Flight Checklist OK
 
 ### Task Summary
-{brief description of what needs to be done}
+{brief description}
 
-### Context Loaded
-- [x] CLAUDE.md - {1-line summary}
-- [x] ARCHITECTURE.md - {1-line summary}
-- [x] CONTRACTS.md - {1-line summary}
-- [x] TESTING.md - {1-line summary}
-- [x] AGENTS.md - {1-line summary} (created in C6 of the harness rollout — skip gracefully if not present)
-- [x] docs/THESIS.md or docs/MODULE_REFERENCE.md - {if applicable}
-
-### Task Breakdown (via sequential-thinking)
-1. {step 1}
-2. {step 2}
-3. {step 3}
-...
+### Layer
+- CLI (`fincli/`) | HTTP API (`fincli_api/`) | Core/Config/Logger (`core/`, `config/`, `logger/`)
 
 ### Mode & Role
-- **Mode**: {detected mode}
-- **Role**: {detected role}
-- **Rule File**: {corresponding rules file to follow}
+- Mode: {detected}
+- Role: {detected}
 
-### Local Probes
-- ruff check: {clean | N findings}
-- ruff format --check: {clean | N findings}
-- mypy: {clean | N blocking issues}
-
-### Affected Modules
-- {fincli | core | config | logger | scripts | tests}
+### Worktree
+- Path: {worktree path}
+- Branch: {branch name}
 
 ### Key Constraints
-- {constraint 1}
-- {constraint 2}
-
-### Dependencies
-- {any external dependencies or blockers}
-
-### Memory
-- {session id} - {session name}
+- ...
 
 ### Ready to Proceed
 ```
 
 ## Composability
 
-This skill can be chained with:
 - `@load-context {path}` — for module / config / domain context
-- `@tdd-setup {feature}` — to set up tests before implementation
-- `@research {topic}` — if unknowns were identified
+- `@tdd-setup {feature}` — set up tests before implementation
+- `/sdlc` — classification, planning, implementation-cycle routing, closure
 
 ## Example Usage
 
 ```
-User: @preflight I need to add a new --max-tickers cap to the fincli screener
+User: @preflight add a --max-tickers cap to the fincli screener
 
-AI: [Executes sequential-thinking]
-    [Reads CLAUDE.md, ARCHITECTURE.md, CONTRACTS.md]
-    [Reads fincli/app/cli.py and fincli/app/main.py]
-    [Runs ruff/mypy probes on touched modules]
-    [Stores context in memory]
-    [Outputs pre-flight checklist]
+AI: [Step 0: git worktree add ../algo_beta_max-tickers-cap -b
+     feat/max-tickers-cap master]
+    [Step 1: layer = CLI (fincli/app/cli.py) + core config; /sdlc handles
+     classification]
+    [Step 2: AGENTS.md tier contract]
+    [Step 3: Mode=EXECUTE, Role=BACKEND]
+    [Step 4: /sdlc intake already ran the duplicate-work check]
+    [Hands off to /sdlc's task route → /execute]
 ```

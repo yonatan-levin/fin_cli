@@ -164,7 +164,7 @@ Full diagram + per-section detail in `ARCHITECTURE.md`.
 
 ### Git Workflow
 - **Always work in a dedicated git worktree, never directly on the primary checkout.** Create a task branch in its own worktree and keep staging scoped to the files that task owns.
-- Integration is a separate human decision: do not advance `master`, push, open a PR, or remove the worktree without explicit direction. Rationale and edge cases live in `docs/FEEDBACK-LOG.md`.
+- Never merge or push the default branch (`master`) on an agent's own initiative. The **SDLC HUMAN acceptance gate is the authorization point** — not a later separate step: an unmerged PR is a legitimate reviewable work product (opening one mid-task is fine). Once authorized, removing the worktree and deleting the merged branch is REQUIRED (`/sdlc` closure step 6). Rationale and history live in `docs/FEEDBACK-LOG.md`.
 
 These MCP servers are wired in this repo. One-line "when to use" guidance:
 
