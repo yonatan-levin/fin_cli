@@ -84,10 +84,20 @@ then check its parent count: a merge commit (more than one parent) needs the
 combined diff on a clean merge and would make a real finding look unsupported —
 plain `git show <sha>` is correct only for single-parent commits. Then handle it before new
 work (fix, or defer explicitly with the human), and delete the processing
-file only once every block in it is handled or explicitly deferred. A
-`starting` line with no matching `-> verdict` line in
-`~/.claude/security/codex-review.log` means a review is still in flight — never
-end a session silently dropping it; hand it off in the final report. Full
+file only once every block in it is handled or explicitly deferred. **Foreign blocks — restore, never delete.** Each block's header carries the
+repository root it came from (`=== <date> <repo-root> <sha> UNHANDLED ===`).
+A block whose repo-root is **not this checkout** is another project's alert:
+do **not** fix it here (it would breach the ADR-001 delegation boundary and
+land the change in the wrong repo), and do **not** delete it (that silently
+destroys that project's only notification). If you already claimed the queue,
+**restore the file** — rename the processing copy back — and report the
+foreign block in your final handoff so the owning project's session drains it.
+Verified the hard way 2026-08-14: a midas session claimed a queue whose
+findings all targeted `orchestrator`.
+
+A `starting` line with no matching `-> verdict` line in
+`~/.claude/security/codex-review.log` means a review is still in flight —
+never end a session silently dropping it; hand it off in the final report. Full
 procedure: the user-level `/sdlc` skill (intake step 1, closure step 7).
 
 **Intake:** classify every work-producing request — **feature / epic / task /
